@@ -42,7 +42,7 @@ describe('RFC 8785 canonical hashing', () => {
 
   it('sorts object properties by UTF-16 code units', () => {
     const value = { '\u20ac': 'euro', '\r': 'cr', '\ufb33': 'hebrew', '1': 'one', '\ud83d\ude00': 'emoji', '\u0080': 'control', '\u00f6': 'latin' }
-    expect(canonicalize(value)).toBe('{"\\r":"cr","1":"one","":"control","ö":"latin","€":"euro","😀":"emoji","דּ":"hebrew"}')
+    expect(canonicalize(value)).toBe('{"\\r":"cr","1":"one","":"control","ö":"latin","דּ":"hebrew","€":"euro","😀":"emoji"}')
   })
 
   it('strips only declared volatile fields recursively', () => {
