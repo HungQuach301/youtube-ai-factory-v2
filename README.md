@@ -5,10 +5,10 @@ Repository độc lập cho một nhà máy YouTube đa kênh vận hành bằng
 ## Trạng thái
 
 - Mode hiện tại: `BUILD`
-- Mốc hiện tại: bootstrap single source of truth
-- Nguồn đã nhập: 16 tài liệu, giữ nguyên nội dung và kiểm soát bằng SHA-256
+- Mốc hiện tại: source recovery hoàn tất; sẵn sàng bắt đầu WP-00
+- Nguồn đã nhập: 21 tài liệu, giữ nguyên nội dung và kiểm soát bằng SHA-256
 - Kiến trúc đích: 48 module, 18 stage, hai track `Platform` và `Golden Path`
-- Chưa được phép coi là build-ready cho WP-00 vì còn thiếu các tài liệu nguồn chân lý được liệt kê trong [`BLOCKED.md`](BLOCKED.md)
+- Build-ready cho WP-00 → WP-07. Các blocker owner-specific vẫn được cưỡng chế theo [`BLOCKED.md`](BLOCKED.md) và `DECISIONS-ANSWERED.md`.
 
 ## Quy tắc single source of truth
 
@@ -25,4 +25,3 @@ Thứ tự đọc bắt buộc:
 ## Phạm vi bootstrap
 
 Commit đầu tiên chỉ thiết lập nguồn chuẩn và governance. Không tái sử dụng code, dữ liệu production, secret, artifact hay lịch sử Git của project cũ; không dispatch provider và không phát sinh chi phí sản xuất.
-

@@ -8,7 +8,7 @@ Mọi phiên phải tuyên bố đúng một mode: `BUILD`, `OPERATE` hoặc `EV
 
 - GitHub repository này là single source of truth duy nhất sau bootstrap.
 - Đọc `docs/00-AGENT-BRIEF.md` và `docs/00-INDEX.md` trước khi làm việc.
-- `docs/02-CONTRACTS.md` là nguồn chuẩn về type/ngưỡng khi file này được bổ sung.
+- `docs/02-CONTRACTS.md` là nguồn chuẩn về type/ngưỡng.
 - `docs/03-DATA-SCHEMA.sql` là nguồn chuẩn về dữ liệu.
 - Addendum thắng khi mâu thuẫn với tài liệu gốc.
 - Không suy diễn hoặc tự tạo nội dung thay cho tài liệu đang thiếu; ghi vào `BLOCKED.md`.
@@ -20,4 +20,3 @@ Mọi phiên phải tuyên bố đúng một mode: `BUILD`, `OPERATE` hoặc `EV
 - Mọi thay đổi tài liệu nguồn phải cập nhật `docs/SOURCE-MANIFEST.md` và `docs/SOURCE_SHA256SUMS` trong cùng PR.
 - Mỗi work package dùng một branch, một PR và `DONE.md` có Acceptance ↔ Test.
 - Tuân thủ P1–P13 và G1–G15 trong `docs/00-AGENT-BRIEF.md`.
-
