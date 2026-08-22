@@ -30,6 +30,12 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/core-hash:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -1805,4 +1811,3 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@4.4.3: {}
-

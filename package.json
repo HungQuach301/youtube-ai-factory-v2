@@ -6,14 +6,17 @@
   "packageManager": "pnpm@11.19.0",
   "engines": { "node": ">=22.0.0" },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc -b packages/contracts && tsc --noEmit -p tsconfig.json && tsc --noEmit -p packages/core-hash/tsconfig.json",
+    "build": "tsc -b packages/contracts packages/core-hash",
     "lint": "eslint .",
     "test": "vitest run",
     "test:guardrails": "vitest run tests/guardrails",
     "test:unit": "vitest run packages",
+    "test:migrations": "vitest run tests/migrations",
+    "test:integration": "vitest run packages/core-hash/tests/lineage.test.ts",
     "verify:guardrails": "node tools/verify-guardrails.mjs",
     "verify:source": "sha256sum --check docs/SOURCE_SHA256SUMS",
-    "ci": "pnpm verify:source && pnpm typecheck && pnpm lint && pnpm test:guardrails && pnpm test:unit"
+    "ci": "pnpm verify:source && pnpm typecheck && pnpm lint && pnpm test:guardrails && pnpm test:unit && pnpm test:migrations && pnpm test:integration"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.3",

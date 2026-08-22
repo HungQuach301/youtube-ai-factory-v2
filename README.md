@@ -5,10 +5,10 @@ Repository độc lập cho một nhà máy YouTube đa kênh vận hành bằng
 ## Trạng thái
 
 - Mode hiện tại: `BUILD`
-- Mốc hiện tại: `WP-00_COMPLETE`; GitHub CI đã xác minh clean install với lockfile
+- Mốc hiện tại: `WP-01_IN_REVIEW`; Canonical Hashing & Lineage đang chờ GitHub CI clean install
 - Nguồn đã nhập: 21 tài liệu, giữ nguyên nội dung và kiểm soát bằng SHA-256
 - Kiến trúc đích: 48 module, 18 stage, hai track `Platform` và `Golden Path`
-- Contracts v2 và guardrail G1/G2/G6 đã được cưỡng chế; work package kế tiếp là WP-01. Các blocker owner-specific vẫn được cưỡng chế theo [`BLOCKED.md`](BLOCKED.md) và `DECISIONS-ANSWERED.md`.
+- WP-00 đã hoàn tất; CORE-01 gồm canonical hash, stream hash, lineage CTE, quarantine và migration `0001` đã được triển khai trên PR riêng. Các blocker owner-specific vẫn được cưỡng chế theo [`BLOCKED.md`](BLOCKED.md) và `DECISIONS-ANSWERED.md`.
 
 ## Quy tắc single source of truth
 

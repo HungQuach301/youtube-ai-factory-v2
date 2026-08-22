@@ -4,8 +4,8 @@
 node_modules/
 .turbo/
 dist/
+*.tsbuildinfo
 coverage/
 .wrangler/
 *.log
 .DS_Store
-

@@ -35,3 +35,7 @@ jobs:
         run: pnpm test:guardrails
       - name: Package unit tests
         run: pnpm test:unit
+      - name: Migration up/down tests
+        run: pnpm test:migrations
+      - name: Lineage integration tests
+        run: pnpm test:integration
