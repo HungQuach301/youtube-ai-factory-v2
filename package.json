@@ -1,0 +1,25 @@
+{
+  "name": "youtube-ai-factory-v2",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Policy-first, human-controlled YouTube AI Factory monorepo",
+  "packageManager": "pnpm@11.19.0",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:guardrails": "vitest run tests/guardrails",
+    "test:unit": "vitest run packages",
+    "verify:guardrails": "node tools/verify-guardrails.mjs",
+    "verify:source": "sha256sum --check docs/SOURCE_SHA256SUMS",
+    "ci": "pnpm verify:source && pnpm typecheck && pnpm lint && pnpm test:guardrails && pnpm test:unit"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "8.59.3",
+    "@typescript-eslint/parser": "8.59.3",
+    "eslint": "9.39.4",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}
