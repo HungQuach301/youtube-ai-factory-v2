@@ -5,7 +5,8 @@ const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 const workPackages = [
   { id: "WP-00", name: "Scaffold & Contracts", status: "Complete", detail: "Contracts v2, strict TypeScript, guardrails and frozen CI install." },
   { id: "WP-01", name: "Canonical Hashing & Lineage", status: "Complete", detail: "Deterministic identity, streaming SHA-256 and fail-closed lineage." },
-  { id: "WP-02", name: "Typed Command & State Machine", status: "Next", detail: "Twelve commands, immutable transactions and concurrent idempotency." },
+  { id: "WP-02", name: "Typed Command & State Machine", status: "Complete", detail: "Twelve commands, immutable transactions and concurrent idempotency." },
+  { id: "WP-03", name: "Lease & Fencing", status: "Next", detail: "Monotonic writer tokens, heartbeat, expiry and reconciliation." },
 ];
 
 const controls = [
@@ -76,9 +77,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
               <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation in controlled progress</h2></div>
-              <span className="progress-label">2 / 33 work packages</span>
+              <span className="progress-label">3 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="2 of 33 work packages complete"><span style={{ width: "6.06%" }} /></div>
+            <div className="progress-track" aria-label="3 of 33 work packages complete"><span style={{ width: "9.09%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>

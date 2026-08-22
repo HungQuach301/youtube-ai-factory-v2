@@ -75,25 +75,50 @@ Physical tables `artifact`, `artifact_lineage`, `quarantine_hash` và trigger G5
 
 ---
 
-## WP-SITES-01 · GitHub-canonical ChatGPT Sites Control Plane
+## WP-02 · CORE-02 Typed Command & State Machine
 
 ## Mode: BUILD
 
-## Acceptance ↔ Evidence
+## Acceptance ↔ Test
 
-| Acceptance | Evidence |
+| Acceptance | Bằng chứng cưỡng chế |
 |---|---|
-| GitHub is the only canonical source | Deployable source stored at `sites/control-plane`; SSOT contract prohibits direct Site authority |
-| Site and GitHub source match | SHA-256 aggregate `f03564cf959576255805c14d3dd3d4d066f975a38abe83a2d4ed66cd061df1e6` over 35 managed files |
-| Clean GitHub build is deployable | PR #5: root build, source integrity and Sites control-plane CI all passed |
-| Drift fails closed | Every build runs `scripts/verify-source-lock.mjs` before Vinext |
-| AI/model handoff is recoverable | `SSOT-CONTRACT.md` requires clean GitHub `main`, checksums, blockers, PR and CI |
-| New Site is isolated | Dedicated slug `youtube-ai-factory-v2`; legacy Site remains immutable |
-| Production checkpoint verified | Version 1 succeeded at `https://youtube-ai-factory-v2.quach-hung.chatgpt.site` |
-| Provider/spend/publishing boundaries preserved | Provider dispatch OFF, production spend $0, auto-publish BLOCKED |
+| Đủ 12 typed command với transition xác định | `packages/core-command/tests/state-machine.test.ts` |
+| 100 lệnh đồng thời trùng idempotency chỉ có đúng một hiệu lực | Unit transaction test + SQLite integration trên migration `0001` |
+| Writer có fencing token cũ bị từ chối, zero side effect | `rejects stale writers with zero side effect` |
+| `prevState` sai bị rollback cả state và command reservation | `rolls back the reserved log when prevState conflicts` |
+| Năm lệnh P10 bắt buộc identity + signature + evidence hợp lệ | Hai test owner command đối nghịch + trigger `trg_owner_command_signature` |
+| Lệnh không thể tác động target thuộc package khác | `fails closed when a command crosses package boundaries` |
 
-## Canonical source
+## Transaction 6 bước
 
-- Merge commit: `adc719ba3c5fc46ad53724231ecfc2c52d536f0f`
-- Pull request: `#5`
-- Deployment evidence: `docs/operations/SITES-DEPLOYMENTS.md`
+1. So fencing token với lease hiện tại.
+2. Append bản ghi đầy đủ vào `command_log`; UNIQUE giữ idempotency.
+3. Đọc target theo `packageId` và so `prevState`.
+4. Xác minh identity-bound cho đúng 5 lệnh P10.
+5. Compare-and-set target sang trạng thái kế tiếp.
+6. Commit state và command log trong cùng transaction; mọi lỗi rollback toàn bộ.
+
+## Trigger ↔ Test
+
+| Trigger | Test |
+|---|---|
+| `trg_command_log_no_update` | `tests/migrations/0001-control-core.test.mjs` — UPDATE abort |
+| `trg_command_log_no_delete` | `tests/migrations/0001-control-core.test.mjs` — DELETE abort |
+| `trg_owner_command_signature` | `tests/migrations/0001-control-core.test.mjs` — thiếu signature/evidence abort |
+
+## Guardrail đã cưỡng chế
+
+| Guardrail | Cơ chế |
+|---|---|
+| G4 | Chỉ append command log; schema trigger cấm UPDATE/DELETE |
+| P10 | `OWNER_COMMANDS` giữ đúng 5 lệnh; verifier tầng ứng dụng + allowlist trigger tầng DB |
+| G5 / cô lập đa kênh | Mọi state target được scope bằng `packageId`, fail closed khi cross-package |
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:unit` · `pnpm test:migrations` · `pnpm test:integration`
+
+## Ngoài phạm vi WP-02
+
+Durable Object, cấp fencing token đơn điệu, heartbeat và reconciliation thuộc WP-03. Điều kiện owner + promoted learning cho `UNFREEZE_CHANNEL` vẫn do migration `0010`/WP-29 cưỡng chế; lệnh này không được thêm vào năm lệnh P10.
