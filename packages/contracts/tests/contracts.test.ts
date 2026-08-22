@@ -23,6 +23,15 @@ describe('contracts v2', () => {
     expect(thresholds.PROFILE.REDUCED.routeCount).toBe(2)
   })
 
+  it('centralizes the DoR condition count, Stage 14 boundary and performance ceiling', () => {
+    expect(thresholds.DOR).toEqual({
+      CONDITION_COUNT: 11,
+      HUMAN_DECISION_STAGE_ORDINAL: 14,
+      CACHE_MAX_SEC: 10,
+      P95_MAX_MS: 200,
+    })
+  })
+
   it('rejects a production envelope without a 64-character settings hash', () => {
     const result = JobEnvelopeSchema.safeParse({
       traceId: 'trace', packageId: 'package', stageInstanceId: 'stage', fencingToken: 1,
