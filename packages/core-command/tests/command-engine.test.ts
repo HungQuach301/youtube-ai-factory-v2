@@ -2,14 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import type {
   CommandLogRecord,
-  CommandStoreError,
   CommandStore,
   CommandTransaction,
   ExecuteCommand,
   OwnerCommandVerifier,
   StateTarget,
 } from '../src/index.js'
-import { CommandEngine } from '../src/index.js'
+import { CommandEngine, CommandStoreError } from '../src/index.js'
 
 const HEX_A = 'a'.repeat(64)
 const HEX_B = 'b'.repeat(64)
