@@ -1,7 +1,8 @@
 const PROVIDER_SDK = /^(?:openai|@anthropic-ai\/sdk|@google\/generative-ai|elevenlabs|@elevenlabs\/|groq-sdk|cohere-ai|replicate|runway|pexels|pixabay|youtubei|googleapis)(?:\/|$)/u
 
 function isAdapterFile(filename) {
-  return filename.replaceAll('\\', '/').includes('/packages/provider/adapters/')
+  const normalized = `/${filename.replaceAll('\\', '/').replace(/^\/+/, '')}`
+  return normalized.includes('/packages/provider/adapters/')
 }
 
 export default {
