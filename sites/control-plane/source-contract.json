@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "canonical_repository": "HungQuach301/youtube-ai-factory-v2",
+  "canonical_branch": "main",
+  "canonical_path": "sites/control-plane",
+  "site_slug": "youtube-ai-factory-v2",
+  "direction": "github-main-to-sites-checkpoint",
+  "direct_site_authoring": false,
+  "fail_closed_on_unverified_source": true
+}

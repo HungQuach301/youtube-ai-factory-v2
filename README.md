@@ -25,3 +25,12 @@ Thứ tự đọc bắt buộc:
 ## Phạm vi bootstrap
 
 Commit đầu tiên chỉ thiết lập nguồn chuẩn và governance. Không tái sử dụng code, dữ liệu production, secret, artifact hay lịch sử Git của project cũ; không dispatch provider và không phát sinh chi phí sản xuất.
+
+## ChatGPT Sites deployment mirror
+
+- Canonical source: GitHub `main`
+- Deployable source: [`sites/control-plane`](sites/control-plane)
+- Continuity contract: [`sites/control-plane/SSOT-CONTRACT.md`](sites/control-plane/SSOT-CONTRACT.md)
+- Direction: GitHub `main` → reviewed immutable ChatGPT Sites checkpoint
+
+Direct Site edits, chat-only decisions and temporary workspace files are not factory truth. Every change must return through a GitHub pull request and green CI before deployment.
