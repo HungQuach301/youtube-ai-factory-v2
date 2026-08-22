@@ -1,0 +1,41 @@
+name: sites-control-plane
+
+on:
+  pull_request:
+    paths:
+      - "sites/control-plane/**"
+      - ".github/workflows/sites-control-plane.yml"
+  push:
+    branches: [main]
+    paths:
+      - "sites/control-plane/**"
+      - ".github/workflows/sites-control-plane.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites-control-plane-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-deployable-mirror:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sites/control-plane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sites/control-plane/package-lock.json
+      - name: Frozen install
+        run: npm ci
+      - name: Verify canonical source lock
+        run: npm run verify:source
+      - name: Lint
+        run: npm run lint
+      - name: Build and rendered control-plane test
+        run: npm test
