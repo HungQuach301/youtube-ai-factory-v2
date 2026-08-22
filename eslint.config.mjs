@@ -3,7 +3,7 @@ import tsParser from '@typescript-eslint/parser'
 import factoryGuardrails from './tools/eslint-rules/index.mjs'
 
 export default [
-  { ignores: ['node_modules/**', 'dist/**', 'coverage/**', 'tests/guardrails/fixtures/**'] },
+  { ignores: ['node_modules/**', '**/dist/**', 'coverage/**', 'tests/guardrails/fixtures/**'] },
   {
     files: ['**/*.{ts,tsx,mts,cts}'],
     languageOptions: {
