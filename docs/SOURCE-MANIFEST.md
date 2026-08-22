@@ -7,10 +7,10 @@
 | Imported at | 2026-08-22 (Asia/Bangkok) |
 | Source | Files supplied by project owner through ChatGPT Work |
 | Import mode | Byte-preserving copy; canonical filename restored |
-| File count | 16 |
-| Total bytes | 268,118 |
+| File count | 21 |
+| Total bytes | 370,939 |
 | Integrity | SHA-256; verified by GitHub Actions |
-| Completeness | `PARTIAL_SOURCE_PACK` |
+| Completeness | `BUILD_READY_ACTIVE_PACK` — delta 12 đã hợp nhất vào 04 |
 
 ## Files
 
@@ -32,8 +32,12 @@
 | `03-DATA-SCHEMA.sql` | `46e394f09beebff9f90e5f84a886c9b67dfe28eecf388228ce18e389aef7f2e7` | Data source of truth; 10 migrations |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
+| `02-CONTRACTS.md` | `8bbfeb232a5d3fa5e3e8b41d2891f46a85894911cb3c8f39677246a0770c1ab8` | Type và mọi ngưỡng số — authority cao nhất |
+| `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
+| `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
+| `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
+| `DECISIONS-ANSWERED.md` | `079b85be35ba9b624397fa043cdd68db3b49f4d7ac7d5ee223c6800608efb085` | Owner decision baseline; mục `[XÁC NHẬN]` vẫn fail-closed |
 
 ## Provenance rule
 
 The hashes above prove the initial Git copy matches the supplied source files. A later intentional edit must update this manifest and `SOURCE_SHA256SUMS` in the same reviewed PR. Policy claims are time-sensitive and remain subject to Policy Watch; importing a file does not constitute independent validation of current YouTube policy.
-
