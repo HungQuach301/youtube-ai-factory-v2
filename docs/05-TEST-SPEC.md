@@ -1,0 +1,253 @@
+# 05 — TEST SPEC (v2)
+
+Cách chứng minh một work package đã xong. Mỗi mục Acceptance phải ánh xạ tới ít nhất một test có tên cụ thể.
+
+---
+
+## 1. Bốn tầng test
+
+| Tầng | Vị trí | Chạy khi | Đặc điểm |
+|---|---|---|---|
+| **Guardrail** | `tests/guardrails/` | Mọi PR — **chặn merge** | Không mock; chạy trên codebase và DB thật |
+| **Unit** | Cạnh file được test | Mọi PR | Mock provider; nhanh |
+| **Integration** | `tests/integration/` | Mọi PR | D1 tạm, R2 tạm; không gọi provider thật |
+| **Qualification** | Thủ công | Khi có yêu cầu | Gọi provider thật, tốn tiền |
+
+Test qualification **không** chạy trong CI — nó tốn tiền và cần phê duyệt ngân sách.
+
+---
+
+## 2. Guardrail suite — bắt buộc
+
+Mười lăm nhóm test chạy trên codebase và DB thật. Fail một cái là không merge.
+
+```ts
+// tests/guardrails/g01-canonical-hash.test.ts
+test('G1: không có lời gọi hash nào dùng JSON.stringify')
+test('G1: canonicalHash ổn định qua 1000 permutation thứ tự khóa')
+test('G1: canonicalHash chuẩn hóa NFC — chuỗi NFD cho cùng hash')
+test('G1: số thực serialize theo ECMAScript, không phải toFixed')
+
+// g02-provider-isolation.test.ts
+test('G2: không file nào ngoài provider/adapters/ import SDK provider')
+
+// g03-media-worker-no-d1.test.ts
+test('G3: container config không có D1 binding')
+test('G3: media-worker không import package nào chạm D1')
+
+// g04-append-only.test.ts
+test('G4: UPDATE command_log bị trigger abort')
+test('G4: DELETE command_log bị trigger abort')
+
+// g05-namespace-isolation.test.ts
+test('G5: insert lineage qualification→production bị abort')
+test('G5: insert lineage quarantine→production bị abort')
+test('G5: quét toàn bộ artifact_lineage không có vi phạm')
+
+// g06-preflight-deterministic.test.ts
+test('G6: PreflightContext không expose provider client — kiểm bằng type')
+test('G6: không lời gọi LLM nào trong thân preflight()')
+
+// g07-gate-evidence.test.ts
+test('G7: gate state=PASS thiếu evidence_r2_key bị abort (INSERT)')
+test('G7: gate state=PASS thiếu evidence_r2_key bị abort (UPDATE)')
+test('G7: WAIVE gate M0 bị abort')
+
+// g08-no-retry.test.ts
+test.each(['SCHEMA_VIOLATION','RIGHTS_DENIED','BUDGET_DENIED','CONTENT_FILTERED'])
+  ('G8: %s không bao giờ được retry')
+
+// g09-dispatch-guard.test.ts
+test('G9: adapter không export dispatch trực tiếp')
+test('G9: mọi lời gọi provider đi qua guardedDispatch')
+
+// g10-no-autopublish.test.ts
+test('G10: không đường code nào set auto_publish = 1')
+test('G10: CHECK constraint chặn auto_publish = 1')
+
+// ---------- v2 ----------
+// g11-no-self-relax.test.ts
+test('G11: hạ strictness_rank của gate không kèm change_log → abort')
+test('G11: vô hiệu hóa gate (active=0) không kèm promotion → abort')
+test('G11: RELAX trong standard_change_log thiếu promotion_id → abort')
+test('G11: CI threshold-diff phát hiện chiều RELAX trong thresholds.ts')
+test('G11: chiều TIGHTEN đi qua được, không cần owner')
+
+// g12-shadow-required.test.ts
+test('G12: proposal sang EVIDENCE_READY thiếu shadow_run_id → abort')
+test('G12: proposal sang PROMOTED từ trạng thái khác EVIDENCE_READY → abort')
+test('G12: PROMOTED với decided_by không phải owner → abort')
+
+// g13-operate-boundary.test.ts
+test('G13: PR nhãn mode=OPERATE chạm packages/contracts → CI fail')
+test('G13: PR nhãn mode=OPERATE chạm tests/guardrails → CI fail')
+test('G13: PR nhãn mode=OPERATE chạm db/migrations → CI fail')
+
+// g14-goldset-append-only.test.ts
+test('G14: DELETE gold_sample bị abort')
+test('G14: UPDATE defect_class hoặc severity bị abort')
+test('G14: retire không có owner identity bị abort')
+
+// g15-policy-checklist.test.ts
+test('G15: publish với <8 policy_check PASS → abort')
+test('G15: publish thiếu predicted_performance → abort (P9)')
+test('G15: publish thiếu disclosure_decision → abort')
+test('G15: publish khi channel đang frozen → abort')
+test('G15: publish với authorized_by không phải owner → abort')
+
+// thresholds.test.ts
+test('Không literal số nào trong packages/ ngoài thresholds.ts')
+test('Không `any`, `as unknown as`, hay @ts-ignore trong packages/')
+test('Ngưỡng trong UNCALIBRATED không được dùng làm gate M0/M1')   // P5
+
+// human-imprint.test.ts   (v2)
+test('P13: package thiếu MIN_HUMAN_DECISIONS → DoR chặn Stage 14')
+test('P13: human_decision với actor là service account → abort')
+test('P13: rationale_text ngắn hơn ngưỡng → abort')
+```
+
+**Quy tắc v2:** mỗi trigger trong `03-DATA-SCHEMA.sql` phải có ít nhất một test chứng minh nó ABORT đúng trường hợp. Trigger không có test coi như chưa tồn tại. 33 trigger → ≥33 test.
+
+---
+
+## 3. Test then chốt theo work package
+
+Nếu chỉ chạy được một test, chạy cái này.
+
+| WP | Test then chốt |
+|---|---|
+| WP-00 | File cố ý vi phạm G1 → lint fail |
+| WP-01 | 1000 permutation → cùng hash |
+| WP-02 | 100 lệnh trùng idempotency đồng thời → đúng 1 có hiệu lực |
+| WP-03 | GC pause 120 s → writer cũ bị từ chối bằng fencing token |
+| WP-04 | **Gate M0 = NOT_EVALUATED → DoR `ready: false`**; kênh frozen → `ready: false` |
+| WP-05 | Episode standard nới gate của channel → bị từ chối |
+| WP-06 | Xóa URL nguồn → vẫn tái lập được từ snapshot |
+| WP-07 | SCHEMA_VIOLATION không retry |
+| WP-08 | 50 dispatch song song, trần đủ 10 → đúng 10 qua, 40 zero spend |
+| WP-09 | Đổi 1 ký tự system prompt → dispatch bị chặn |
+| WP-10 | Gọi LLM trong preflight() → compile error |
+| WP-11 | Cùng seed → cùng champion 3 lần; judge input không chứa metadata nguồn |
+| WP-12 | Cùng envelope trên 5 worker → 5 output cùng sha256 |
+| **WP-12B** | **Bảng cost/video ba cấu hình, có kết luận bằng số vs trần §3** |
+| WP-13 | Mỗi phép đo cho kết quả đúng trên input đã biết |
+| WP-14 | Gold set ≥30 mẫu, mọi defect class có ≥2 mẫu |
+| WP-15 | `ALIGNER_ERROR_FLOOR` là giá trị đo được, không phải hằng số giả định |
+| WP-16 | Advice lint bắt 100% trong bộ đối kháng ≥30 mẫu |
+| WP-17 | Audience job chứa tên chủ đề → lint fail; 7-gram trùng bị bắt |
+| WP-18 | 4 route trùng cặp hook×device → lint fail; beat không đổi knowledge → lint fail |
+| WP-19 | Cắt đoạn TTS không rơi giữa entity/số/mệnh đề nhân quả |
+| WP-20 | **Không tồn tại ràng buộc 90–180 shots trong code**; zero gap/overlap |
+| WP-21 | Insert distribution master thiếu archival cha → abort |
+| WP-22 | M2 không chạy được khi M1 còn FAIL; critic chưa qualified → abort |
+| WP-23 | `AUTHORIZE_PUBLISH` thiếu `predicted_performance` → từ chối (P9) |
+| WP-24 | Learning chưa đạt cỡ mẫu → không promote được |
+| WP-25 | Một `trace_id` tái dựng được toàn bộ chuỗi sự kiện |
+| **WP-26** | **RELAX threshold không kèm promotion → CI fail; DELETE gold_sample → abort** |
+| **WP-27** | **Proposal thiếu shadow evidence không sang EVIDENCE_READY được** |
+| **WP-28** | **Package thiếu human decision → DoR chặn Stage 14; evidence report tái lập 100%** |
+| **WP-29** | **Publish thiếu PC-4 → abort; unfreeze thiếu learning promoted → abort** |
+| **WP-30** | **Rejected master → gold sample cùng lần chạy; promote PORTFOLIO từ 1 kênh → từ chối** |
+| **WP-31** | **Lệnh trong command_log không có trong OPS-LOG → audit bắt được** |
+
+---
+
+## 4. Bộ test đối kháng agent phải tự viết
+
+Năm nơi cần agent chủ động sinh mẫu tấn công, không chỉ mẫu hạnh phúc:
+
+**Advice lint (WP-16)** — ≥30 mẫu, gồm biến thể né tránh:
+```
+"bạn nên mua"                          → chặn
+"nhiều người đã chọn cách chuyển sang" → chặn (mệnh lệnh gián tiếp)
+"nếu bạn muốn tăng lợi nhuận, hãy"     → chặn (điều kiện hứa hẹn)
+"cơ chế này hoạt động như sau"         → cho qua
+"một số nhà phân tích cho rằng"        → cho qua (có qualifier)
+```
+
+**Anti-copy (WP-17)** — paraphrase nông:
+```
+Đổi thứ tự từ trong câu gốc      → phải bắt được
+Thay từ đồng nghĩa, giữ cấu trúc → phải bắt được qua beat sequence
+Viết lại hoàn toàn, cùng ý       → cho qua
+```
+
+**Number audit (WP-18)** — số sai tinh vi:
+```
+Claim 4.2%, script nói "khoảng 4%"          → cho qua nếu claim là ESTIMATE
+Claim 4.2%, script nói "hơn 5%"             → chặn
+Claim as_of_date 2024, script nói "hiện nay" → chặn (thiếu qualifier)
+Đơn vị đổi mà magnitude không đổi           → chặn
+```
+
+**Self-relax attack (WP-26, v2)** — ≥10 mẫu, agent thử tự nới bằng mọi đường:
+```
+Sửa trực tiếp thresholds.ts theo chiều dễ hơn      → CI fail
+Đổi tier gate M0 → M1                              → abort
+Set gate active = 0                                → abort
+Thêm nhánh waiver mới cho M0                       → abort
+Xóa một điều kiện trong DoR resolver               → guardrail test fail
+Ghi standard_change_log NEUTRAL cho thay đổi RELAX → audit phải bắt
+```
+
+**Human imprint bypass (WP-28, v2)** — ≥8 mẫu:
+```
+Service account ghi human_decision              → abort
+rationale_text sinh bởi model, giống nhau qua nhiều video
+                                                 → lint đa dạng phải cảnh báo
+2 decision cùng một loại D3                     → không đạt MIN_DISTINCT_TYPES
+Decision timestamp sau khi artifact đã seal     → lineage check phải bắt
+```
+
+---
+
+## 5. Mẫu DONE.md
+
+```markdown
+# DONE — WP-04 · CORE-04 DoR Resolver
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+| Acceptance | Test file | Test name | Trạng thái |
+|---|---|---|---|
+| Đánh giá đủ 11 điều kiện DoR | core-dor/resolver.test.ts | resolves all eleven conditions | ✅ |
+| NOT_EVALUATED bị từ chối ở M0/M1 | core-dor/resolver.test.ts | rejects NOT_EVALUATED at M0 | ✅ |
+| Kênh frozen → ready=false | core-dor/resolver.test.ts | blocks when channel frozen | ✅ |
+| Trả DoRFailure có cấu trúc | core-dor/resolver.test.ts | returns structured failures | ✅ |
+| p95 ≤ 200 ms | core-dor/perf.test.ts | p95 under 200ms | ✅ |
+
+## Guardrail đã cưỡng chế
+| ID | Cơ chế |
+|---|---|
+| G6 | Type system — DoRContext không có provider client |
+| G7 | Đọc gate_evaluation, tôn trọng trigger từ 0005 |
+| G15 | DoR đọc policy_check, chặn Stage 14 khi chưa đủ |
+
+## Trigger mới ↔ Test
+| Trigger | Test chứng minh ABORT |
+|---|---|
+| (không có trigger mới trong WP này) | — |
+
+## Lệnh đã chạy
+typecheck ✅ · lint ✅ · mode-guard ✅ · threshold-diff ✅ · guardrails ✅
+· unit ✅ · migration up/down ×2 ✅ · integration ✅
+
+## BLOCKED
+(trống)
+```
+
+---
+
+## 6. Quy tắc chống test giả
+
+Bốn dạng test vô nghĩa mà agent hay tạo ra khi bị chặn — audit phải bắt được:
+
+| Dạng | Dấu hiệu |
+|---|---|
+| **Test tautology** | `expect(fn()).toBe(fn())`; assert lại chính implementation |
+| **Ngưỡng giả** | Test pass vì ngưỡng đặt bằng giá trị quan sát được, thay vì ngưỡng thật |
+| **Mock che lỗi** | Mock trả về đúng thứ test cần, không phản ánh hành vi thật |
+| **Trigger không test** (v2) | Migration có trigger nhưng không test nào chứng minh nó ABORT |
+
+Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ không phải giá trị đo được, đó là ngưỡng giả — gate vẫn PASS/FAIL đều đặn nhưng con số nó tạo ra không có ý nghĩa. Danh sách `UNCALIBRATED` trong contracts tồn tại để làm điều này hiển thị: ngưỡng nằm trong danh sách đó **không được dùng làm gate M0/M1** cho tới khi có evidence hiệu chuẩn.
