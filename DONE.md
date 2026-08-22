@@ -162,3 +162,51 @@ Durable Object, cấp fencing token đơn điệu, heartbeat và reconciliation 
 ## Ngoài phạm vi WP-03
 
 Reconciler nhận interface để WP-08 triển khai thao tác vật lý `provider_request → ORPHANED` và `spend_reservation HELD → EXPIRED`. DoR sử dụng trạng thái lease/reconciliation này tại WP-04. WP-03 không gọi provider, không tạo spend và không đổi thứ tự migration.
+
+---
+
+## WP-04 · CORE-04 Definition of Ready Resolver
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Đánh giá đủ 11 điều kiện DoR | `resolver.test.ts` — từng condition có mutation đối kháng và kiểm tra count duy nhất |
+| M0/M1 `NOT_EVALUATED` bị từ chối | `rejects NOT_EVALUATED at M0...`; `requires PASS at M1...` |
+| Kênh frozen hoặc trạng thái freeze không xác định đều chặn | `blocks a frozen channel`; test unknown evidence |
+| Thiếu human decision chặn từ Stage 14 | `requires human decisions only from Stage 14 onward` |
+| Settings hash lệch hoặc thiếu archetype qualification đều chặn | `rejects capability settings drift...` |
+| Gate PASS thiếu evidence vẫn chặn | `rejects a PASS gate that lacks evidence` |
+| D1/evidence query lỗi không mở stage | `fails every condition when the evidence query is unavailable` |
+| Mọi từ chối có expected/actual/remediation | `treats unknown evidence as failure and returns structured remediation` |
+| Resolver luôn đọc lại bằng chứng, không tin ready flag đã lưu | `recomputes from the repository on every request...` |
+| p95 resolver ≤200 ms | `performance.test.ts`; manual 500 lượt đo p95 ≈0,004 ms |
+
+## 11 điều kiện fail-closed
+
+`LEASE_VALID` · `PARENTS_READY` · `MANDATORY_GATES_PASS` · `CAPABILITIES_QUALIFIED` · `NO_ACTIVE_PROVIDER_REQUESTS` · `NO_UNRECONCILED_LEASES` · `BUDGET_AVAILABLE` · `INPUTS_NOT_QUARANTINED` · `NO_CONFLICTING_PROVIDER_REQUESTS` · `CHANNEL_NOT_FROZEN` · `HUMAN_DECISIONS_SUFFICIENT`.
+
+Không dùng cache ở WP-04: mỗi lần resolve đọc bằng chứng mới, tương đương TTL 0 giây và nằm trong giới hạn cache tối đa 10 giây. Lỗi truy vấn trả `ready=false` cho cả 11 điều kiện; không có demo fallback.
+
+## Guardrail đã cưỡng chế
+
+| Guardrail | Cơ chế |
+|---|---|
+| P2 fail-closed | `false`, `null`, thiếu evidence hoặc query error đều không thể trả `ready=true` |
+| G6 zero-spend preflight | `DoREvidenceRepository` chỉ expose `loadEvidence`; type test chứng minh không có `providerClient` |
+| G7 evidence-bound gate | M0/M1 chỉ đạt khi state=`PASS` và `evidenceR2Key` khác null |
+| G15/P13 | Từ Stage 14, count phải đạt `POLICY.MIN_HUMAN_DECISIONS` |
+
+## Trigger mới ↔ Test
+
+WP-04 không thêm migration hoặc trigger.
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:unit`
+
+## Ngoài phạm vi WP-04
+
+CORE-05/WP-05 sở hữu standard inheritance, waiver validation, drift detection và migration `0005`. WP-04 chỉ đọc evidence qua repository, không gọi provider, không ghi D1, không reserve spend và không tạo production attempt.

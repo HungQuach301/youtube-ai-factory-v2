@@ -7,7 +7,8 @@ const workPackages = [
   { id: "WP-01", name: "Canonical Hashing & Lineage", status: "Complete", detail: "Deterministic identity, streaming SHA-256 and fail-closed lineage." },
   { id: "WP-02", name: "Typed Command & State Machine", status: "Complete", detail: "Twelve commands, immutable transactions and concurrent idempotency." },
   { id: "WP-03", name: "Lease & Fencing", status: "Complete", detail: "Durable lease state, monotonic fencing and fail-closed reconciliation." },
-  { id: "WP-04", name: "Definition of Ready Resolver", status: "Next", detail: "Eleven evidence-derived readiness conditions with structured refusal." },
+  { id: "WP-04", name: "Definition of Ready Resolver", status: "Complete", detail: "Eleven evidence-derived readiness conditions with structured refusal." },
+  { id: "WP-05", name: "Standard & Policy Registry", status: "Next", detail: "Versioned inheritance that may tighten standards but never weaken them." },
 ];
 
 const controls = [
@@ -78,9 +79,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
               <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation in controlled progress</h2></div>
-              <span className="progress-label">4 / 33 work packages</span>
+              <span className="progress-label">5 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="4 of 33 work packages complete"><span style={{ width: "12.12%" }} /></div>
+            <div className="progress-track" aria-label="5 of 33 work packages complete"><span style={{ width: "15.15%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>

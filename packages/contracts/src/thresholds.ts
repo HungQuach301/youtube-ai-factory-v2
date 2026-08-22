@@ -123,6 +123,12 @@ export const MOBILE = {
 } as const
 
 export const LEASE = { HEARTBEAT_SEC: 30, TTL_SEC: 90 } as const
+export const DOR = {
+  CONDITION_COUNT: 11,
+  HUMAN_DECISION_STAGE_ORDINAL: 14,
+  CACHE_MAX_SEC: 10,
+  P95_MAX_MS: 200
+} as const
 export const RETRY = { MAX_ATTEMPTS: 3, BASE_BACKOFF_MS: 1000, JITTER_RATIO: 0.3 } as const
 
 export const LEARNING = {
