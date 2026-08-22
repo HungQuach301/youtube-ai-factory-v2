@@ -23,9 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
-      - name: Emit bootstrap lockfile
-        run: base64 -w0 pnpm-lock.yaml
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Source integrity
         run: pnpm verify:source
       - name: Strict typecheck
