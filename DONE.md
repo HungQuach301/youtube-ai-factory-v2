@@ -72,3 +72,28 @@ G3–G15, implementation của `guardedDispatch`, StageRunner lifecycle, migrati
 ## Ngoài phạm vi WP-01
 
 Physical tables `artifact`, `artifact_lineage`, `quarantine_hash` và trigger G5 vẫn thuộc migration `0004` theo nguồn chuẩn `docs/03-DATA-SCHEMA.sql`; WP-01 không đổi thứ tự migration.
+
+---
+
+## WP-SITES-01 · GitHub-canonical ChatGPT Sites Control Plane
+
+## Mode: BUILD
+
+## Acceptance ↔ Evidence
+
+| Acceptance | Evidence |
+|---|---|
+| GitHub is the only canonical source | Deployable source stored at `sites/control-plane`; SSOT contract prohibits direct Site authority |
+| Site and GitHub source match | SHA-256 aggregate `f03564cf959576255805c14d3dd3d4d066f975a38abe83a2d4ed66cd061df1e6` over 35 managed files |
+| Clean GitHub build is deployable | PR #5: root build, source integrity and Sites control-plane CI all passed |
+| Drift fails closed | Every build runs `scripts/verify-source-lock.mjs` before Vinext |
+| AI/model handoff is recoverable | `SSOT-CONTRACT.md` requires clean GitHub `main`, checksums, blockers, PR and CI |
+| New Site is isolated | Dedicated slug `youtube-ai-factory-v2`; legacy Site remains immutable |
+| Production checkpoint verified | Version 1 succeeded at `https://youtube-ai-factory-v2.quach-hung.chatgpt.site` |
+| Provider/spend/publishing boundaries preserved | Provider dispatch OFF, production spend $0, auto-publish BLOCKED |
+
+## Canonical source
+
+- Merge commit: `adc719ba3c5fc46ad53724231ecfc2c52d536f0f`
+- Pull request: `#5`
+- Deployment evidence: `docs/operations/SITES-DEPLOYMENTS.md`
