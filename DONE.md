@@ -122,3 +122,43 @@ Physical tables `artifact`, `artifact_lineage`, `quarantine_hash` và trigger G5
 ## Ngoài phạm vi WP-02
 
 Durable Object, cấp fencing token đơn điệu, heartbeat và reconciliation thuộc WP-03. Điều kiện owner + promoted learning cho `UNFREEZE_CHANNEL` vẫn do migration `0010`/WP-29 cưỡng chế; lệnh này không được thêm vào năm lệnh P10.
+
+---
+
+## WP-03 · CORE-03 Lease & Fencing
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Lease độc quyền theo `(channel_id, package_id)` | `scopes leases by channel and package instead of globally` |
+| 100 acquire đồng thời chỉ có đúng một holder | `serializes concurrent acquisition so exactly one holder wins` |
+| Fencing token tăng đơn điệu và không tái sử dụng | `never reuses a fencing token after a clean release` |
+| Heartbeat 30 s, TTL 90 s = 3 × heartbeat | `uses a 90 second TTL equal to three heartbeat intervals` |
+| Heartbeat chỉ nhận đúng holder + token hiện hành | `renews only the exact active holder and fencing token` |
+| GC pause 120 s làm writer cũ mất quyền ghi | `rejects the old writer after a 120 second GC pause...` |
+| Sau expiry không cấp lease mới trước reconciliation sạch | Cùng test GC pause kiểm cả trạng thái `PENDING` và `CLEAN` |
+| State và event lease sống qua Durable Object restart | `durable-storage.test.ts` |
+
+## Trạng thái và sự kiện
+
+`ACQUIRE → HEARTBEAT* → RELEASE` cho đường sạch. Khi quá TTL: `EXPIRE → RECONCILED`; mọi acquire bị fail-closed với `RECONCILIATION_REQUIRED` cho tới khi reconciler trả `CLEAN` và không còn ID chưa xử lý. State và event append-only được ghi cùng một aggregate trong Durable Object storage để tránh torn write.
+
+## Guardrail đã cưỡng chế
+
+| Guardrail | Cơ chế |
+|---|---|
+| Single writer | Hàng đợi tuần tự trong coordinator + lease scope riêng cho từng channel/package |
+| Stale writer rejection | Mọi heartbeat, release và kiểm tra writer so khớp đồng thời holder + fencing token |
+| Fail-closed expiry | Lease hết hạn chuyển sang `REQUIRED`; không tự động trao quyền cho holder khác |
+| Durable recovery | Repository dùng storage bền vững; instance mới đọc lại lease đang hoạt động |
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:unit`
+
+## Ngoài phạm vi WP-03
+
+Reconciler nhận interface để WP-08 triển khai thao tác vật lý `provider_request → ORPHANED` và `spend_reservation HELD → EXPIRED`. DoR sử dụng trạng thái lease/reconciliation này tại WP-04. WP-03 không gọi provider, không tạo spend và không đổi thứ tự migration.

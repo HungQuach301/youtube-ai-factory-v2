@@ -16,5 +16,8 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /YouTube AI Factory V2/i);
   assert.match(html, /Single source of truth policy active/i);
   assert.match(html, /Production remains locked/i);
+  assert.match(html, /4 \/ 33 work packages/i);
+  assert.match(html, /Lease &amp; Fencing/i);
+  assert.match(html, /Definition of Ready Resolver/i);
   assert.doesNotMatch(html, /codex-preview/i);
 });
