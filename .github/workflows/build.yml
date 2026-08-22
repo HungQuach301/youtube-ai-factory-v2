@@ -1,0 +1,37 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - name: Source integrity
+        run: pnpm verify:source
+      - name: Strict typecheck
+        run: pnpm typecheck
+      - name: ESLint including G1, G2 and G6
+        run: pnpm lint
+      - name: Mandatory guardrail tests
+        run: pnpm test:guardrails
+      - name: Package unit tests
+        run: pnpm test:unit
