@@ -12,6 +12,8 @@ GitHub repository. A URL alone is not evidence of source equality.
 | 2026-08-23T00:27:32Z | `8e2bdad980292a729dd8bc9cd1649dfe4ffcb2e0` | [#14](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/14) | `57c4172382cd6e3984aff47096cce74cb6e2589efe2146b5e68c4e850af12768` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 5 | SUCCEEDED | custom; owner-controlled |
 | 2026-08-23T01:03:15Z | `f44a4228821452e5a15a491f95002450ed17d684` | [#17](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/17) | `70291967cfbe97f2b01865181773b2a9c1fad3199a64123be4c78c677540357c` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 6 | SUCCEEDED | custom; owner-controlled |
 
+| 2026-08-23T01:31:03Z | `f168bd141d4c64aba7cae1c1002af79aaaffc16f` | [#20](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/20) | `1d5309cbe73e8c0f084c3d33760b227924f5886cfa60a521897c1988559abc21` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 7 | SUCCEEDED | custom; owner-controlled |
+
 ## Verification evidence
 
 - GitHub root build: passed.
