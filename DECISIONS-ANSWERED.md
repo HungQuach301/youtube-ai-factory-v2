@@ -29,6 +29,19 @@ Phạm vi triển khai đang được ủy quyền liên tục: củng cố SSOT
 WP-13..WP-17; và mức tối thiểu WP-28/WP-29. Mỗi WP vẫn dùng branch/PR/CI/DONE
 độc lập, GitHub `main` vẫn là nguồn chuẩn duy nhất.
 
+## WP-12B numeric checkpoint ✅ **[OWNER CONFIRMED — 2026-08-23]**
+
+Sau khi benchmark đã tạo evidence, owner xác nhận ba kết quả trong phạm vi đo:
+
+- FULL: `$0.266674/video`;
+- REDUCED: `$0.123168/video`;
+- REDUCED + deterministic max: `$0.127076/video`.
+
+Owner chọn `PROFILE=REDUCED` để triển khai WP-13 và các work package phía sau.
+Quyết định này không biến số benchmark thành all-in production cost và không
+qualify provider chưa chạy thật; cost reservation, qualification và mọi hard
+gate tiếp tục fail-closed. `B-005` được đóng bằng xác nhận evidence-specific này.
+
 ---
 
 ## §1 · Nhịp mục tiêu ✅
