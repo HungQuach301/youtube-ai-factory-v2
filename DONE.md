@@ -437,3 +437,37 @@ Nếu lỗi xảy ra sau reservation, reservation tiếp tục ở trạng thái
 ## Điểm dừng bắt buộc
 
 WP-09 hoàn tất Giai đoạn 1 — Nền tảng. Không bắt đầu WP-10 cho tới khi owner xem báo cáo checkpoint và phê duyệt rõ ràng việc mở Giai đoạn 2. Provider thật, production data, actual spend và auto-publish vẫn bị khóa.
+
+---
+
+## WP-10 · EXE-02 Stage Runner Framework
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Framework sở hữu đúng chín bước lifecycle | `packages/stage-runner/tests/framework.test.ts` kiểm thứ tự DoR → validate → candidates → tournament → preflight → artifact → read-back → verify → freeze |
+| DoR fail có zero production và zero command side effect | Test dừng ngay tại `RESOLVE_DOR`, không produce candidate/artifact và không phát command |
+| Input critical không được default/transform âm thầm | Test schema thêm default làm đổi canonical input hash và bị `INPUT_IDENTITY_MISMATCH` trước `START_STAGE` |
+| G6: preflight không thể gọi provider/LLM | `tests/typecheck/preflight-provider-denied.ts` dùng negative compile contract; G6 ESLint chặn `guardedDispatch`, direct call và method reference trong `preflight()` |
+| Tournament không thể trả candidate ngoài attempt hiện tại | Test thay lineage hash và bị `INVALID_CHAMPION` trước tạo artifact |
+| Preflight fail không seal và không tự sinh revision thứ hai | Test ghi failure evidence, produce candidate đúng một lần, không tạo artifact và chỉ có `START_STAGE` |
+| Read-back fail chặn verify/freeze | Test checksum failure ghi evidence và không phát `VERIFY_ARTIFACT`/`FREEZE_STAGE` |
+| Command retry có định danh ổn định | Test hai lần chạy cùng stage attempt tạo cùng bốn idempotency key và mỗi command có key riêng |
+| PROFILE được truyền đúng vào stage | Test xác nhận `RunContext.profileSettings` và `PreflightContext.thresholds.PROFILE.REDUCED` dùng SSOT thresholds |
+
+## Ranh giới framework
+
+Subclass chỉ cài `requiredCapabilities`, input schema, candidate production,
+deterministic preflight và acceptance tests. `run()` là template method do
+framework sở hữu; stage-specific code không được bỏ qua preflight hoặc read-back.
+Preflight không nhận provider client. Bốn command lifecycle được phát qua typed
+command port với fencing token, actor identity, trace và idempotency key xác định.
+
+## Điểm dừng
+
+WP-10 không gọi provider thật, không ghi production data, không tạo actual spend
+và không bật auto-publish. Dừng checkpoint sau WP-10; WP-11 chỉ bắt đầu ở lượt
+triển khai tiếp theo của owner.

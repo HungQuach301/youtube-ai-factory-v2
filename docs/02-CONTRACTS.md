@@ -529,6 +529,14 @@ export type JobEnvelope = z.infer<typeof JobEnvelopeSchema>
 ## 7. Stage runner — `stage-runner.ts`
 
 ```ts
+export interface RunContext {
+  readonly packageId: PackageId
+  readonly stageInstanceId: StageInstanceId
+  readonly traceId: TraceId
+  readonly profile: ProfileName
+  readonly profileSettings: (typeof PROFILE)[ProfileName]
+}
+
 export interface PreflightContext {
   // G6 — CỐ Ý không expose provider client
   readonly measurements: DeterministicMeasurements
@@ -544,11 +552,20 @@ export abstract class StageRunner<In, Out> {
   abstract preflight(candidate: Out, ctx: PreflightContext): Promise<PreflightResult>
   abstract acceptanceTests(out: Out): AcceptanceTest[]
 
-  // framework lo: DoR → validate → tournament → preflight → seal
+  // framework lo: DoR → validate → produce candidates → tournament
+  //               → deterministic preflight → produce artifact
   //               → read-back → verify → freeze. KHÔNG override
   final async run(id: StageInstanceId): Promise<void>
 }
 ```
+
+`run()` là template method do EXE-02 sở hữu. `START_STAGE` chỉ được phát sau khi
+DoR và input schema đã PASS; bốn command `START_STAGE`, `PRODUCE_ARTIFACT`,
+`VERIFY_ARTIFACT`, `FREEZE_STAGE` dùng idempotency key xác định theo cùng stage
+attempt. Preflight fail hoặc read-back fail phải ghi evidence, không seal/freeze
+và không tự sinh revision thứ hai. `RunContext` đọc đúng cấu hình `PROFILE`; còn
+`PreflightContext` chỉ có measurement, threshold và profile nên provider/LLM call
+trong preflight là lỗi biên dịch.
 
 ---
 

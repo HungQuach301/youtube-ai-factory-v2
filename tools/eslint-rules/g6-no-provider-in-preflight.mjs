@@ -14,7 +14,12 @@ function functionName(node) {
   return ''
 }
 
-const PROVIDER_CALL = /(?:^|\.)(?:provider|llm|openai|anthropic|dispatch|generateText|generateObject|chat|completions|responses)(?:\.|$)/iu
+const PROVIDER_CALL = /(?:^|\.)(?:provider|llm|openai|anthropic|dispatch|guardedDispatch|generateText|generateObject|chat|completions|responses)(?:\.|$)/iu
+
+function insideRanges(node, ranges) {
+  return Array.isArray(node.range)
+    && ranges.some(([start, end]) => start <= node.range[0] && node.range[1] <= end)
+}
 
 export default {
   meta: {
@@ -33,9 +38,12 @@ export default {
         if (name === 'preflight' && Array.isArray(node.range)) preflightRanges.push(node.range)
       },
       CallExpression(node) {
-        if (!Array.isArray(node.range)) return
-        const inside = preflightRanges.some(([start, end]) => start <= node.range[0] && node.range[1] <= end)
-        if (inside && PROVIDER_CALL.test(calleePath(node.callee))) {
+        if (insideRanges(node, preflightRanges) && PROVIDER_CALL.test(calleePath(node.callee))) {
+          context.report({ node, messageId: 'providerCall' })
+        }
+      },
+      MemberExpression(node) {
+        if (insideRanges(node, preflightRanges) && PROVIDER_CALL.test(calleePath(node))) {
           context.report({ node, messageId: 'providerCall' })
         }
       },
