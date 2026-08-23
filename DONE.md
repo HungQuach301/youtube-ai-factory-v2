@@ -694,3 +694,29 @@ Implementation tối thiểu đã hoàn tất nhưng activation vẫn fail-close
 owner cung cấp một `human_actor.identity` thật. Hệ thống không suy identity từ
 GitHub login, email phiên ChatGPT hay service account. Không dispatch provider,
 không ghi production data, không tạo actual spend và không bật auto-publish.
+
+
+---
+
+## WP-29 · Policy Defense — minimum Track G boundary
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| PC1..PC8 đều PASS và có evidence | Strict schema, checklist test và SQL trigger |
+| Publish thiếu checklist/disclosure/prediction/owner hoặc kênh freeze bị chặn | Runtime aggregate và `trg_publish_requires_policy_checklist` |
+| Disclosure mặc định bật; tắt cần rationale ≥20 | Unit test + INSERT/UPDATE SQL triggers |
+| PC7 dùng primitive WP-17 | Import trực tiếp beat Levenshtein và pHash Hamming từ `@youtube-ai-factory/intelligence`; thêm voice-settings reuse |
+| I2+ thiếu matching freeze là hard failure | `assertIncidentFreeze` test; operator active được emergency freeze, owner xác nhận trong 24h |
+| Unfreeze đòi owner + learning promoted | Runtime test + SQL trigger |
+| Policy-watch diff tạo proposal xác định | Cùng snapshot diff tạo cùng proposal/idempotency hash |
+| Migration `0010` tái lập | UP/DOWN ×2; disclosure, evidence, publish và unfreeze abort tests |
+
+SSOT đã được đồng bộ với quyết định owner: disclosure mặc định bật, operator
+emergency freeze, owner confirm 24 giờ, clean streak 15 và kill criterion 12.
+Các URL chính thức chỉ được resolve/snapshot trong OPERATE; BUILD không tự đổi
+gate và không khẳng định capability/provider qualification. Auto-publish tiếp tục
+bị khóa.
