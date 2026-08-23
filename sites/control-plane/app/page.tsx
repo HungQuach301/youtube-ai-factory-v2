@@ -15,7 +15,8 @@ const workPackages = [
   { id: "WP-09", name: "Capability Registry & Dispatch Guard", status: "Complete", detail: "Versioned qualified bindings, exact settings hashes and the nine-step fail-closed guard now protect every provider transport." },
   { id: "WP-10", name: "Stage Runner Framework", status: "Complete", detail: "The framework now owns the nine-step lifecycle, deterministic preflight, mandatory read-back and idempotent typed commands." },
   { id: "WP-11", name: "Tournament Engine", status: "Complete", detail: "Blind judge payloads, deterministic seeded selection, anchored rubrics, eligibility-first filtering and rejected-candidate evidence are enforced." },
-  { id: "WP-12", name: "Media Worker Runtime", status: "Blocked", detail: "The next package requires an owner decision on container infrastructure; implementation has not started." },
+  { id: "WP-12", name: "Media Worker Runtime", status: "Complete", detail: "Pinned CPU-only image, deterministic job plans, immutable read-back and the no-D1 worker boundary now pass CI." },
+  { id: "WP-12B", name: "Cost Benchmark", status: "Decision", detail: "Sixteen measured render cases place all three benchmarked profiles below $30; owner numeric confirmation remains mandatory." },
 ];
 
 const controls = [
@@ -86,9 +87,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
             <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · controlled execution in progress</h2></div>
-              <span className="progress-label">12 / 33 work packages</span>
+              <span className="progress-label">13 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="12 of 33 work packages complete"><span style={{ width: "36.36%" }} /></div>
+            <div className="progress-track" aria-label="13 of 33 work packages complete"><span style={{ width: "39.39%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -110,7 +111,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-11 is complete. WP-12 remains blocked pending the container-infrastructure decision; every provider, spend and publish control remains fail-closed.</p>
+              <p>WP-12 is complete. WP-12B measured FULL at $0.2667, REDUCED at $0.1232 and deterministic-max REDUCED at $0.1271 within its scoped model. The mandatory owner numeric checkpoint remains fail-closed.</p>
             </div>
             <p className="safety-note">This progress update changes no production permission: provider transport, spend and publishing remain locked.</p>
           </aside>
