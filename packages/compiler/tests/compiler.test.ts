@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
 import { CompilerError, compileShotCueProgram } from '../src/index.js'
@@ -70,23 +68,16 @@ describe('WP-20 ShotCueProgram compiler', () => {
   })
 
   test('does not impose a minimum or maximum number of shots', () => {
-    const compiled = compileShotCueProgram({
+    const single = compileShotCueProgram({
       ...makeProgram(1),
       canonicalDurationTicks: 240_000,
       shots: [makeShot(0, 0, 240_000)],
     })
-    expect(compiled.shotCount).toBe(1)
-    expect(compiled.adaptiveWarnings.some(
+    expect(single.shotCount).toBe(1)
+    expect(single.adaptiveWarnings.some(
       (warning) => warning.code === 'SHOT_DURATION_ABOVE_GUIDANCE',
     )).toBe(true)
-
-    const sourceFiles = ['compiler.ts', 'types.ts', 'interval-tree.ts'].map((name) => readFileSync(
-      fileURLToPath(new URL('../src/' + name, import.meta.url)),
-      'utf8',
-    )).join('\n')
-    const legacyRange = new RegExp(String(90) + '\\s*[-–]\\s*' + String(180), 'u')
-    expect(sourceFiles).not.toMatch(legacyRange)
-    expect(sourceFiles).not.toMatch(/SHOT_COUNT_(?:MIN|MAX)/u)
+    expect(compileShotCueProgram(makeProgram(256)).shotCount).toBe(256)
   })
 
   test('fails closed on a timeline gap', () => {
