@@ -307,3 +307,42 @@ WP-06 không thêm migration. `source.snapshot_r2_key`/`content_hash` vẫn thu�
 ## Ngoài phạm vi WP-06
 
 Không gọi provider thật, không tạo reservation/spend, không ghi production data, không bật auto-publish. Provider adapter framework và ledger vật lý thuộc WP-07/WP-08; binding R2/D1 thật được cấu hình tại WP sở hữu hạ tầng tương ứng.
+
+---
+
+## WP-07 · PRV-01 Provider Adapter Framework
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| `SCHEMA_VIOLATION` không bao giờ retry | `guarded-dispatch.test.ts` — terminal error table kiểm đúng một transport attempt |
+| Chỉ `TRANSIENT` và `RATE_LIMIT` được retry | Test từng lớp retryable tới `thresholds.RETRY.MAX_ATTEMPTS`; cùng idempotency key qua mọi attempt |
+| Năm lớp còn lại dừng ngay | Test bảng `SCHEMA_VIOLATION`, `RIGHTS_DENIED`, `BUDGET_DENIED`, `CONTENT_FILTERED`, `PROVIDER_ERROR` |
+| Error normalization ngoài contract fail closed | Adapter trả error class không hợp lệ hoặc normalizer lỗi → `PROVIDER_ERROR`, không retry |
+| Estimate chạy trước transport và estimate lỗi là zero dispatch | Event-order test + invalid estimate trả `attempts=0` và provider call count bằng 0 |
+| Token cost dùng tokenizer thật và output ceiling | `estimateTokenCost` test đếm tokenizer một lần, giữ exact input/output token detail và max cost |
+| Adapter không export raw `dispatch` | Public API test không có `dispatch`; package exports chỉ root framework |
+| Mọi transport call đi qua `guardedDispatch` | G9 ESLint adversarial tests chặn direct `.dispatch`, concrete adapter import và named dispatch export |
+
+## Retry contract
+
+`guardedDispatch` tính cost estimate trước, tạo một canonical idempotency key từ capability, version, settings hash, archetype, package, stage và request, rồi tái sử dụng key đó cho mọi attempt. Backoff dùng `thresholds.RETRY`: tối đa 3 attempt, base 1.000 ms, exponential jitter 0,3. Fencing token và trace vẫn nằm trong context để WP-09 kiểm quyền, nhưng không làm thay đổi provider idempotency của cùng stage/request.
+
+## Guardrail G9
+
+ESLint mới cưỡng chế ba ranh giới: code ngoài framework không được gọi `.dispatch`; code ngoài provider package không được import adapter cụ thể; file adapter không được export hàm `dispatch` trực tiếp. Concrete adapter sẽ chỉ được liên kết nội bộ phía sau root API `guardedDispatch`.
+
+## Exact cost estimate
+
+`estimateTokenCost` không suy token từ ký tự. Adapter phải cung cấp tokenizer thật, giá theo từng token và `maxOutputTokens`; mọi count/price không hữu hạn, âm hoặc token count không nguyên đều bị từ chối trước transport. WP-07 chỉ tính cận trên; reservation/settlement vật lý vẫn thuộc WP-08.
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:guardrails` · `pnpm test:unit` · strict TypeScript độc lập · runtime smoke retry/terminal/token cost
+
+## Ngoài phạm vi WP-07
+
+Không thêm concrete provider SDK hoặc chọn provider, không gọi provider thật, không tạo spend và không thêm migration. Evidence binding, cost reservation/ledger và chín bước capability dispatch guard lần lượt thuộc WP-08/WP-09. Auto-publish tiếp tục bị khóa.
