@@ -129,6 +129,7 @@ export const DOR = {
   CACHE_MAX_SEC: 10,
   P95_MAX_MS: 200
 } as const
+export const EVIDENCE = { PROVIDER_RETENTION_MONTHS: 12 } as const
 export const RETRY = { MAX_ATTEMPTS: 3, BASE_BACKOFF_MS: 1000, JITTER_RATIO: 0.3 } as const
 
 export const LEARNING = {
