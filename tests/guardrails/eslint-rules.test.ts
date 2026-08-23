@@ -43,4 +43,28 @@ describe('mandatory ESLint guardrails', () => {
   it('G6 permits deterministic measurements inside preflight()', () => {
     expect(verify('class Runner { async preflight() { return measurements.verify() } }', 'g6-no-provider-in-preflight', 'packages/stage-runner/src/valid.js')).toHaveLength(0)
   })
+
+  it('G9 rejects direct provider dispatch outside the framework', () => {
+    const messages = verify('provider.dispatch(request, key)', 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('directDispatch')
+  })
+
+  it('G9 rejects computed raw dispatch access outside the framework', () => {
+    const messages = verify("provider['dispatch'](request, key)", 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('directDispatch')
+  })
+
+  it('G9 rejects importing a concrete adapter outside the provider package', () => {
+    const messages = verify("import adapter from '@youtube-ai-factory/provider/adapters/openai'", 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('adapterImport')
+  })
+
+  it('G9 rejects a named dispatch export from an adapter', () => {
+    const messages = verify('export async function dispatch() {}', 'g9-guarded-dispatch-only', 'packages/provider/adapters/openai.js')
+    expect(messages.map((message) => message.messageId)).toContain('dispatchExport')
+  })
+
+  it('G9 permits the single framework call site', () => {
+    expect(verify('adapter.dispatch(request, key)', 'g9-guarded-dispatch-only', 'packages/provider/src/framework.js')).toHaveLength(0)
+  })
 })
