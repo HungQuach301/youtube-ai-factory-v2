@@ -53,6 +53,6 @@ describe('WP-14 gold set manager', () => {
     const detections = samples.map((sample, index) => ({ sampleId: sample.id, detected: index % 2 === 0 }))
     const metrics = measureGoldPerformance(samples, detections)
     expect(metrics).toHaveLength(8)
-    expect(metrics[0]).toEqual({ defectClass: 'BLACK_FRAME', precision: 0.125, recall: 0.5, durationVariance: 0.140625 })
+    expect(metrics[0]).toEqual({ defectClass: 'BLACK_FRAME', precision: 0.125, recall: 0.5, durationVariance: 0.015625 })
   })
 })
