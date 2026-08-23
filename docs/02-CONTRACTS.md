@@ -325,9 +325,13 @@ export const POLICY = {
   ESCAPED_P0_CLEAN_DAYS_FOR_SAMPLING: 90,
   POLICY_WATCH_INTERVAL_DAYS: 7,
   POLICY_CHECK_COUNT: 8,                     // PC1..PC8, tất cả phải PASS (G15)
-  SAMPLING_MIN_CLEAN_STREAK: null,           // → 07 §10, khuyến nghị ≥15
-  KILL_CRITERIA_VIDEO_COUNT: null,           // → 07 §10, khuyến nghị 12–15
-  POLICY_SNAPSHOT_SOURCES: null,             // → 07 §9
+  SAMPLING_MIN_CLEAN_STREAK: 15,             // owner confirmed 2026-08-23
+  KILL_CRITERIA_VIDEO_COUNT: 12,             // owner confirmed 2026-08-23
+  POLICY_SNAPSHOT_SOURCES: ['ypp_monetization','inauthentic_content',
+                            'synthetic_disclosure','advertiser_friendly'],
+  DISCLOSURE_DEFAULT: true,
+  OPERATOR_EMERGENCY_FREEZE: true,
+  FREEZE_OWNER_CONFIRM_HOURS: 24,
 } as const
 
 // ============ v2 — TIẾN HÓA ============
@@ -386,7 +390,6 @@ export const UNDECIDED = {
   SAMPLING_THRESHOLD_N: null,                 // → 07 §10
   BASELINE_RETENTION_SOURCE: null,            // → 07 §8
   MEDIA_INFRA: null,                          // → 07 §4
-  DISCLOSURE_DEFAULT: null,                   // → 07 §9
 } as const
 ```
 

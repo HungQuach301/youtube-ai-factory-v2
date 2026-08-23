@@ -44,7 +44,8 @@ export const POLICY = {
   SELF_THUMBNAIL_PHASH_HAMMING_MIN: 16,
   INCIDENT_CLEAN_DAYS_FOR_SAMPLING: 90,
   POLICY_WATCH_INTERVAL_DAYS: 7,
-  POLICY_SNAPSHOT_SOURCES: null,       // owner khai danh sách URL chính thức
+  POLICY_SNAPSHOT_SOURCES: ['ypp_monetization','inauthentic_content',
+                            'synthetic_disclosure','advertiser_friendly'],
 } as const
 ```
 Ghi chú P5: các ngưỡng self-similarity trên là khởi điểm chưa hiệu chuẩn — đánh dấu `UNCALIBRATED`, hiệu chỉnh sau 10–15 video bằng phân phối thực tế, mọi thay đổi qua Evolution (G11/G12).
