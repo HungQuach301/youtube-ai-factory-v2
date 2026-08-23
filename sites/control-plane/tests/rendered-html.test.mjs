@@ -16,7 +16,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /YouTube AI Factory V2/i);
   assert.match(html, /Single source of truth policy active/i);
   assert.match(html, /Production remains locked/i);
-  assert.match(html, /10 \/ 33 work packages/i);
+  assert.match(html, /11 \/ 33 work packages/i);
   assert.match(html, /Lease &amp; Fencing/i);
   assert.match(html, /Definition of Ready Resolver/i);
   assert.match(html, /Standard &amp; Policy Registry/i);
@@ -26,8 +26,11 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Two-phase reservation/i);
   assert.match(html, /Capability Registry &amp; Dispatch Guard/i);
   assert.match(html, /nine-step fail-closed guard/i);
-  assert.match(html, /Foundation complete/i);
-  assert.match(html, /Owner checkpoint required before WP-10/i);
+  assert.match(html, /Stage Runner Framework/i);
+  assert.match(html, /deterministic preflight/i);
+  assert.match(html, /Tournament Engine/i);
+  assert.match(html, /Phase 2 · controlled execution in progress/i);
+  assert.match(html, /WP-10 is complete\. WP-11 is the next bounded work package/i);
   assert.match(html, /Provider dispatch[\s\S]*OFF/i);
   assert.match(html, /Production spend[\s\S]*\$0/i);
   assert.match(html, /Automatic publishing[\s\S]*BLOCKED/i);

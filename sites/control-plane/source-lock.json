@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "47043225c11c00d2c12fbad9845364e11d30517326539986864fd62af7edf2ae",
+  "aggregate_sha256": "33ca7b40a2a61da6c847d6d6cc2512c86381b91a4febbe3fadb5504a7fefc453",
   "files": [
     {
       "path": ".gitignore",
@@ -129,7 +129,7 @@
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "eff9df48257c85da0e931dcd365785841cfc87936787c8cb315f967165985abd"
+      "sha256": "ee2d99b265c13904bdfd9b2c99abf8283bb01e0ff605634a90f756ceaf52a403"
     },
     {
       "path": "tsconfig.json",
