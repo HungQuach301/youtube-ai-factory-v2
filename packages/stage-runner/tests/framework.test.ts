@@ -76,7 +76,7 @@ function fixturePorts(options: {
   readonly foreignChampion?: boolean
   readonly readBack?: ReadBackResult
 } = {}): {
-  readonly ports: StageRunnerPorts
+  readonly ports: StageRunnerPorts<FixtureOutput>
   readonly steps: StageLifecycleStep[]
   readonly commands: ExecuteCommand[]
   readonly failures: string[]

@@ -11,9 +11,9 @@ import type {
   PackageId,
   PreflightResult,
   ProfileName,
-  RunContext,
   StageInstanceId,
   TraceId,
+  TournamentSelectionPort,
 } from '@youtube-ai-factory/contracts'
 import type { ExecuteCommand } from '@youtube-ai-factory/core-command'
 
@@ -56,16 +56,6 @@ export interface StageDoRPort {
     readonly stage: StageRunRecord
     readonly requiredCapabilities: readonly CapabilityRef[]
   }): Promise<DoRResult>
-}
-
-export interface TournamentInput<Out> {
-  readonly candidates: readonly Candidate<Out>[]
-  readonly context: RunContext
-  readonly acceptanceTests: (output: Out) => readonly AcceptanceTest[]
-}
-
-export interface StageTournamentPort {
-  select<Out>(input: TournamentInput<Out>): Promise<Candidate<Out>>
 }
 
 export interface StoredArtifact {
@@ -133,10 +123,10 @@ export interface StageLifecycleObserver {
   }): Promise<void>
 }
 
-export interface StageRunnerPorts {
+export interface StageRunnerPorts<Out> {
   readonly repository: StageRunRepository
   readonly dor: StageDoRPort
-  readonly tournament: StageTournamentPort
+  readonly tournament: TournamentSelectionPort<Out>
   readonly artifacts: StageArtifactPort
   readonly verification: StageVerificationPort
   readonly commands: StageCommandPort

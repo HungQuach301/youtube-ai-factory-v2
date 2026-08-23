@@ -13,9 +13,7 @@ export type {
   StageRunRecord,
   StageRunnerPorts,
   StageRunRepository,
-  StageTournamentPort,
   StageVerificationPort,
   StartingControlState,
   StoredArtifact,
-  TournamentInput,
 } from './types.js'

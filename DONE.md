@@ -471,3 +471,51 @@ command port với fencing token, actor identity, trace và idempotency key xác
 WP-10 không gọi provider thật, không ghi production data, không tạo actual spend
 và không bật auto-publish. Dừng checkpoint sau WP-10; WP-11 chỉ bắt đầu ở lượt
 triển khai tiếp theo của owner.
+
+---
+
+## WP-11 · EXE-03 Tournament Engine
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Cùng seed tạo cùng champion ba lần | `packages/tournament/tests/engine.test.ts` — chạy ba engine độc lập, so cùng lineage hash |
+| Judge input không chứa metadata nguồn | Test đưa provider/model/prompt/request/source metadata vào candidate rồi kiểm payload judge chỉ có `blindId` và `value` |
+| Eligibility chạy trước chi phí judge | Test loại candidate trước judge, mỗi critic chỉ nhận candidate đủ điều kiện |
+| Sinh và chấm độc lập theo P7 | Test chặn system prompt hash trùng; generation temperature đọc contract, judge temperature luôn 0 |
+| Rubric anchoring bắt buộc | Test thiếu anchor `borderline` fail-closed trước judge |
+| Width và critic count đọc từ PROFILE | Test thiếu candidate hoặc thiếu critic so với REDUCED đều bị chặn |
+| Candidate bị loại được bảo tồn | Test bundle giữ đủ `CHAMPION`, `REJECTED`, `INELIGIBLE`, critic score và evidence hash |
+| Lỗi evidence hoặc judge output không thể trả champion | Test evidence store throw và partial score đều fail-closed |
+
+## Ranh giới blind và xác định
+
+Candidate giữ source metadata riêng để audit nhưng `BlindJudgeInput` không có
+ordinal, lineage hash hay source metadata. Engine xáo thứ tự xác định theo seed,
+tạo blind ID theo vị trí và gọi từng critic bằng payload mới, không truyền kết quả
+critic trước. Điểm criterion nằm trên thang contract 0–100; aggregate là trung
+bình xác định, champion phải đạt `CREATIVE.CHAMPION_MIN_SCORE`, hòa được phá bằng
+rank hash theo seed.
+
+## PROFILE và bảo tồn evidence
+
+Candidate width chỉ có thể đọc qua `routeCount`, `compositionsPerCriticalUnit`
+hoặc `sourceCandidates`; critic count chỉ qua `criticCountStage04` hoặc
+`criticCountAssurance`. Engine từ chối context không trỏ đúng object PROFILE
+trong SSOT. Mọi candidate phải được preserve trước khi trả champion; lỗi preserve
+không được hạ xuống warning.
+
+## Lệnh xác minh
+
+`pnpm verify:source` · `pnpm typecheck` · `pnpm test:typecheck-boundaries` ·
+`pnpm lint` · `pnpm test:guardrails` · `pnpm test:unit` ·
+`pnpm test:migrations` · `pnpm test:integration`
+
+## Điểm dừng
+
+WP-11 không gọi provider thật, không ghi production data, không tạo reservation
+hoặc actual spend và không bật auto-publish. Dừng checkpoint sau WP-11; không tự
+bắt đầu WP-12 vì WP-12 còn bị chặn bởi quyết định hạ tầng container.

@@ -56,7 +56,7 @@ function commandKey(stageRunKey: Hex64, type: StageCommandType): Hex64 {
 }
 
 export abstract class StageRunner<In, Out> extends StageRunnerContract<In, Out> {
-  constructor(private readonly ports: StageRunnerPorts) { super() }
+  constructor(private readonly ports: StageRunnerPorts<Out>) { super() }
 
   abstract override readonly stageCode: string
   abstract override requiredCapabilities(): readonly CapabilityRef[]
