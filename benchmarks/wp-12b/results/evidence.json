@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-23T08:06:01.315Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.19.0"
+  },
+  "inputs": {
+    "schema_version": 1,
+    "benchmark": {
+      "width": 640,
+      "height": 360,
+      "fps": 12,
+      "duration_seconds": 1,
+      "production_width": 1920,
+      "production_height": 1080,
+      "production_fps": 24,
+      "production_duration_seconds": 480
+    },
+    "fly": {
+      "machine": "shared-cpu-1x-1gb",
+      "region": "sin",
+      "usd_per_started_second_conservative": 0.00000355,
+      "source": "https://fly.io/docs/about/pricing/",
+      "observed_at": "2026-08-23"
+    },
+    "stage14_fixture": {
+      "model_pricing_reference": "gpt-5.6-terra",
+      "model_is_qualified": false,
+      "input_usd_per_million_tokens": 2,
+      "output_usd_per_million_tokens": 12,
+      "input_tokens_per_critic": 8000,
+      "output_tokens_per_critic": 1000,
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+      "observed_at": "2026-08-23"
+    },
+    "profiles": [
+      {
+        "name": "FULL",
+        "architecture": "sharp-per-frame",
+        "critics": 9,
+        "deterministic_measurement_multiplier": 1
+      },
+      {
+        "name": "REDUCED",
+        "architecture": "render-once-filter-graph",
+        "critics": 4,
+        "deterministic_measurement_multiplier": 1
+      },
+      {
+        "name": "REDUCED_DETERMINISTIC_MAX",
+        "architecture": "render-once-filter-graph",
+        "critics": 4,
+        "deterministic_measurement_multiplier": 1.35
+      }
+    ]
+  },
+  "cases": [
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "title-card",
+      "headlessChromiumRequired": false,
+      "wallMs": 471.364,
+      "cpuSeconds": 0.446332,
+      "peakRssBytes": 116019200,
+      "outputBytes": 9342,
+      "outputPath": "sharp-per-frame-title-card.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "split-panel",
+      "headlessChromiumRequired": false,
+      "wallMs": 436.831,
+      "cpuSeconds": 0.417735,
+      "peakRssBytes": 115290112,
+      "outputBytes": 9161,
+      "outputPath": "sharp-per-frame-split-panel.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "timeline",
+      "headlessChromiumRequired": false,
+      "wallMs": 476.396,
+      "cpuSeconds": 0.440962,
+      "peakRssBytes": 115728384,
+      "outputBytes": 9023,
+      "outputPath": "sharp-per-frame-timeline.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "data-chart",
+      "headlessChromiumRequired": false,
+      "wallMs": 485.473,
+      "cpuSeconds": 0.454179,
+      "peakRssBytes": 115646464,
+      "outputBytes": 11643,
+      "outputPath": "sharp-per-frame-data-chart.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "quote-card",
+      "headlessChromiumRequired": false,
+      "wallMs": 462.765,
+      "cpuSeconds": 0.43313,
+      "peakRssBytes": 116072448,
+      "outputBytes": 9240,
+      "outputPath": "sharp-per-frame-quote-card.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "device-ui",
+      "headlessChromiumRequired": true,
+      "wallMs": 532.589,
+      "cpuSeconds": 0.499095,
+      "peakRssBytes": 116154368,
+      "outputBytes": 8751,
+      "outputPath": "sharp-per-frame-device-ui.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "webpage-scroll",
+      "headlessChromiumRequired": true,
+      "wallMs": 470.314,
+      "cpuSeconds": 0.455121,
+      "peakRssBytes": 117043200,
+      "outputBytes": 10607,
+      "outputPath": "sharp-per-frame-webpage-scroll.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "sharp-per-frame",
+      "archetype": "kinetic-text",
+      "headlessChromiumRequired": false,
+      "wallMs": 491.622,
+      "cpuSeconds": 0.466524,
+      "peakRssBytes": 116117504,
+      "outputBytes": 9826,
+      "outputPath": "sharp-per-frame-kinetic-text.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "title-card",
+      "headlessChromiumRequired": false,
+      "wallMs": 348.501,
+      "cpuSeconds": 0.317359,
+      "peakRssBytes": 93454336,
+      "outputBytes": 6984,
+      "outputPath": "render-once-filter-graph-title-card.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "split-panel",
+      "headlessChromiumRequired": false,
+      "wallMs": 346.306,
+      "cpuSeconds": 0.318103,
+      "peakRssBytes": 93569024,
+      "outputBytes": 6811,
+      "outputPath": "render-once-filter-graph-split-panel.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "timeline",
+      "headlessChromiumRequired": false,
+      "wallMs": 440.959,
+      "cpuSeconds": 0.394828,
+      "peakRssBytes": 93343744,
+      "outputBytes": 6511,
+      "outputPath": "render-once-filter-graph-timeline.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "data-chart",
+      "headlessChromiumRequired": false,
+      "wallMs": 360.743,
+      "cpuSeconds": 0.326505,
+      "peakRssBytes": 93302784,
+      "outputBytes": 8001,
+      "outputPath": "render-once-filter-graph-data-chart.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "quote-card",
+      "headlessChromiumRequired": false,
+      "wallMs": 358.965,
+      "cpuSeconds": 0.3302,
+      "peakRssBytes": 93392896,
+      "outputBytes": 6923,
+      "outputPath": "render-once-filter-graph-quote-card.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "device-ui",
+      "headlessChromiumRequired": true,
+      "wallMs": 350.478,
+      "cpuSeconds": 0.319749,
+      "peakRssBytes": 93208576,
+      "outputBytes": 6490,
+      "outputPath": "render-once-filter-graph-device-ui.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "webpage-scroll",
+      "headlessChromiumRequired": true,
+      "wallMs": 352.26,
+      "cpuSeconds": 0.321678,
+      "peakRssBytes": 93593600,
+      "outputBytes": 8179,
+      "outputPath": "render-once-filter-graph-webpage-scroll.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    },
+    {
+      "architecture": "render-once-filter-graph",
+      "archetype": "kinetic-text",
+      "headlessChromiumRequired": false,
+      "wallMs": 354.549,
+      "cpuSeconds": 0.326439,
+      "peakRssBytes": 93376512,
+      "outputBytes": 7095,
+      "outputPath": "render-once-filter-graph-kinetic-text.mp4",
+      "sharpVersion": "0.35.3",
+      "libvipsVersion": "8.18.3"
+    }
+  ],
+  "model": {
+    "pixelFrameScale": 18,
+    "durationScale": 480,
+    "criticUnitUsd": 0.028,
+    "caveat": "Measured scope covers media render compute plus a token-priced Stage 14 fixture. It excludes unqualified production providers, storage egress, TTS, stock, music and rework."
+  },
+  "profiles": [
+    {
+      "name": "FULL",
+      "architecture": "sharp-per-frame",
+      "critics": 9,
+      "deterministic_measurement_multiplier": 1,
+      "projectedComputeSeconds": 4133.542,
+      "mediaComputeUsd": 0.014674,
+      "stage14Usd": 0.252,
+      "wp12bMeasuredScopeUsd": 0.266674,
+      "underVideoCeiling": true,
+      "underScaledTarget": true
+    },
+    {
+      "name": "REDUCED",
+      "architecture": "render-once-filter-graph",
+      "critics": 4,
+      "deterministic_measurement_multiplier": 1,
+      "projectedComputeSeconds": 3145.782,
+      "mediaComputeUsd": 0.011168,
+      "stage14Usd": 0.112,
+      "wp12bMeasuredScopeUsd": 0.123168,
+      "underVideoCeiling": true,
+      "underScaledTarget": true
+    },
+    {
+      "name": "REDUCED_DETERMINISTIC_MAX",
+      "architecture": "render-once-filter-graph",
+      "critics": 4,
+      "deterministic_measurement_multiplier": 1.35,
+      "projectedComputeSeconds": 4246.806,
+      "mediaComputeUsd": 0.015076,
+      "stage14Usd": 0.112,
+      "wp12bMeasuredScopeUsd": 0.127076,
+      "underVideoCeiling": true,
+      "underScaledTarget": true
+    }
+  ],
+  "conclusion": "ALL_THREE_WITHIN_30_USD_FOR_MEASURED_SCOPE"
+}
