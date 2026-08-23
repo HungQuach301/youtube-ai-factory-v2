@@ -159,6 +159,9 @@ h2 { font-size: clamp(20px, 2.1vw, 28px); letter-spacing: -.025em; margin: 0; }
 .safety-list li { align-items: center; border-top: 1px solid var(--line); display: flex; justify-content: space-between; padding: 15px 0; }
 .safety-list span { color: var(--muted); font-size: 12px; }
 .safety-list b { color: var(--amber); font-size: 10px; letter-spacing: .08em; }
+.foundation-boundary { background: rgba(243, 188, 101, .08); border: 1px solid rgba(243, 188, 101, .22); border-radius: 13px; margin-top: 18px; padding: 14px; }
+.foundation-boundary strong { color: var(--amber); font-size: 10px; letter-spacing: .1em; }
+.foundation-boundary p { color: #c3b18f; font-size: 12px; line-height: 1.55; margin: 7px 0 0; }
 
 .continuity { margin-top: 22px; }
 .contract-version { color: var(--mint); }

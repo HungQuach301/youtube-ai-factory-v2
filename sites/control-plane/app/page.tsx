@@ -12,7 +12,8 @@ const workPackages = [
   { id: "WP-06", name: "Evidence Store", status: "Complete", detail: "Immutable source and provider snapshots with checksum replay and namespace isolation." },
   { id: "WP-07", name: "Provider Adapter Framework", status: "Complete", detail: "Guarded dispatch, seven-class error normalization, bounded retry and exact token-cost estimation." },
   { id: "WP-08", name: "Cost Reservation & Ledger", status: "Complete", detail: "Two-phase reservation, hierarchical ceilings, namespace isolation and orphan reconciliation are enforced fail-closed." },
-  { id: "WP-09", name: "Capability Registry & Dispatch Guard", status: "Next", detail: "Bind approved capabilities and enforce the nine-step dispatch guard before any provider transport can run." },
+  { id: "WP-09", name: "Capability Registry & Dispatch Guard", status: "Complete", detail: "Versioned qualified bindings, exact settings hashes and the nine-step fail-closed guard now protect every provider transport." },
+  { id: "WP-10", name: "Stage Runner Framework", status: "Blocked", detail: "Owner checkpoint required before WP-10 can open Phase 2 execution work." },
 ];
 
 const controls = [
@@ -82,10 +83,10 @@ export default function Home() {
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-              <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation in controlled progress</h2></div>
-              <span className="progress-label">9 / 33 work packages</span>
+              <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation complete · owner checkpoint active</h2></div>
+              <span className="progress-label">10 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="9 of 33 work packages complete"><span style={{ width: "27.27%" }} /></div>
+            <div className="progress-track" aria-label="10 of 33 work packages complete"><span style={{ width: "30.30%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -105,7 +106,11 @@ export default function Home() {
               <li><span>Automatic publishing</span><b>BLOCKED</b></li>
               <li><span>Legacy site mutation</span><b>PROHIBITED</b></li>
             </ul>
-            <p className="safety-note">Owner-specific decisions remain fail-closed until their documented gates are satisfied.</p>
+            <div className="foundation-boundary" role="note">
+              <strong>OWNER CHECKPOINT</strong>
+              <p>Foundation WP-00 → WP-09 is complete. Owner approval is required before WP-10 or any Phase 2 execution work begins.</p>
+            </div>
+            <p className="safety-note">Provider transport, production spend and publishing remain fail-closed while this checkpoint is active.</p>
           </aside>
         </section>
 
