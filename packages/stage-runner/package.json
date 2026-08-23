@@ -17,6 +17,7 @@
   "dependencies": {
     "@youtube-ai-factory/contracts": "workspace:*",
     "@youtube-ai-factory/core-command": "workspace:*",
-    "@youtube-ai-factory/core-hash": "workspace:*"
+    "@youtube-ai-factory/core-hash": "workspace:*",
+    "zod": "4.4.3"
   }
 }

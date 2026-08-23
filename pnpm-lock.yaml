@@ -104,6 +104,9 @@ importers:
       '@youtube-ai-factory/core-hash':
         specifier: workspace:*
         version: link:../core-hash
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
 packages:
 
