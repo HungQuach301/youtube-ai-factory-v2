@@ -669,3 +669,28 @@ Không dispatch provider, không ghi production data và không thay đổi auto
 WP-17 không gọi provider thật, không ghi production data, không tạo actual spend
 và không bật auto-publish. Differentiation score không trở thành hard gate trước
 khi có dữ liệu calibration theo P5.
+
+
+---
+
+## WP-28 · Human Touchpoints & Evidence — minimum Track G boundary
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Thiếu allowlist thật fail-closed | `packages/human-evidence/tests/human-evidence.test.ts` — empty allowlist throws before evaluation |
+| Thiếu hai decision hoặc hai loại chặn Stage 14 | Test `MIN_HUMAN_DECISIONS` và `MIN_DISTINCT_DECISION_TYPES` |
+| Service/inactive actor và rationale ngắn bị chặn | Unit boundary + `tests/migrations/0009-human.test.mjs` |
+| Artifact seal phải hậu-quyết-định | Imprint evaluation kiểm timestamp của artifact-after |
+| Pattern human imprint máy móc bị cảnh báo | Diversity lint bắt rationale lặp và chỉ một decision type trong cửa sổ năm video |
+| Trần chú ý 300 phút và queue alert 48 giờ | Runtime test + SQL trigger atomic |
+| Evidence report tái lập từ D1/R2 | Cùng input cho cùng canonical content và SHA-256 |
+| Migration `0009` tái lập | UP/DOWN ×2 và trigger abort |
+
+Implementation tối thiểu đã hoàn tất nhưng activation vẫn fail-closed cho tới khi
+owner cung cấp một `human_actor.identity` thật. Hệ thống không suy identity từ
+GitHub login, email phiên ChatGPT hay service account. Không dispatch provider,
+không ghi production data, không tạo actual spend và không bật auto-publish.

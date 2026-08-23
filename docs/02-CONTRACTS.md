@@ -308,7 +308,7 @@ export const ATTENTION = {
   HP03_MIN_PER_VIDEO:  { min: 5,  max: 10 },
   HP04_MIN_PER_REJECT: { min: 10, max: 15 },
   HP05_MIN_PER_WEEK:   { min: 15, max: 30 },
-  OWNER_WEEKLY_CEILING_MIN: null,     // → 07 §11
+  OWNER_WEEKLY_CEILING_MIN: 300,      // confirmed by owner 2026-08-23
   QUEUE_AGE_ALERT_HOURS: 48,
   RATIONALE_MIN_CHARS: 20,
 } as const
@@ -384,7 +384,6 @@ export const UNDECIDED = {
   PRODUCTION_AUDIO_PROVIDER: null,            // → 07 §5
   ALIGNER_ERROR_FLOOR: null,                  // → phải ĐO (WP-15)
   SAMPLING_THRESHOLD_N: null,                 // → 07 §10
-  OWNER_WEEKLY_CEILING_MIN: null,             // → 07 §11
   BASELINE_RETENTION_SOURCE: null,            // → 07 §8
   MEDIA_INFRA: null,                          // → 07 §4
   DISCLOSURE_DEFAULT: null,                   // → 07 §9

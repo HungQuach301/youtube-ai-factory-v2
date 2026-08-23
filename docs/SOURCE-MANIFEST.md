@@ -20,7 +20,7 @@
 | `14-STAGE-INDEX.md` | `2fa0595c5c76f20cdaa61cb3ea4a07905de82e35a634826ce9eb0d37e6f6117d` | 18-stage mapping |
 | `07-DECISIONS-REQUIRED.md` | `d7a77388db8dee334466fa9a49973832b2ad1f97efee6cd754a991ba16157e59` | Owner decision schema |
 | `13-TRACK-G-CONFIG.md` | `36e2ac6b21908dafe3c7c2905cadc950b69264f673b39ffbc264442c9aea1377` | Golden Path profile |
-| `10-HUMAN-TOUCHPOINTS.md` | `6061b42ae12e6fc1f0db6dc9bd71960a789cb538b07588360a6c8f254738ee8c` | Human-in-the-loop |
+| `10-HUMAN-TOUCHPOINTS.md` | `73125ca5a4958091be06f587fc8c982bdf80164c35efdb27cfdbc49a01eefd48` | Human-in-the-loop; 300-minute weekly ceiling owner-confirmed |
 | `11-POLICY-DEFENSE.md` | `12c1ea94f5e85cb3632e407e6b6889f11aa61a817c8d2946024868be19a1d6b5` | Platform policy defense |
 | `05-TEST-SPEC.md` | `b580e5f9b01a884d302063ab26c56a429b440ce170c783478cd8e30341280a35` | Acceptance/test rules |
 | `00-AGENT-BRIEF.md` | `ee94a51cb109a1ae9955ee54cd83db0ad4bd55bdf643712fefdd36a11cc0a55a` | Agent operating contract |
@@ -32,7 +32,7 @@
 | `03-DATA-SCHEMA.sql` | `2e83410eebcefba269e296dfef656411b592e810e45deba185cf516a1db8ae10` | Data source of truth; 10 migrations; WP-09 immutable capability, qualification and dispatch-block invariants aligned |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
-| `02-CONTRACTS.md` | `0869515aafdc4addae61954de920e79242104a80c581effb4d433237b959cfae` | Type và mọi ngưỡng số — WP-11 Tournament Engine blind contract, PROFILE width và rubric anchoring aligned |
+| `02-CONTRACTS.md` | `a6f156418734213d9920e7a92a67583e466250a731bc024158b2d4a24f59e2de` | Type và mọi ngưỡng số — WP-11 Tournament Engine blind contract, PROFILE width, rubric anchoring và attention ceiling aligned |
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |

@@ -38,7 +38,7 @@ Trạng thái: `OPEN — budget confirmation CLOSED 2026-08-23; các mục còn 
 
 - **CLOSED 2026-08-23:** owner đã xác nhận ngân sách thật `$30/video`, `$400 qualification`, `$350 Track G`; WP-08 và WP-12B được mở khóa với đúng các trần này.
 - Thay placeholder `owner@<domain>` và `operator@<domain>` bằng identity người thật trước WP-28.
-- Xác nhận `OWNER_WEEKLY_CEILING_MIN = 300` và cung cấp 10–15 mẫu audio chuẩn trước WP-15/Track G G-02.
+- **CLOSED 2026-08-23:** `OWNER_WEEKLY_CEILING_MIN = 300` đã được ghi vào runtime contract; còn cần cung cấp 10–15 mẫu audio chuẩn trước khi WP-15 calibration/Track G G-02 có thể PASS.
 - Chọn nhà cung cấp production audio và xác nhận license hiện hành trước WP-19.
 
 Ghi chú xung đột nội bộ đã được giải quyết bằng xác nhận owner ngày 2026-08-23. Không được tự nâng các trần đã xác nhận; mọi thay đổi sau này cần quyết định owner mới.
