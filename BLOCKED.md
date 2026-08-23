@@ -72,3 +72,15 @@ xác nhận con số **sau khi đo** trước WP-13. Standing authorization khô
 được quyết định evidence-specific này. Owner đã xác nhận cả bảng và chọn
 `PROFILE=REDUCED`; WP-13 được mở khóa. Các caveat phạm vi đo, qualification và
 cost reservation vẫn giữ nguyên.
+
+## B-006 · WP-14/WP-15 calibration evidence chưa hiện diện
+
+Trạng thái: `OPEN — harness tiếp tục, hard gate vẫn fail-closed`
+
+- WP-14 đã có manager append-only, 16 synthetic recipes (8 defect class × 2)
+  và phép đo precision/recall/variance. Definition of Done vẫn thiếu 15 rejected
+  masters kèm owner judgment; synthetic fixture không được giả làm phán quyết thật.
+- WP-15 có thể xây calibration harness, nhưng không được ghi
+  `ALIGNER_ERROR_FLOOR` cho tới khi có 10–15 audio người đọc chuẩn cùng transcript.
+- Trong khi blocker mở, `AUDIO.PHONEME_MISMATCH_BASE` tiếp tục thuộc
+  `UNCALIBRATED`; measurement chỉ phát cảnh báo và tuyệt đối không chặn M0/M1.
