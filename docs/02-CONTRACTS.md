@@ -363,10 +363,21 @@ export const PROFILE: Record<ProfileName, {
 } as const
 ```
 
+### Trần chi phí owner đã xác nhận — PRV-02 dùng trực tiếp
+```ts
+export const SPEND = {
+  CEILING_PER_VIDEO_USD: 30,
+  CEILING_PER_CHANNEL_WEEK_USD: 70,
+  CEILING_PORTFOLIO_MONTH_USD: 900,
+  QUALIFICATION_BUDGET_USD: 400,
+  TRACK_G_BUDGET_USD: 350,
+  SCALED_TARGET_COST_PER_VIDEO_USD: 18,
+} as const
+```
+
 ### Giá trị chưa xác định — agent phải hỏi, không được đặt mặc định
 ```ts
 export const UNDECIDED = {
-  SPEND_CEILING_PER_VIDEO_USD: null,          // → 07 §3
   TARGET_VIDEOS_PER_CHANNEL_PER_WEEK: null,   // → 07 §1
   IDENTITY_SCOPE: null,                       // → 07 §2  'channel' | 'video'
   PRODUCTION_AUDIO_PROVIDER: null,            // → 07 §5
