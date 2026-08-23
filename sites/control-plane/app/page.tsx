@@ -18,6 +18,12 @@ const workPackages = [
   { id: "WP-12", name: "Media Worker Runtime", status: "Complete", detail: "Pinned CPU-only image, deterministic job plans, immutable read-back and the no-D1 worker boundary now pass CI." },
   { id: "WP-12B", name: "Cost Benchmark", status: "Complete", detail: "Owner confirmed the measured economic checkpoint and selected PROFILE=REDUCED for downstream work." },
   { id: "WP-13", name: "Deterministic Measurement", status: "Complete", detail: "All 15 MSR-01 measurements now use strict inputs, known-result tests and canonical evidence hashes." },
+  { id: "WP-14", name: "Gold Set & Calibration", status: "Evidence", detail: "Harness and 16 deterministic synthetic defects are merged. PASS remains blocked until the set reaches 30 samples including 15 real rejected masters." },
+  { id: "WP-15", name: "Aligner Calibration", status: "Evidence", detail: "Pinned calibration harness is merged. The phoneme gate remains warning-only until 10–15 real human-reader samples establish the error floor." },
+  { id: "WP-16", name: "Truth Layer", status: "Complete", detail: "Source tiers, critical-claim enforcement, deterministic numeric parsing and bilingual advice lint now pass CI." },
+  { id: "WP-17", name: "Intelligence & Anti-copy", status: "Complete", detail: "Audience jobs, freshness and four-dimensional anti-copy primitives are deterministic; differentiation remains measurement-only until calibrated." },
+  { id: "WP-28", name: "Human Evidence", status: "Activation", detail: "Editorial Imprint, the 300-minute attention ceiling and reproducible evidence reports are merged; activation waits for an explicit real-human allowlist identity." },
+  { id: "WP-29", name: "Policy Defense · Minimum", status: "Complete", detail: "PC1–PC8, disclosure default-on, incident freeze/unfreeze and policy-watch diff controls are enforced fail-closed." },
 ];
 
 const controls = [
@@ -69,6 +75,7 @@ export default function Home() {
             <dl className="authority-list">
               <div><dt>Repository</dt><dd>HungQuach301/youtube-ai-factory-v2</dd></div>
               <div><dt>Branch</dt><dd>main</dd></div>
+              <div><dt>Canonical commit</dt><dd className="mono">1c0156c2cf60</dd></div>
               <div><dt>Site role</dt><dd>Deployment mirror</dd></div>
               <div><dt>Managed files</dt><dd>{sourceLock.files.length}</dd></div>
               <div><dt>Source fingerprint</dt><dd className="mono">{fingerprint}</dd></div>
@@ -87,10 +94,10 @@ export default function Home() {
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · controlled execution in progress</h2></div>
-              <span className="progress-label">14 / 33 work packages</span>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · minimum policy boundary implemented</h2></div>
+              <span className="progress-label">18 evidence-ready · 21 implemented / 33</span>
             </div>
-            <div className="progress-track" aria-label="14 of 33 work packages complete"><span style={{ width: "42.42%" }} /></div>
+            <div className="progress-track" aria-label="18 of 33 work packages evidence-ready; 21 implemented"><span style={{ width: "54.55%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -112,7 +119,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-12B is owner-confirmed with PROFILE=REDUCED. WP-13 now binds 15 deterministic measurements to immutable evidence. Phoneme mismatch is measured but remains warning-only until WP-15 establishes a real aligner error floor.</p>
+              <p>WP-16, WP-17 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-28 awaits an explicit human allowlist identity. These are activation gates, not permission prompts.</p>
             </div>
             <p className="safety-note">This progress update changes no production permission: provider transport, spend and publishing remain locked.</p>
           </aside>

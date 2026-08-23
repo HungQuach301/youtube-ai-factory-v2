@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "4819aaa1b2c09bd5a62b65fdb75016df346369ad0d0658bbc0f95a2626240cdd",
+  "aggregate_sha256": "6e230951a51603a097ea2065988f3dd083df2831350e7a6a8c04dac36070850b",
   "files": [
     {
       "path": ".gitignore",
@@ -29,7 +29,7 @@
     },
     {
       "path": "app/globals.css",
-      "sha256": "60026244177b4dc99420666f8dc6e1c73ebef504570990c6c69fd666c7ada4b8"
+      "sha256": "032a8bcb5ff957761045f08d8a9fa820297622c37bb5c3e2588ec5228bda67c1"
     },
     {
       "path": "app/layout.tsx",
@@ -37,7 +37,7 @@
     },
     {
       "path": "app/page.tsx",
-      "sha256": "e9e84235692d9e05c6b2a9920a2ebfeac635849f4b9d1173dd07197199ff014b"
+      "sha256": "9e7dcce36f4f680b7f0d9aa1b7de2c5556aacd6b5c211e1713c0e3928df10354"
     },
     {
       "path": "build/sites-vite-plugin.ts",
@@ -129,7 +129,7 @@
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "d3ea3e369154a2a60ef4ad5baf9fb238d4ef7aba772d26a0d0ce76f7cfcff622"
+      "sha256": "fc417b073298ac228256dd4c18f97139aee68d544eee0db6795417a53058a8d1"
     },
     {
       "path": "tsconfig.json",
