@@ -1,0 +1,42 @@
+name: media-worker-image
+
+on:
+  pull_request:
+    paths:
+      - "packages/media-worker/**"
+      - "packages/contracts/**"
+      - "packages/core-hash/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/media-worker-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require immutable base image
+        run: grep -Eq '^FROM .+@sha256:[a-f0-9]{64}' packages/media-worker/Dockerfile
+      - name: Build worker image
+        run: docker build --file packages/media-worker/Dockerfile --tag factory-media-worker:test .
+      - name: Prove health and absence of D1 binding
+        run: |
+          docker run --detach --name factory-media-worker \
+            --env MEDIA_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --publish 18080:8080 factory-media-worker:test
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs factory-media-worker
+          exit 1
+      - name: Negative D1 capability check
+        run: |
+          if docker inspect factory-media-worker --format '{{json .Config.Env}}' | grep -Eq '(^|[^A-Z])D1([^A-Z]|$)'; then
+            echo 'D1 binding detected in media worker image' >&2
+            exit 1
+          fi
