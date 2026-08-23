@@ -7,11 +7,15 @@ export const SCRIPT = {
   WPM_DENSE_MECHANISM: { min: 125, max: 150 },
   WPM_PAYOFF: { min: 135, max: 155 },
   SYLLABLES_PER_SEC: { min: 3.3, max: 3.8 },
+  SYLLABLES_PER_SEC_HOOK: { min: 3.5, max: 4.0 },
+  SYLLABLES_PER_SEC_DENSE_MECHANISM: { min: 2.9, max: 3.5 },
+  SYLLABLES_PER_SEC_PAYOFF: { min: 3.2, max: 3.6 },
   SENTENCE_WORDS_MEDIAN: { min: 10, max: 18 },
   SENTENCE_WORDS_REVIEW: 24,
   BREATH_GROUP_WORDS: { min: 5, max: 12 },
   BREATH_GROUP_SEC: { min: 2.5, max: 5 },
-  NEW_ENTITY_PER_15S: 2
+  NEW_ENTITY_PER_15S: 2,
+  ENTITY_WINDOW_SEC: 15
 } as const
 
 export const STORY = {
@@ -29,6 +33,22 @@ export const CREATIVE = {
   GENERATE_TEMPERATURE: { min: 0.9, max: 1.1 },
   JUDGE_TEMPERATURE: 0,
   JUDGE_SCORE: { min: 0, max: 100 }
+} as const
+
+export const PREDICTION = {
+  BASELINE_SOURCE: 'flat',
+  BASELINE_FLAT_CURVE: {
+    0: 1.00,
+    5: 0.75,
+    10: 0.62,
+    25: 0.48,
+    50: 0.38,
+    75: 0.31,
+    100: 0.26,
+  },
+  MODEL_VERSION: 'v0-flat',
+  RECALIBRATE_AFTER_VIDEOS: 6,
+  CURVE_STEP_PCT: 5,
 } as const
 
 export const ANTICOPY = {

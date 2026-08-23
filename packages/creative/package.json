@@ -1,5 +1,5 @@
 {
-  "name": "@youtube-ai-factory/truth-layer",
+  "name": "@youtube-ai-factory/creative",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@youtube-ai-factory/contracts": "workspace:*",
+    "@youtube-ai-factory/core-hash": "workspace:*",
+    "@youtube-ai-factory/truth-layer": "workspace:*",
     "zod": "4.4.3"
   }
 }
