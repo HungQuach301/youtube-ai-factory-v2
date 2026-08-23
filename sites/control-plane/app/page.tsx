@@ -10,7 +10,8 @@ const workPackages = [
   { id: "WP-04", name: "Definition of Ready Resolver", status: "Complete", detail: "Eleven evidence-derived readiness conditions with structured refusal." },
   { id: "WP-05", name: "Standard & Policy Registry", status: "Complete", detail: "Four-scope inheritance, G11 only-tighten policy and fail-closed gate controls." },
   { id: "WP-06", name: "Evidence Store", status: "Complete", detail: "Immutable source and provider snapshots with checksum replay and namespace isolation." },
-  { id: "WP-07", name: "Provider Adapter Framework", status: "Next", detail: "Guarded dispatch boundary, normalized provider errors and zero-spend preflight." },
+  { id: "WP-07", name: "Provider Adapter Framework", status: "Complete", detail: "Guarded dispatch, seven-class error normalization, bounded retry and exact token-cost estimation." },
+  { id: "WP-08", name: "Cost Reservation & Ledger", status: "Blocked", detail: "Owner must confirm the real $30/video, $400 qualification and $350 Track G budgets." },
 ];
 
 const controls = [
@@ -81,9 +82,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
               <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation in controlled progress</h2></div>
-              <span className="progress-label">7 / 33 work packages</span>
+              <span className="progress-label">8 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="7 of 33 work packages complete"><span style={{ width: "21.21%" }} /></div>
+            <div className="progress-track" aria-label="8 of 33 work packages complete"><span style={{ width: "24.24%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
