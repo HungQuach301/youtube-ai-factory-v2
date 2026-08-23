@@ -16,7 +16,8 @@ export default [
       '@typescript-eslint/consistent-type-imports': 'error',
       'factory-guardrails/g1-no-json-stringify-hash': 'error',
       'factory-guardrails/g2-provider-sdk-boundary': 'error',
-      'factory-guardrails/g6-no-provider-in-preflight': 'error'
+      'factory-guardrails/g6-no-provider-in-preflight': 'error',
+      'factory-guardrails/g9-guarded-dispatch-only': 'error'
     }
   },
   {
