@@ -210,3 +210,53 @@ WP-04 không thêm migration hoặc trigger.
 ## Ngoài phạm vi WP-04
 
 CORE-05/WP-05 sở hữu standard inheritance, waiver validation, drift detection và migration `0005`. WP-04 chỉ đọc evidence qua repository, không gọi provider, không ghi D1, không reserve spend và không tạo production attempt.
+
+---
+
+## WP-05 · CORE-05 Standard & Policy Registry
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Kế thừa bốn scope và chỉ cho cấp dưới siết | `registry.test.ts` — resolve `PORTFOLIO → CHANNEL → PILLAR → EPISODE` |
+| Episode nới rule của Channel bị từ chối | Test đối kháng đủ `MINIMUM`, `MAXIMUM`, `REQUIRED`, `ALLOWLIST` |
+| G11 phân loại từ cấu trúc, không tin nhãn agent | `classifies strictness structurally`; xóa rule được phân loại `RELAX` |
+| RELAX bắt buộc evolution đã PROMOTED, owner và evidence | `rejects RELAX unless a promoted owner-signed evolution is supplied` |
+| M0 không bao giờ WAIVED; M1/M2 cần owner active + expiry tương lai | Unit test `gate policy` và trigger migration |
+| M2 chỉ chạy sau khi M0/M1 sạch | `does not evaluate M2 until M0 and M1 are clean` |
+| `STANDARD_DRIFT` chặn freeze; ngưỡng chưa chốt fail-closed | `blocks freeze on configured drift and fails closed when threshold is UNDECIDED` |
+| Migration `0005` tái lập | UP/DOWN ×2 và test đối kháng cho từng trigger |
+
+## Quyết định phạm vi kế thừa
+
+Schema chuẩn `0005` chỉ định bốn scope lưu trữ `PORTFOLIO → CHANNEL → PILLAR → EPISODE`; CORE-05 dùng đúng bốn scope này. `Series` trong tài liệu module được giữ là khái niệm lập kế hoạch nội dung vì schema hiện không có scope/table `SERIES`; không tự thêm schema ngoài nguồn chuẩn.
+
+## Ngưỡng STANDARD_DRIFT
+
+Tài liệu chưa chốt giá trị số. Resolver nhận `maxAllowedVersionSpread` từ cấu hình; `null` tương ứng `UNDECIDED` và luôn trả cảnh báo `STANDARD_DRIFT` với `blocksFreeze=true`. Không có numeric threshold tự suy đoán trong code.
+
+## Trigger ↔ Test
+
+| Trigger | Test |
+|---|---|
+| `trg_gate_pass_requires_evidence_ins` | INSERT PASS thiếu evidence → ABORT |
+| `trg_gate_pass_requires_evidence_upd` | UPDATE thành PASS thiếu evidence → ABORT |
+| `trg_no_waive_m0_ins` | INSERT WAIVED M0 → ABORT |
+| `trg_no_waive_m0_upd` | UPDATE thành WAIVED M0 → ABORT |
+| `trg_waiver_requires_owner` | WAIVED thiếu active owner/expiry → ABORT |
+| `trg_critic_must_be_qualified` | Critic chưa QUALIFIED → ABORT |
+
+## G11 và thứ tự migration
+
+CORE-05 cưỡng chế G11 ở tầng ứng dụng. Các trigger vật lý `standard_change_log` vẫn thuộc migration `0008`/WP-26 đúng theo `docs/03-DATA-SCHEMA.sql`; WP-05 không kéo bảng tương lai về `0005` và không phá thứ tự migration.
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:unit` · `pnpm test:migrations`
+
+## Ngoài phạm vi WP-05
+
+Không gọi provider, không tạo production spend, không bật auto-publish. Evidence Store thuộc WP-06; physical G11 threshold-diff/trigger thuộc WP-26; Evolution Pipeline thuộc WP-27.
