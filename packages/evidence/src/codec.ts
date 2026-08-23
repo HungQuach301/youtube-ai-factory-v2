@@ -8,8 +8,9 @@ async function transform(
 ): Promise<Uint8Array> {
   const writer = stream.writable.getWriter()
   const buffer = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(buffer).set(bytes)
-  await writer.write(buffer)
+  const chunk = new Uint8Array(buffer)
+  chunk.set(bytes)
+  await writer.write(chunk)
   await writer.close()
   return new Uint8Array(await new Response(stream.readable).arrayBuffer())
 }
