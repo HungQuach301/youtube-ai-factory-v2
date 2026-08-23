@@ -25,7 +25,7 @@ function quote(value: string): string {
   return serialized
 }
 
-function serialize(value: unknown, ancestors: WeakSet<object>): string {
+function serialize(value: unknown, ancestors: WeakSet<object>, stripVolatileFields: boolean): string {
   if (value === null) return 'null'
   if (typeof value === 'string') return quote(value)
   if (typeof value === 'boolean') return value ? 'true' : 'false'
@@ -42,7 +42,7 @@ function serialize(value: unknown, ancestors: WeakSet<object>): string {
       const items: string[] = []
       for (let index = 0; index < value.length; index += 1) {
         if (!Object.hasOwn(value, index)) throw new TypeError('I-JSON forbids sparse arrays')
-        items.push(serialize(value[index], ancestors))
+        items.push(serialize(value[index], ancestors, stripVolatileFields))
       }
       return `[${items.join(',')}]`
     }
@@ -64,13 +64,13 @@ function serialize(value: unknown, ancestors: WeakSet<object>): string {
       }
       const key = rawKey.normalize('NFC')
       assertUnicodeScalarString(key)
-      if (VOLATILE_FIELDS.has(key)) continue
+      if (stripVolatileFields && VOLATILE_FIELDS.has(key)) continue
       if (normalizedEntries.has(key)) throw new TypeError(`NFC key collision: ${key}`)
       normalizedEntries.set(key, descriptor.value)
     }
 
     return `{${Array.from(normalizedEntries.keys()).sort().map((key) => (
-      `${quote(key)}:${serialize(normalizedEntries.get(key), ancestors)}`
+      `${quote(key)}:${serialize(normalizedEntries.get(key), ancestors, stripVolatileFields)}`
     )).join(',')}}`
   } finally {
     ancestors.delete(value)
@@ -78,7 +78,11 @@ function serialize(value: unknown, ancestors: WeakSet<object>): string {
 }
 
 export function canonicalize(value: unknown): string {
-  return serialize(value, new WeakSet())
+  return serialize(value, new WeakSet(), true)
+}
+
+export function canonicalizeExact(value: unknown): string {
+  return serialize(value, new WeakSet(), false)
 }
 
 export function canonicalHash(value: unknown): Hex64 {
