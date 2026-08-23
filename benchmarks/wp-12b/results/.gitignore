@@ -1,0 +1,4 @@
+*-frames/
+*.mp4
+sharp-per-frame-*.json
+render-once-filter-graph-*.json

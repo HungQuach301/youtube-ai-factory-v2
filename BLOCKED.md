@@ -55,3 +55,18 @@ WP-12 vẫn được build và kiểm định bằng GitHub Actions. Không đư
 production đã deploy, không được ghi image digest giả và không được đưa secret vào
 repository. Blocker đóng khi CI image pass và một môi trường Fly được xác thực để
 deploy đúng image digest rồi health-check production.
+
+## B-005 · WP-12B numeric checkpoint cần owner xác nhận sau phép đo
+
+Trạng thái: `OPEN — MANDATORY STOP`
+
+Benchmark đã đo đủ 16 case và kết luận trong phạm vi WP-12B:
+
+- FULL: `$0.266674/video`;
+- REDUCED: `$0.123168/video`;
+- REDUCED + deterministic max: `$0.127076/video`.
+
+Cả ba dưới trần `$30/video`, nhưng đây không phải all-in factory cost và pricing
+fixture chưa phải capability `QUALIFIED`. `docs/04-BUILD-ORDER.md` yêu cầu owner
+xác nhận con số **sau khi đo** trước WP-13. Standing authorization không thay thế
+được quyết định evidence-specific này; agent phải dừng fail-closed tại đây.

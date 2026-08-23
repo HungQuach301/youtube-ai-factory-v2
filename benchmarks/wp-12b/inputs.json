@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "width": 640,
+    "height": 360,
+    "fps": 12,
+    "duration_seconds": 1,
+    "production_width": 1920,
+    "production_height": 1080,
+    "production_fps": 24,
+    "production_duration_seconds": 480
+  },
+  "fly": {
+    "machine": "shared-cpu-1x-1gb",
+    "region": "sin",
+    "usd_per_started_second_conservative": 0.00000355,
+    "source": "https://fly.io/docs/about/pricing/",
+    "observed_at": "2026-08-23"
+  },
+  "stage14_fixture": {
+    "model_pricing_reference": "gpt-5.6-terra",
+    "model_is_qualified": false,
+    "input_usd_per_million_tokens": 2,
+    "output_usd_per_million_tokens": 12,
+    "input_tokens_per_critic": 8000,
+    "output_tokens_per_critic": 1000,
+    "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+    "observed_at": "2026-08-23"
+  },
+  "profiles": [
+    { "name": "FULL", "architecture": "sharp-per-frame", "critics": 9, "deterministic_measurement_multiplier": 1 },
+    { "name": "REDUCED", "architecture": "render-once-filter-graph", "critics": 4, "deterministic_measurement_multiplier": 1 },
+    { "name": "REDUCED_DETERMINISTIC_MAX", "architecture": "render-once-filter-graph", "critics": 4, "deterministic_measurement_multiplier": 1.35 }
+  ]
+}

@@ -554,3 +554,38 @@ typed `PRODUCE_ARTIFACT` kèm reservation, image digest và resource report.
 chỉ được ghi là hoàn tất sau khi có Fly credential/tool và digest image thực tế.
 Không gọi provider trả phí, không tạo actual spend và không bật auto-publish trong
 WP-12.
+
+---
+
+## WP-12B · Cost Benchmark — AWAITING OWNER NUMERIC CONFIRMATION
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| 8 archetype × 2 kiến trúc render | `benchmarks/wp-12b/results/evidence.json` chứa đúng 16 case |
+| Đo wall, CPU, RAM đỉnh, output size | Mỗi case có bốn trường đo dương; `verify.mjs` fail nếu thiếu |
+| Ghi rõ nhu cầu headless Chromium | `device-ui` và `webpage-scroll` được đánh dấu ở cả hai kiến trúc |
+| Stage 14 giả lập critic × media fixture | Input định giá versioned; 9 critic FULL và 4 critic REDUCED |
+| Ba cấu hình có cost/video bằng số | FULL `$0.266674`; REDUCED `$0.123168`; REDUCED + deterministic max `$0.127076` trong phạm vi đo |
+| Đối chiếu trần owner | Cả ba dưới `$30/video` và `$18` scaled target trong **phạm vi đã đo** |
+| Evidence được khóa hash | `REPORT.md` bind SHA-256 `f29da6ada2a4bc73746fdb2e7af94ea0f3c41ac93e284df8e8178ea9098bf0e1` |
+
+## Kết luận bằng số
+
+`ALL_THREE_WITHIN_30_USD_FOR_MEASURED_SCOPE`.
+
+Kết quả không phải all-in factory cost: chưa gồm provider chưa qualified, TTS,
+stock, music, storage egress và rework. Stage 14 dùng pricing fixture
+`gpt-5.6-terra` `$2/MTok input` + `$12/MTok output`, không tuyên bố capability đã
+qualified và không dispatch provider. Fly compute dùng mức bảo thủ
+`$0.00000355/started-second` cho shared CPU 1x + 1 GiB.
+
+## Điểm dừng bắt buộc
+
+Theo `docs/04-BUILD-ORDER.md`, owner phải xác nhận các con số sau khi đã biết kết
+quả. Ủy quyền triển khai chung không được dùng để giả mạo một quyết định owner về
+evidence chưa tồn tại tại thời điểm ủy quyền. WP-13 và các WP sau giữ `BLOCKED`
+cho tới typed/recorded owner confirmation của bảng trên.

@@ -1,0 +1,20 @@
+name: wp-12b-evidence
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/wp-12b/**"
+      - ".github/workflows/wp-12b-evidence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node benchmarks/wp-12b/verify.mjs
