@@ -748,3 +748,37 @@ WP-18 chỉ xây Creative Layer deterministic và contract seal. Không dispatch
 provider, không tạo reservation/actual spend, không ghi production data và không
 bật auto-publish. Baseline retention `v0-flat` phải được tái hiệu chỉnh sau 6
 video có analytics hợp lệ; không được trình bày như calibration evidence thực.
+
+---
+
+## WP-19 · Design Layer (DES-01..DES-03) — fail-closed framework
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Identity là tài sản cấp kênh | `sealChannelIdentity` chỉ nhận `scope=channel` và seal canonical hash |
+| Voice settings/fingerprint nhất quán | Hash settings được tái tính; fingerprint đúng 30 giây |
+| Video không tự đổi narrator | `assertInheritedVoice` yêu cầu owner exception hash khi voice/model/settings đổi |
+| TTS chỉ cắt tại sentence boundary an toàn | `planTtsSegments` loại boundary nằm trong entity, number hoặc causal clause |
+| Segment/context dùng ngưỡng SSOT | 300–800 ký tự; context 200–300 ký tự từ `thresholds.AUDIO` |
+| Music provider thiếu thì fail-closed | `sealSoundscape` chỉ cho ambience/silence khi provider evidence là null |
+| Sáu điều kiện license là bắt buộc | Provider schema yêu cầu toàn bộ literal `true` và contract evidence hash |
+| Source routing là hàm xác định, toàn phần | MECHANISM/PROCESS → MAKE; observed → SOURCE; evidence + explanation → HYBRID |
+| Motion classifier có ba nhóm rời nhau | Exhaustive 8 tổ hợp boolean; authored layer ưu tiên LAYERED_SEMANTIC |
+| Route không đổi sau Stage 07B | `assertRouteFrozen` từ chối mọi thay đổi route |
+| Visual grammar được seal | Mọi shot có route, motion class, archetype và canonical hash |
+
+## Trạng thái activation
+
+Implementation deterministic của WP-19 hoàn tất. Production music vẫn
+fail-closed vì `PRODUCTION_AUDIO_PROVIDER=null` và chưa có hợp đồng chứng minh
+sáu tiêu chí license. Ambience/silence mode tiếp tục hợp lệ; không suy diễn rằng
+nhà cung cấp đã được qualify.
+
+## Ranh giới
+
+Không gọi provider, không dùng asset music có bản quyền, không tạo spend, không
+ghi production data và không bật auto-publish.

@@ -222,6 +222,7 @@ export const AUDIO = {
   PAUSE_DRAMATIC_MAX_MS:   1200,
   TTS_SECTION_CHARS:       { min: 300, max: 800 },
   TTS_CONTEXT_CHARS:       { min: 200, max: 300 },
+  VOICE_FINGERPRINT_SEC:   30,
   SEAM_F0_MAX_SEMITONE:    2,
   // P5 — ngưỡng thật = max(base, error_floor × multiplier); floor phải ĐO
   PHONEME_MISMATCH_BASE:   0.01,
