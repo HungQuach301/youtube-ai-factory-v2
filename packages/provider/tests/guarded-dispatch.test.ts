@@ -13,9 +13,9 @@ import type {
   TraceId,
 } from '@youtube-ai-factory/contracts'
 import { thresholds } from '@youtube-ai-factory/contracts'
+import type { ProviderDispatchError } from '../src/index.js'
 
 import {
-  ProviderDispatchError,
   estimateTokenCost,
   guardedDispatch,
 } from '../src/index.js'
