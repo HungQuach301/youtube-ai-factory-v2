@@ -517,5 +517,40 @@ không được hạ xuống warning.
 ## Điểm dừng
 
 WP-11 không gọi provider thật, không ghi production data, không tạo reservation
-hoặc actual spend và không bật auto-publish. Dừng checkpoint sau WP-11; không tự
-bắt đầu WP-12 vì WP-12 còn bị chặn bởi quyết định hạ tầng container.
+hoặc actual spend và không bật auto-publish. Quyết định hạ tầng WP-12 sau đó đã
+được owner chốt là Fly.io Machines, CPU-only trong `DECISIONS-ANSWERED.md`.
+
+---
+
+## WP-12 · EXE-04 Media Worker Runtime
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Envelope sai không tạo side effect | `packages/media-worker/tests/runtime.test.ts` kiểm validation trước read/execute/write/publish |
+| Image runtime phải khớp immutable digest | Schema và runtime từ chối digest sai trước khi đọc input |
+| Mọi input được xác minh trước media tool | Test checksum sai tạo zero execute, zero write |
+| Sáu operation có invocation xác định | Test plans cho composite, encode, align, probe, flow và pHash |
+| Cùng envelope trên 5 worker cho cùng output | Năm runtime/stateless store độc lập trả cùng SHA-256 và frame MD5 |
+| Output chỉ hoàn tất sau immutable read-back | Test corruption chặn completion command |
+| Deadline cưỡng chế cả runtime lẫn subprocess | Runtime kiểm giữa các pha; container kill media tool khi quá hạn |
+| Worker không có D1 binding | Negative TypeScript contract và container image inspection trong CI |
+| Image tái lập từ base immutable | Dockerfile pin Node bằng digest; workflow build image và health-check |
+
+## Ranh giới G3
+
+Worker chỉ nhận envelope đã fence, scoped HTTPS object access và scoped command
+URL. Nó không có D1/database port, không tự mutate control-plane state và không
+được coi object write là hoàn tất trước read-back checksum. Completion duy nhất là
+typed `PRODUCE_ARTIFACT` kèm reservation, image digest và resource report.
+
+## Hạ tầng và trạng thái production
+
+`fly.toml` cố định Fly.io Machines tại `sin`, shared CPU 1 vCPU, RAM 1 GiB và
+`MEDIA_GPU=false`. Image CI chứng minh build/health/boundary; production deploy
+chỉ được ghi là hoàn tất sau khi có Fly credential/tool và digest image thực tế.
+Không gọi provider trả phí, không tạo actual spend và không bật auto-publish trong
+WP-12.
