@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "d440fe8d4f5bfd7a3413e80d1e9d034e7c57b77f628aa811a7b9f25c7882c946",
+  "aggregate_sha256": "4819aaa1b2c09bd5a62b65fdb75016df346369ad0d0658bbc0f95a2626240cdd",
   "files": [
     {
       "path": ".gitignore",
@@ -37,7 +37,7 @@
     },
     {
       "path": "app/page.tsx",
-      "sha256": "3271173e807c7154e0e8b19e79d4551f2da2d19e3b4337f374538986f81ff47e"
+      "sha256": "e9e84235692d9e05c6b2a9920a2ebfeac635849f4b9d1173dd07197199ff014b"
     },
     {
       "path": "build/sites-vite-plugin.ts",
@@ -129,7 +129,7 @@
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "a00f4f0462d107511d9f15cc9d49b7c7f595bcaff1302e8f009c682248108d9b"
+      "sha256": "d3ea3e369154a2a60ef4ad5baf9fb238d4ef7aba772d26a0d0ce76f7cfcff622"
     },
     {
       "path": "tsconfig.json",
