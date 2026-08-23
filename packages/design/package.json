@@ -1,0 +1,22 @@
+{
+  "name": "@youtube-ai-factory/design",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@youtube-ai-factory/contracts": "workspace:*",
+    "@youtube-ai-factory/core-hash": "workspace:*",
+    "zod": "4.4.3"
+  }
+}

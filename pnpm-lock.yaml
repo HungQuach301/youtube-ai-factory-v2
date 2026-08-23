@@ -66,6 +66,18 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/design:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/core-hash:
     dependencies:
       '@youtube-ai-factory/contracts':
