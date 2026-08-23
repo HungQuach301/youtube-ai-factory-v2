@@ -386,3 +386,54 @@ Ledger theo dõi `PRODUCTION`, `QUALIFICATION`, `REJECTED_CANDIDATE`; API trả 
 ## Ngoài phạm vi WP-08
 
 Không gọi provider thật, không ghi production D1, không tạo reservation/spend thật và không bật auto-publish. WP-09 sở hữu capability registry, binding, settings hash và dispatch guard chín bước; WP-12B sở hữu benchmark chi phí thực so với các trần owner đã xác nhận.
+
+---
+
+## WP-09 · CAP-01 + CAP-04 Registry & Dispatch Guard
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Capability chỉ dispatch khi đúng version `ACTIVE` và binding `QUALIFIED` | `packages/capability/tests/dispatch-guard.test.ts` chặn version/binding không đủ điều kiện tại bước 1, zero spend |
+| Đổi một ký tự system prompt làm đổi settings hash và chặn transport | Test `changes the settings hash...` kiểm hash khác, transport count bằng 0 và block log ở bước 2 |
+| Chỉ dùng model snapshot cụ thể | Registry và migration từ chối `latest`, `default`, cùng alias có hậu tố `-`, `_` hoặc `/` |
+| Shadow qualification không đóng version cũ | Test giữ version cũ `QUALIFIED` dispatchable khi version mới còn `QUALIFICATION_RUNNING` |
+| Guard chạy đúng chín bước fail-closed | Unit/runtime smoke kiểm qualification → hash → fencing → reservation → request evidence → transport → response evidence → settlement → return |
+| Bốn bước chặn đầu đều zero spend và có audit | Test riêng cho binding, hash, fencing và budget denial; `dispatch_block_log.zero_spend = 1` |
+| Không có đường lấy/call raw provider dispatch ngoài framework | G9 ESLint chặn call, computed access, method reference, destructuring, concrete-adapter import và raw export |
+| Migration `0002` tái lập và dữ liệu bất biến | UP/DOWN ×2; capability identity/settings immutable; QUALIFIED cần PASS run; block log append-only |
+
+## Guardrail chín bước
+
+1. Resolve đúng capability version và binding `QUALIFIED`.
+2. So khớp registry, adapter và request settings hash.
+3. Xác minh fencing token hiện hành.
+4. Reserve ngân sách qua ledger WP-08.
+5. Snapshot request và đăng ký provider request.
+6. Gọi transport duy nhất qua provider framework.
+7. Snapshot response.
+8. Settle actual cost theo reservation.
+9. Trả response.
+
+Nếu lỗi xảy ra sau reservation, reservation tiếp tục ở trạng thái giữ chỗ để reconciler xử lý; hệ thống không tự giải phóng và không che giấu provider request mồ côi.
+
+## Trigger ↔ Test
+
+| Trigger | Test |
+|---|---|
+| `trg_capability_identity_immutable` | UPDATE settings hash/model/version → ABORT |
+| `trg_binding_insert_requires_passed_run` | INSERT binding QUALIFIED thiếu PASS run → ABORT |
+| `trg_binding_requires_passed_run` | UPDATE binding QUALIFIED thiếu PASS run → ABORT |
+| `trg_dispatch_block_no_update` | UPDATE block log → ABORT |
+| `trg_dispatch_block_no_delete` | DELETE block log → ABORT |
+
+## Lệnh xác minh
+
+`pnpm verify:source` · `pnpm typecheck` · `pnpm lint` · `pnpm test:guardrails` · `pnpm test:unit` · `pnpm test:migrations` · runtime smoke guard/migration
+
+## Điểm dừng bắt buộc
+
+WP-09 hoàn tất Giai đoạn 1 — Nền tảng. Không bắt đầu WP-10 cho tới khi owner xem báo cáo checkpoint và phê duyệt rõ ràng việc mở Giai đoạn 2. Provider thật, production data, actual spend và auto-publish vẫn bị khóa.

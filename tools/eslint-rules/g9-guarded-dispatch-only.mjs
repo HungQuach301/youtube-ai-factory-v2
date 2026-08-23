@@ -57,13 +57,22 @@ export default {
           context.report({ node, messageId: 'adapterImport' })
         }
       },
-      CallExpression(node) {
-        const callee = node.callee
+      MemberExpression(node) {
         if (!isProviderFramework(filename)
           && !isProviderAdapter(filename)
-          && isDispatchMember(callee)) {
+          && isDispatchMember(node)) {
           context.report({ node, messageId: 'directDispatch' })
         }
+      },
+      VariableDeclarator(node) {
+        if (isProviderFramework(filename) || isProviderAdapter(filename)) return
+        if (node.id?.type !== 'ObjectPattern') return
+        const extractsDispatch = node.id.properties.some((property) => (
+          property.type === 'Property'
+          && ((property.key.type === 'Identifier' && property.key.name === 'dispatch')
+            || (property.key.type === 'Literal' && property.key.value === 'dispatch'))
+        ))
+        if (extractsDispatch) context.report({ node, messageId: 'directDispatch' })
       },
       ExportNamedDeclaration(node) {
         if (!isProviderAdapter(filename)) return

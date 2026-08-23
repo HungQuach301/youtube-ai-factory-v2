@@ -24,6 +24,15 @@ importers:
         specifier: 4.0.18
         version: 4.0.18
 
+  packages/capability:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+
   packages/contracts:
     dependencies:
       zod:

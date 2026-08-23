@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   ArchetypeId,
   CapabilityId,
+  DispatchGuardRuntime,
   ErrorClass,
   FencingToken,
   GuardedDispatchContext,
   Hex64,
   PackageId,
   ProviderAdapter,
+  ReservationId,
   StageInstanceId,
   TraceId,
 } from '@youtube-ai-factory/contracts'
@@ -23,11 +25,24 @@ import {
 const CAPABILITY_ID = 'capability-1' as CapabilityId
 const ARCHETYPE_ID = 'archetype-1' as ArchetypeId
 const SETTINGS_HASH = 'a'.repeat(64) as Hex64
+const PASS_THROUGH_GUARD: DispatchGuardRuntime = {
+  async execute(_input, transport) {
+    return (await transport()).response
+  },
+}
 const CONTEXT: GuardedDispatchContext = {
   fencingToken: 7 as FencingToken,
   packageId: 'package-1' as PackageId,
   stageInstanceId: 'stage-instance-1' as StageInstanceId,
   traceId: 'trace-1' as TraceId,
+  namespace: 'production',
+  reservationId: 'reservation-1' as ReservationId,
+  portfolioRef: 'portfolio-1',
+  channelRef: 'channel-1',
+  createdAt: '2026-08-23T00:00:00.000Z',
+  expiresAt: '2026-08-23T00:05:00.000Z',
+  requestSettingsHash: SETTINGS_HASH,
+  dispatchGuard: PASS_THROUGH_GUARD,
 }
 
 interface Request { readonly prompt: string, readonly maxOutputTokens: number }
@@ -48,6 +63,7 @@ function adapter(
     settingsHash: SETTINGS_HASH,
     estimateCost,
     dispatch,
+    actualCost: () => 0.008,
     normalizeError,
   }
 }
