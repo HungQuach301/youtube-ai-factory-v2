@@ -13,7 +13,8 @@ const workPackages = [
   { id: "WP-07", name: "Provider Adapter Framework", status: "Complete", detail: "Guarded dispatch, seven-class error normalization, bounded retry and exact token-cost estimation." },
   { id: "WP-08", name: "Cost Reservation & Ledger", status: "Complete", detail: "Two-phase reservation, hierarchical ceilings, namespace isolation and orphan reconciliation are enforced fail-closed." },
   { id: "WP-09", name: "Capability Registry & Dispatch Guard", status: "Complete", detail: "Versioned qualified bindings, exact settings hashes and the nine-step fail-closed guard now protect every provider transport." },
-  { id: "WP-10", name: "Stage Runner Framework", status: "Blocked", detail: "Owner checkpoint required before WP-10 can open Phase 2 execution work." },
+  { id: "WP-10", name: "Stage Runner Framework", status: "Complete", detail: "The framework now owns the nine-step lifecycle, deterministic preflight, mandatory read-back and idempotent typed commands." },
+  { id: "WP-11", name: "Tournament Engine", status: "Next", detail: "Next controlled package: blind eligibility, generator/judge separation, rubric anchoring and PROFILE-bounded tournament width." },
 ];
 
 const controls = [
@@ -83,10 +84,10 @@ export default function Home() {
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-              <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation complete · owner checkpoint active</h2></div>
-              <span className="progress-label">10 / 33 work packages</span>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · controlled execution in progress</h2></div>
+              <span className="progress-label">11 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="10 of 33 work packages complete"><span style={{ width: "30.30%" }} /></div>
+            <div className="progress-track" aria-label="11 of 33 work packages complete"><span style={{ width: "33.33%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -107,10 +108,10 @@ export default function Home() {
               <li><span>Legacy site mutation</span><b>PROHIBITED</b></li>
             </ul>
             <div className="foundation-boundary" role="note">
-              <strong>OWNER CHECKPOINT</strong>
-              <p>Foundation WP-00 → WP-09 is complete. Owner approval is required before WP-10 or any Phase 2 execution work begins.</p>
+              <strong>CONTROLLED EXECUTION</strong>
+              <p>WP-10 is complete. WP-11 is the next bounded work package; every provider, spend and publish control remains fail-closed.</p>
             </div>
-            <p className="safety-note">Provider transport, production spend and publishing remain fail-closed while this checkpoint is active.</p>
+            <p className="safety-note">This progress update changes no production permission: provider transport, spend and publishing remain locked.</p>
           </aside>
         </section>
 
