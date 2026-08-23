@@ -16,8 +16,16 @@ describe('contracts v2', () => {
     expect(RETRYABLE).toEqual(['TRANSIENT', 'RATE_LIMIT'])
   })
 
-  it('keeps all undecided and uncalibrated values visible', () => {
-    expect(thresholds.UNDECIDED.SPEND_CEILING_PER_VIDEO_USD).toBeNull()
+  it('exposes owner-confirmed spend ceilings and keeps remaining undecided values visible', () => {
+    expect(thresholds.SPEND).toEqual({
+      CEILING_PER_VIDEO_USD: 30,
+      CEILING_PER_CHANNEL_WEEK_USD: 70,
+      CEILING_PORTFOLIO_MONTH_USD: 900,
+      QUALIFICATION_BUDGET_USD: 400,
+      TRACK_G_BUDGET_USD: 350,
+      SCALED_TARGET_COST_PER_VIDEO_USD: 18,
+    })
+    expect(thresholds.UNDECIDED).not.toHaveProperty('SPEND_CEILING_PER_VIDEO_USD')
     expect(thresholds.UNCALIBRATED).toContain('AUDIO.PHONEME_MISMATCH_BASE')
     expect(thresholds.PROFILE.FULL.routeCount).toBe(4)
     expect(thresholds.PROFILE.REDUCED.routeCount).toBe(2)

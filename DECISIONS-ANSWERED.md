@@ -5,7 +5,7 @@ Bản trả lời cho 11 quyết định trong `07-DECISIONS-REQUIRED.md`. Nạp
 **Trạng thái:** ĐÃ CHỐT (bản v1, do owner phê duyệt để khởi động).
 Mọi thay đổi về sau đi qua Evolution pipeline như mọi meta-change khác.
 
-**Nguyên tắc điền.** Các giá trị dưới đây được chọn để (a) nhất quán với nhau — nhịp §1 nằm trong trần chú ý §11, ngân sách §3 nằm trong cấu hình REDUCED của Track G; (b) thiên về thận trọng ở mọi chỗ rủi ro chính sách; (c) đủ cụ thể để agent không bị chặn. Ba con số cần owner xác nhận lại được đánh dấu **[XÁC NHẬN]** và liệt kê ở cuối.
+**Nguyên tắc điền.** Các giá trị dưới đây được chọn để (a) nhất quán với nhau — nhịp §1 nằm trong trần chú ý §11, ngân sách §3 nằm trong cấu hình REDUCED của Track G; (b) thiên về thận trọng ở mọi chỗ rủi ro chính sách; (c) đủ cụ thể để agent không bị chặn. Ngân sách §3 được owner xác nhận ngày 2026-08-23; các xác nhận còn lại được liệt kê ở cuối.
 
 ---
 
@@ -53,7 +53,7 @@ IDENTITY_SCOPE: 'channel'
 
 ---
 
-## §3 · Mô hình kinh tế ✅ **[XÁC NHẬN — con số 1]**
+## §3 · Mô hình kinh tế ✅ **[OWNER CONFIRMED — 2026-08-23]**
 
 ```
 Trần chi phí cho MỘT video ở chất lượng mục tiêu:   $30
@@ -282,17 +282,17 @@ QUEUE_AGE_ALERT_HOURS: 48
 
 ---
 
-## Ba con số cần owner xác nhận
+## Các xác nhận owner
 
 Agent chạy được ngay với giá trị trên. Ba mục dưới đây là cam kết thật của owner — nếu lệch, sửa và báo agent:
 
 | # | Mục | Giá trị đang đặt | Vì sao chỉ owner biết |
 |---|---|---|---|
-| 1 | `SPEND_CEILING_PER_VIDEO_USD` và các trần §3 | $30 / video · $400 qualification · $350 Track G | Đây là tiền thật của owner. Nếu ngân sách thực < con số này, phải biết **trước** WP-12B để benchmark đúng cấu hình |
+| 1 | `SPEND_CEILING_PER_VIDEO_USD` và các trần §3 | **CONFIRMED 2026-08-23** — $30 / video · $400 qualification · $350 Track G | Owner đã xác nhận; WP-08 và WP-12B được mở khóa với các trần này |
 | 2 | `human_actor` allowlist §10 | placeholder `owner@<domain>` | Cần identity thật (email/key) để trigger P10 hoạt động; không có thì mọi lệnh owner bị abort |
 | 3 | `OWNER_WEEKLY_CEILING_MIN` §11 + audio mẫu §7 | 300 phút/tuần; audio chưa có | Thời gian thật owner dành được mỗi tuần, và việc thu 10 mẫu audio (một buổi) |
 
-Ba mục này **không chặn WP-00 → WP-11**. Chúng chặn: mục 1 chặn WP-08/12B, mục 2 chặn WP-28, mục 3 chặn WP-15 và Track G G-02.
+Mục 1 đã đóng. Mục 2 chặn WP-28; mục 3 chặn WP-15 và Track G G-02.
 
 ---
 
@@ -300,7 +300,7 @@ Ba mục này **không chặn WP-00 → WP-11**. Chúng chặn: mục 1 chặn W
 
 ```
 ✅ ĐÃ CHỐT, chạy được ngay: §1 §2 §4 §6 §8 §9 §10 §11
-⚠️  CHỐT CÓ ĐIỀU KIỆN:       §3 (xác nhận ngân sách) · §5 (Track G không cần)
+⚠️  CHỐT CÓ ĐIỀU KIỆN:       §5 (Track G không cần)
 🔶 SINH RA TỪ TRACK G:        §6 anchor · §7 gold set
 🔴 CẦN OWNER CUNG CẤP:        §7 audio mẫu (chặn WP-15)
 

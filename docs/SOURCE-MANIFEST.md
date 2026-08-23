@@ -29,14 +29,14 @@
 | `04-BUILD-ORDER.md` | `d592df2c5845ea4cff991cbe79957c72fa5527ea636424ca371b9c3628c32f25` | 32 work packages/two tracks |
 | `09-SELF-UPGRADE.md` | `4662fa935fb45d6831fe1cb1ae97761a30ccf3852747e81358e2136154ac8380` | Evolution governance |
 | `ai-factory-kien-truc.md` | `0dc6355071682b73fa14accb2f1cc141664bc7a44a905a4165116200e9312115` | Base business/technical architecture |
-| `03-DATA-SCHEMA.sql` | `46e394f09beebff9f90e5f84a886c9b67dfe28eecf388228ce18e389aef7f2e7` | Data source of truth; 10 migrations |
+| `03-DATA-SCHEMA.sql` | `fd6b15737403d09d4dc2b55324fc1ca1666684fe3a9ea6c42666972acb00a589` | Data source of truth; 10 migrations; WP-08 atomic ceiling, namespace and monetary invariants aligned |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
-| `02-CONTRACTS.md` | `8bbfeb232a5d3fa5e3e8b41d2891f46a85894911cb3c8f39677246a0770c1ab8` | Type và mọi ngưỡng số — authority cao nhất |
+| `02-CONTRACTS.md` | `bbb8273adc76e00f742c906bb2d6ff725a155ea2085a89667d88ebe329b21004` | Type và mọi ngưỡng số — owner-confirmed spend ceilings recorded 2026-08-23 |
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
-| `DECISIONS-ANSWERED.md` | `079b85be35ba9b624397fa043cdd68db3b49f4d7ac7d5ee223c6800608efb085` | Owner decision baseline; mục `[XÁC NHẬN]` vẫn fail-closed |
+| `DECISIONS-ANSWERED.md` | `9de87f5803445a1ee599f8cd55e082b158011452caf61109a34278b68e283df6` | Owner decision baseline; spend ceilings confirmed 2026-08-23; remaining owner inputs stay fail-closed |
 
 ## Provenance rule
 

@@ -131,6 +131,14 @@ export const DOR = {
 } as const
 export const EVIDENCE = { PROVIDER_RETENTION_MONTHS: 12 } as const
 export const RETRY = { MAX_ATTEMPTS: 3, BASE_BACKOFF_MS: 1000, JITTER_RATIO: 0.3 } as const
+export const SPEND = {
+  CEILING_PER_VIDEO_USD: 30,
+  CEILING_PER_CHANNEL_WEEK_USD: 70,
+  CEILING_PORTFOLIO_MONTH_USD: 900,
+  QUALIFICATION_BUDGET_USD: 400,
+  TRACK_G_BUDGET_USD: 350,
+  SCALED_TARGET_COST_PER_VIDEO_USD: 18,
+} as const
 
 export const LEARNING = {
   ANALYTICS_WINDOW_DAYS: { min: 14, max: 28 },
@@ -196,7 +204,6 @@ export const PROFILE: Readonly<Record<ProfileName, {
 } as const
 
 export const UNDECIDED = {
-  SPEND_CEILING_PER_VIDEO_USD: null,
   TARGET_VIDEOS_PER_CHANNEL_PER_WEEK: null,
   IDENTITY_SCOPE: null,
   PRODUCTION_AUDIO_PROVIDER: null,
