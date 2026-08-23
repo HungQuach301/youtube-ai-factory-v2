@@ -5,8 +5,10 @@
     "composite": false,
     "baseUrl": "../..",
     "paths": {
-      "@youtube-ai-factory/contracts": ["packages/contracts/src/index.ts"]
+      "@youtube-ai-factory/contracts": ["packages/contracts/src/index.ts"],
+      "@youtube-ai-factory/core-hash": ["packages/core-hash/src/index.ts"],
+      "@youtube-ai-factory/media-worker": ["packages/media-worker/src/index.ts"]
     }
   },
-  "include": ["preflight-provider-denied.ts"]
+  "include": ["preflight-provider-denied.ts", "media-worker-d1-denied.ts"]
 }

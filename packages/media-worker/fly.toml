@@ -1,0 +1,14 @@
+app = "youtube-ai-factory-media-worker"
+primary_region = "sin"
+
+[build]
+  dockerfile = "packages/media-worker/Dockerfile"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1024mb"
+
+[env]
+  MEDIA_GPU = "false"
+  MEDIA_WORKER_MODE = "queue"
