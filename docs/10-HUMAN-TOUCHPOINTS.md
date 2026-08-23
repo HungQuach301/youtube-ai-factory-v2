@@ -97,7 +97,7 @@ export const ATTENTION = {
   HP03_MIN_PER_VIDEO: { min: 5,  max: 10 },
   HP04_MIN_PER_REJECT: { min: 10, max: 15 },
   HP05_MIN_PER_WEEK:  { min: 15, max: 30 },
-  OWNER_WEEKLY_CEILING_MIN: null,   // → 12 §11: owner phải khai
+  OWNER_WEEKLY_CEILING_MIN: 300,    // owner confirmed 2026-08-23
   QUEUE_AGE_ALERT_HOURS: 48,        // mục chờ người quá 48h → cảnh báo
 } as const
 ```
