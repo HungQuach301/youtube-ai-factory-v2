@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import type { CapabilityId, Hex64, PackageId, StageInstanceId, TraceId } from './ids.js'
 import type { ProfileName } from './enums.js'
 import type { PROFILE } from './thresholds.js'
+import type { CandidateSourceMetadata } from './tournament.js'
 
 export interface CapabilityRef {
   readonly capabilityId: CapabilityId
@@ -18,6 +19,7 @@ export interface Candidate<T> {
   readonly value: T
   readonly candidateOrdinal: number
   readonly lineageHash: Hex64
+  readonly sourceMetadata?: CandidateSourceMetadata
 }
 
 export interface RunContext {

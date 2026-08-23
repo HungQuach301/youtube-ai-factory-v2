@@ -152,6 +152,7 @@ export const CREATIVE = {
   CRITIC_COUNT_STAGE_04:   7,
   GENERATE_TEMPERATURE:    { min: 0.9,  max: 1.1 },
   JUDGE_TEMPERATURE:       0,
+  JUDGE_SCORE:             { min: 0, max: 100 },
 } as const
 
 export const ANTICOPY = {
@@ -566,6 +567,55 @@ attempt. Preflight fail hoặc read-back fail phải ghi evidence, không seal/f
 và không tự sinh revision thứ hai. `RunContext` đọc đúng cấu hình `PROFILE`; còn
 `PreflightContext` chỉ có measurement, threshold và profile nên provider/LLM call
 trong preflight là lỗi biên dịch.
+
+---
+
+## 7A. Tournament Engine — `tournament.ts`
+
+```ts
+export type TournamentWidthKey =
+  | 'routeCount' | 'compositionsPerCriticalUnit' | 'sourceCandidates'
+export type TournamentCriticCountKey =
+  | 'criticCountStage04' | 'criticCountAssurance'
+
+export interface CandidateSourceMetadata {
+  provider?: string
+  model?: string
+  systemPromptHash?: Hex64
+  requestId?: string
+  generatedAt?: string
+  sourceId?: string
+}
+
+export interface BlindCandidate<Out> {
+  blindId: string
+  value: Out
+}
+
+export interface BlindJudgeInput<Out> {
+  seed: string
+  temperature: number                 // luôn CREATIVE.JUDGE_TEMPERATURE
+  rubric: RubricCriterion[]           // mỗi criterion đủ fail/borderline/pass
+  candidates: BlindCandidate<Out>[]   // không ordinal, lineage, source metadata
+}
+
+export interface TournamentSelectionPort<Out> {
+  select(input: TournamentSelectionInput<Out>): Promise<Candidate<Out>>
+}
+```
+
+Engine đọc candidate width và critic count trực tiếp từ `PROFILE` bằng hai key
+được type hóa; số lượng truyền vào lệch cấu hình phải fail-closed. Generation
+temperature nằm trong `CREATIVE.GENERATE_TEMPERATURE`, judging luôn temperature
+0 và system prompt hash của judge không được trùng generator. Mỗi critic nhận
+một payload mới, thứ tự candidate được xáo xác định theo seed và chỉ có blind ID.
+
+Điểm mỗi criterion nằm trên thang `CREATIVE.JUDGE_SCORE`; engine lấy trung bình
+xác định theo critic, chọn `argmax` đạt `CREATIVE.CHAMPION_MIN_SCORE` và phá hòa
+bằng rank hash theo seed. Eligibility chạy trước mọi judge call. Trước khi trả
+champion, engine phải bảo tồn cả `CHAMPION`, `REJECTED`, `INELIGIBLE`, score và
+evidence hash; lỗi bảo tồn chặn kết quả. Candidate source metadata chỉ tồn tại
+trong evidence nội bộ và không thuộc `BlindJudgeInput`.
 
 ---
 

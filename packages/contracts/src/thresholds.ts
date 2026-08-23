@@ -27,7 +27,8 @@ export const CREATIVE = {
   CHAMPION_MIN_SCORE: 95,
   CRITIC_COUNT_STAGE_04: 7,
   GENERATE_TEMPERATURE: { min: 0.9, max: 1.1 },
-  JUDGE_TEMPERATURE: 0
+  JUDGE_TEMPERATURE: 0,
+  JUDGE_SCORE: { min: 0, max: 100 }
 } as const
 
 export const ANTICOPY = {
