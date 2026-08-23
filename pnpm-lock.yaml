@@ -120,6 +120,15 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/intelligence:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/cost:
     dependencies:
       '@youtube-ai-factory/contracts':
