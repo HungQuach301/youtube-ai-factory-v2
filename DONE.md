@@ -628,3 +628,22 @@ phạm P5.
 WP-13 không dispatch provider thật, không ghi production data, không tạo actual
 spend và không bật auto-publish. WP-14 chỉ bắt đầu sau khi PR WP-13 pass CI và
 được merge.
+
+
+---
+
+## WP-16 · Truth Layer (TRU-01, TRU-02) + Stage 03
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Advice lint bắt 100% bộ đối kháng ≥30 mẫu | `packages/truth-layer/tests/truth.test.ts` — 32/32 blocked; neutral qualified language passes |
+| Parser số xác định, không dùng LLM/provider | Numeric fixture currency, suffix, percent và basis point |
+| CRITICAL claim cần PRIMARY source tier 1/2 | Unit test + `tests/migrations/0003-truth.test.mjs` trigger abort tier 3 |
+| Terminology có IPA và ARPAbet | Strict Zod boundary test |
+| Migration `0003` tái lập | UP/DOWN ×2 và trigger test |
+
+Không dispatch provider, không ghi production data và không thay đổi auto-publish.
