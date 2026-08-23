@@ -782,3 +782,31 @@ nhà cung cấp đã được qualify.
 
 Không gọi provider, không dùng asset music có bản quyền, không tạo spend, không
 ghi production data và không bật auto-publish.
+
+
+---
+
+## WP-20 · ShotCueProgram Compiler (CMP-01) + Stage 08
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Timeline phủ đủ canonical duration và bắt đầu tại zero | `packages/compiler/tests/compiler.test.ts` kiểm toàn bộ 33,813,454 tick = 704.4469583333333 giây |
+| Zero gap/overlap | Unit test gap/overlap; `IntervalTree`; trigger seal trong migration `0004` |
+| Tổng thời lượng khớp ±1 frame | Unit test chấp nhận 1,600 tick ở 30 fps/48 kHz và từ chối 1,601 tick |
+| Không có hard limit 90–180 shot | Compiler dùng shot count dẫn xuất; test source scan cấm legacy range và `SHOT_COUNT_MIN/MAX` |
+| Mỗi shot có đúng BEFORE/DURING/AFTER | Zod boundary, unit test missing/duplicate state và seal trigger yêu cầu ba assertion |
+| Claim và source binding fail-closed | Compiler từ chối assertion ngoài claim của shot, thiếu source query hoặc source query trên MAKE |
+| Adaptive validation không tự tạo gate mới | Pacing/archetype chỉ xuất warning từ `thresholds.SHOT`; không thay đổi SSOT |
+| Output được seal xác định | Shot order chuẩn hóa và `canonicalHash` tạo hash 64 hex |
+| Migration `0004` tái lập và bất biến | UP/DOWN ×2; test sequence, gap, assertion completeness và mọi INSERT/UPDATE/DELETE sau seal |
+
+## Ranh giới
+
+WP-20 chỉ biên dịch ShotCueProgram xác định cho Stage 08. Shot count 98 trong
+fixture là kết quả dẫn xuất của full timeline, không phải ngưỡng. Không gọi
+provider, không tạo reservation/actual spend, không ghi production data và không
+bật auto-publish.
