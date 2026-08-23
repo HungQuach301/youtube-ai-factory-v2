@@ -9,7 +9,8 @@ const workPackages = [
   { id: "WP-03", name: "Lease & Fencing", status: "Complete", detail: "Durable lease state, monotonic fencing and fail-closed reconciliation." },
   { id: "WP-04", name: "Definition of Ready Resolver", status: "Complete", detail: "Eleven evidence-derived readiness conditions with structured refusal." },
   { id: "WP-05", name: "Standard & Policy Registry", status: "Complete", detail: "Four-scope inheritance, G11 only-tighten policy and fail-closed gate controls." },
-  { id: "WP-06", name: "Evidence Store", status: "Next", detail: "Reproducible web and provider snapshots isolated by evidence namespace." },
+  { id: "WP-06", name: "Evidence Store", status: "Complete", detail: "Immutable source and provider snapshots with checksum replay and namespace isolation." },
+  { id: "WP-07", name: "Provider Adapter Framework", status: "Next", detail: "Guarded dispatch boundary, normalized provider errors and zero-spend preflight." },
 ];
 
 const controls = [
@@ -80,9 +81,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
               <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Foundation in controlled progress</h2></div>
-              <span className="progress-label">6 / 33 work packages</span>
+              <span className="progress-label">7 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="6 of 33 work packages complete"><span style={{ width: "18.18%" }} /></div>
+            <div className="progress-track" aria-label="7 of 33 work packages complete"><span style={{ width: "21.21%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
