@@ -20,8 +20,8 @@ WORKDIR /app
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/packages/contracts ./packages/contracts
 COPY --from=build /src/packages/core-hash ./packages/core-hash
-COPY --from=build /src/packages/media-worker/dist ./dist
-COPY --from=build /src/packages/media-worker/container-entry.mjs ./container-entry.mjs
+COPY --from=build /src/packages/media-worker ./packages/media-worker
+WORKDIR /app/packages/media-worker
 USER node
 
 ENTRYPOINT ["node", "container-entry.mjs"]
