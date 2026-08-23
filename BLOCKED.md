@@ -42,3 +42,16 @@ Trạng thái: `OPEN — budget confirmation CLOSED 2026-08-23; các mục còn 
 - Chọn nhà cung cấp production audio và xác nhận license hiện hành trước WP-19.
 
 Ghi chú xung đột nội bộ đã được giải quyết bằng xác nhận owner ngày 2026-08-23. Không được tự nâng các trần đã xác nhận; mọi thay đổi sau này cần quyết định owner mới.
+
+## B-004 · Fly production deployment credential/tool chưa hiện diện
+
+Trạng thái: `OPEN — code/image qualification vẫn tiếp tục`
+
+Owner đã ủy quyền production và provider/API trả phí trong các trần đã chốt. Tuy
+nhiên, phiên triển khai hiện tại không có `flyctl`, Fly connector hoặc credential
+Fly đã xác thực. Đây là thiếu capability kỹ thuật, không phải thiếu phê duyệt.
+
+WP-12 vẫn được build và kiểm định bằng GitHub Actions. Không được tuyên bố Fly
+production đã deploy, không được ghi image digest giả và không được đưa secret vào
+repository. Blocker đóng khi CI image pass và một môi trường Fly được xác thực để
+deploy đúng image digest rồi health-check production.
