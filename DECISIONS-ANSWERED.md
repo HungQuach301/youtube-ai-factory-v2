@@ -7,6 +7,28 @@ Mọi thay đổi về sau đi qua Evolution pipeline như mọi meta-change kh�
 
 **Nguyên tắc điền.** Các giá trị dưới đây được chọn để (a) nhất quán với nhau — nhịp §1 nằm trong trần chú ý §11, ngân sách §3 nằm trong cấu hình REDUCED của Track G; (b) thiên về thận trọng ở mọi chỗ rủi ro chính sách; (c) đủ cụ thể để agent không bị chặn. Ngân sách §3 được owner xác nhận ngày 2026-08-23; các xác nhận còn lại được liệt kê ở cuối.
 
+## Ủy quyền triển khai thường trực ✅ **[OWNER CONFIRMED — 2026-08-23]**
+
+Owner ủy quyền cho agent tiếp tục triển khai code, CI, ChatGPT Sites, môi trường
+production và các provider/API trả phí cần thiết mà không phải xin lại phê duyệt
+hội thoại cho từng thao tác, miễn là thao tác nằm trong phạm vi work package đã
+được giao và trong các trần ngân sách §3.
+
+Ủy quyền này **không** nới hoặc vô hiệu hóa bất kỳ control nào:
+
+- mọi provider call vẫn phải đi qua guarded dispatch và Cost Reservation;
+- vượt trần hoặc thiếu credential hợp lệ phải fail-closed với zero dispatch;
+- hard gate, evidence, qualification và human editorial imprint vẫn bắt buộc;
+- các typed owner command vẫn cần identity/signature/evidence theo P10;
+- `auto_publish` vẫn cố định `OFF`; phát hành từng video vẫn cần hai lệnh owner
+  tách biệt và các kiểm tra PC-1..PC-8/G15;
+- không được tự suy diễn dữ liệu hiệu chuẩn, điều khoản license hoặc identity
+  người thật đang còn thiếu.
+
+Phạm vi triển khai đang được ủy quyền liên tục: củng cố SSOT; WP-12; WP-12B;
+WP-13..WP-17; và mức tối thiểu WP-28/WP-29. Mỗi WP vẫn dùng branch/PR/CI/DONE
+độc lập, GitHub `main` vẫn là nguồn chuẩn duy nhất.
+
 ---
 
 ## §1 · Nhịp mục tiêu ✅

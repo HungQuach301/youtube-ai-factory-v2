@@ -27,6 +27,11 @@ Trạng thái: `OPEN`
 
 Sau khi repository GitHub được tạo cần bật branch protection cho `main`: PR bắt buộc, CI bắt buộc, không force-push, không xóa branch và yêu cầu CODEOWNER review cho vùng governance.
 
+Kiểm tra ngày 2026-08-23 xác nhận `main` vẫn chưa được bảo vệ. Connector GitHub
+hiện tại không expose thao tác branch-protection và Cloud Browser không có phiên
+GitHub đã đăng nhập, nên agent không tuyên bố blocker đã đóng. Mọi thay đổi vẫn
+tiếp tục đi qua draft PR + CI + squash merge trong lúc chờ cấu hình cấp repository.
+
 ## B-003 · Owner confirmations trong DECISIONS-ANSWERED
 
 Trạng thái: `OPEN — budget confirmation CLOSED 2026-08-23; các mục còn lại giữ nguyên blocker theo WP`

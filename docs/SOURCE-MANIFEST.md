@@ -36,7 +36,7 @@
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
-| `DECISIONS-ANSWERED.md` | `9de87f5803445a1ee599f8cd55e082b158011452caf61109a34278b68e283df6` | Owner decision baseline; spend ceilings confirmed 2026-08-23; remaining owner inputs stay fail-closed |
+| `DECISIONS-ANSWERED.md` | `e7eccd077bdc8d850ccaa313b933e2698f2fd61cc65bf9c42709be28adfd6ee7` | Owner decision baseline; spend ceilings and standing implementation authorization confirmed 2026-08-23; hard controls and remaining owner inputs stay fail-closed |
 
 ## Provenance rule
 
