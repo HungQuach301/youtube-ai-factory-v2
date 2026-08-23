@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalHash, canonicalize } from '../src/index.js'
+import { canonicalHash, canonicalize, canonicalizeExact } from '../src/index.js'
 
 function permutation(seed: number): Record<string, unknown> {
   const entries: [string, unknown][] = [
@@ -49,6 +49,11 @@ describe('RFC 8785 canonical hashing', () => {
     const stable = { id: 'x', nested: { value: 1 } }
     const volatile = { id: 'x', timestamp: 'now', nested: { value: 1, request_id: 'r', latency: 2, nonce: 'n' } }
     expect(canonicalHash(volatile)).toBe(canonicalHash(stable))
+  })
+
+  it('can preserve volatile fields for full evidence snapshots', () => {
+    expect(canonicalizeExact({ timestamp: 'now', request_id: 'r', latency: 2, nonce: 'n' }))
+      .toBe('{"latency":2,"nonce":"n","request_id":"r","timestamp":"now"}')
   })
 
   it.each([

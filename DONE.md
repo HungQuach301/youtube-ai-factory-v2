@@ -260,3 +260,50 @@ CORE-05 cưỡng chế G11 ở tầng ứng dụng. Các trigger vật lý `stan
 ## Ngoài phạm vi WP-05
 
 Không gọi provider, không tạo production spend, không bật auto-publish. Evidence Store thuộc WP-06; physical G11 threshold-diff/trigger thuộc WP-26; Evolution Pipeline thuộc WP-27.
+
+---
+
+## WP-06 · CORE-06 Evidence Store
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Xóa hoặc mất live source vẫn tái tạo được nội dung gốc | `evidence-store.test.ts` — snapshot HTML + extracted text, sau đó nguồn trả lỗi nhưng replay vẫn thành công |
+| Mọi provider call có đủ request/response snapshot | `stores and replays a complete request/response pair...` kiểm cả hai key và payload round-trip |
+| Snapshot giữ nguyên trường volatile phục vụ audit | `canonicalizeExact` + test `request_id`, `timestamp`, `latency`; `canonicalize` nhận diện content vẫn giữ hành vi G1 cũ |
+| Bốn namespace R2 tách biệt | Test bảng `production→prod`, `qualification→qual`, `staging→stg`, `quarantine→quar` |
+| Evidence bất biến, ghi lặp cùng bytes idempotent | Test ghi hai lần cùng pair chỉ tạo hai object; thay payload cùng trace/span bị `IMMUTABILITY_VIOLATION` |
+| Read-back phải khớp checksum và byte length | Test thay bytes sau registry → `INTEGRITY_MISMATCH`; thiếu object/registry → fail closed |
+| Không ghi secret vào evidence | Test Authorization lồng trong request bị chặn trước khi có bất kỳ object nào |
+| Retention provider tối thiểu 12 tháng, source/measurement/rejected vĩnh viễn | `contracts.test.ts` + registry assertion dùng `thresholds.EVIDENCE.PROVIDER_RETENTION_MONTHS` |
+| Path không thể thoát namespace | Test absolute path, backslash, `.` và `..` traversal đều bị `INVALID_R2_PATH` |
+
+## Cấu trúc key chuẩn
+
+| Loại | Key |
+|---|---|
+| Source HTML | `{ns}/snapshot/{package_id}/sources/{content_hash}.html` |
+| Source text | `{ns}/snapshot/{package_id}/sources/{content_hash}.txt` |
+| Provider request | `{ns}/evidence/{package_id}/{trace_id}/{span_id}/request.json.gz` |
+| Provider response | `{ns}/evidence/{package_id}/{trace_id}/{span_id}/response.json.gz` |
+
+`{ns}` chỉ có thể là `prod`, `qual`, `stg` hoặc `quar`. Payload provider được canonicalize đầy đủ rồi gzip; request và response có hash riêng. Mỗi lần đọc đều đối chiếu immutable registry, SHA-256 và byte length trước khi trả dữ liệu.
+
+## Ranh giới secret và dữ liệu
+
+Snapshot lưu đầy đủ business payload để audit, bao gồm trường volatile, nhưng từ chối credential-bearing field trước khi encode hoặc ghi bytes. Source URL chỉ nhận HTTP(S), không nhận userinfo, token/signature trong query. Metadata mang classification và retention, không mang provider credential.
+
+## Migration và tích hợp tương lai
+
+WP-06 không thêm migration. `source.snapshot_r2_key`/`content_hash` vẫn thuộc migration `0003` tại WP-16; `provider_request.request_r2_key`/`response_r2_key` vẫn thuộc migration `0006` tại WP-08. Evidence Store cung cấp interface object store + immutable registry để các WP sở hữu schema bind key sau, không kéo bảng tương lai về sớm.
+
+## Lệnh xác minh
+
+`pnpm typecheck` · `pnpm lint` · `pnpm test:guardrails` · `pnpm test:unit` · strict TypeScript độc lập · runtime smoke source/provider/integrity
+
+## Ngoài phạm vi WP-06
+
+Không gọi provider thật, không tạo reservation/spend, không ghi production data, không bật auto-publish. Provider adapter framework và ledger vật lý thuộc WP-07/WP-08; binding R2/D1 thật được cấu hình tại WP sở hữu hạ tầng tương ứng.
