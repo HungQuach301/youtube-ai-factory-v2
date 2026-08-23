@@ -14,6 +14,8 @@ GitHub repository. A URL alone is not evidence of source equality.
 
 | 2026-08-23T01:31:03Z | `f168bd141d4c64aba7cae1c1002af79aaaffc16f` | [#20](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/20) | `1d5309cbe73e8c0f084c3d33760b227924f5886cfa60a521897c1988559abc21` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 7 | SUCCEEDED | custom; owner-controlled |
 
+| 2026-08-23T03:45:46Z | `41377ecac2e74260a3511703bf9e225b43bb6560` | [#23](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/23) | `43b51c5e3e66dbb0894441432ace5ff4dab05ac5b330504c30454a48aa8a84b2` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 8 | SUCCEEDED | custom; owner-controlled |
+
 ## Verification evidence
 
 - GitHub root build: passed.
