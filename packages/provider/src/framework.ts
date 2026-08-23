@@ -104,8 +104,10 @@ export async function guardedDispatch<Req, Res>(
   context: GuardedDispatchContext,
 ): Promise<Res> {
   let key: Hex64
+  let estimate: ReturnType<ProviderAdapter<Req, Res>['estimateCost']>
   try {
-    assertValidEstimate(adapter.estimateCost(request))
+    estimate = adapter.estimateCost(request)
+    assertValidEstimate(estimate)
     key = idempotencyKey(adapter, archetype, request, context)
   } catch (error) {
     throw new ProviderDispatchError(
@@ -116,26 +118,48 @@ export async function guardedDispatch<Req, Res>(
     )
   }
 
-  for (let attempt = 1; attempt <= thresholds.RETRY.MAX_ATTEMPTS; attempt += 1) {
-    try {
-      return await adapter.dispatch(request, key)
-    } catch (error) {
-      const errorClass = normalizeError(adapter, error)
-      if (!RETRYABLE_CLASSES.has(errorClass) || attempt === thresholds.RETRY.MAX_ATTEMPTS) {
-        throw new ProviderDispatchError(
-          errorClass,
-          attempt,
-          `Provider dispatch stopped after ${attempt} attempt(s): ${errorClass}.`,
-          { cause: error },
-        )
+  return context.dispatchGuard.execute({
+    capabilityId: adapter.capabilityId,
+    capabilityVersion: adapter.version,
+    adapterSettingsHash: adapter.settingsHash,
+    requestSettingsHash: context.requestSettingsHash,
+    archetypeId: archetype,
+    request,
+    estimate,
+    idempotencyKey: key,
+    context,
+  }, async () => {
+    for (let attempt = 1; attempt <= thresholds.RETRY.MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await adapter.dispatch(request, key)
+        const actualCostUsd = adapter.actualCost(response)
+        if (!isNonNegativeFinite(actualCostUsd) || actualCostUsd > estimate.maxCostUsd) {
+          throw new ProviderDispatchError(
+            'PROVIDER_ERROR',
+            attempt,
+            'Provider actual cost is invalid or exceeds the reserved estimate.',
+          )
+        }
+        return { response, actualCostUsd }
+      } catch (error) {
+        if (error instanceof ProviderDispatchError) throw error
+        const errorClass = normalizeError(adapter, error)
+        if (!RETRYABLE_CLASSES.has(errorClass) || attempt === thresholds.RETRY.MAX_ATTEMPTS) {
+          throw new ProviderDispatchError(
+            errorClass,
+            attempt,
+            `Provider dispatch stopped after ${attempt} attempt(s): ${errorClass}.`,
+            { cause: error },
+          )
+        }
+        await waitBeforeRetry(attempt)
       }
-      await waitBeforeRetry(attempt)
     }
-  }
 
-  throw new ProviderDispatchError(
-    'PROVIDER_ERROR',
-    thresholds.RETRY.MAX_ATTEMPTS,
-    'Provider dispatch exhausted its fail-closed retry state.',
-  )
+    throw new ProviderDispatchError(
+      'PROVIDER_ERROR',
+      thresholds.RETRY.MAX_ATTEMPTS,
+      'Provider dispatch exhausted its fail-closed retry state.',
+    )
+  })
 }

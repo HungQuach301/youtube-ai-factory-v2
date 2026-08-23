@@ -464,7 +464,28 @@ export interface ProviderAdapter<Req, Res> {
   readonly settingsHash: Hex64
   estimateCost(req: Req): CostEstimate        // đếm thật, KHÔNG đoán
   dispatch(req: Req, idempotencyKey: Hex64): Promise<Res>
+  actualCost(response: Res): number            // giá thật, hữu hạn, không âm, ≤ reservation
   normalizeError(e: unknown): ErrorClass
+}
+
+export interface DispatchExecutionContext {
+  fencingToken: FencingToken
+  packageId: PackageId
+  stageInstanceId: StageInstanceId
+  traceId: TraceId
+  namespace: 'production' | 'qualification' | 'staging'
+  reservationId: ReservationId
+  portfolioRef: string
+  channelRef?: string
+  createdAt: string
+  expiresAt: string
+}
+
+export interface DispatchGuardRuntime {
+  execute<Req, Res>(
+    input: DispatchGuardInput<Req>,
+    transport: () => Promise<{ response: Res; actualCostUsd: number }>,
+  ): Promise<Res>
 }
 
 // G9 — điểm chặn duy nhất
@@ -472,8 +493,10 @@ export function guardedDispatch<Req, Res>(
   adapter: ProviderAdapter<Req, Res>,
   archetype: ArchetypeId,
   request: Req,
-  ctx: { fencingToken: FencingToken; packageId: PackageId;
-         stageInstanceId: StageInstanceId; traceId: TraceId }
+  ctx: DispatchExecutionContext & {
+    requestSettingsHash: Hex64
+    dispatchGuard: DispatchGuardRuntime
+  }
 ): Promise<Res>
 ```
 

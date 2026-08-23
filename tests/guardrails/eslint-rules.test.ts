@@ -54,6 +54,16 @@ describe('mandatory ESLint guardrails', () => {
     expect(messages.map((message) => message.messageId)).toContain('directDispatch')
   })
 
+  it('G9 rejects taking a raw dispatch method reference outside the framework', () => {
+    const messages = verify('const send = provider.dispatch', 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('directDispatch')
+  })
+
+  it('G9 rejects destructuring raw dispatch outside the framework', () => {
+    const messages = verify('const { dispatch } = provider', 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('directDispatch')
+  })
+
   it('G9 rejects importing a concrete adapter outside the provider package', () => {
     const messages = verify("import adapter from '@youtube-ai-factory/provider/adapters/openai'", 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
     expect(messages.map((message) => message.messageId)).toContain('adapterImport')
