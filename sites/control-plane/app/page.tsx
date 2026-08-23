@@ -75,7 +75,6 @@ export default function Home() {
             <dl className="authority-list">
               <div><dt>Repository</dt><dd>HungQuach301/youtube-ai-factory-v2</dd></div>
               <div><dt>Branch</dt><dd>main</dd></div>
-              <div><dt>Canonical commit</dt><dd className="mono">1c0156c2cf60</dd></div>
               <div><dt>Site role</dt><dd>Deployment mirror</dd></div>
               <div><dt>Managed files</dt><dd>{sourceLock.files.length}</dd></div>
               <div><dt>Source fingerprint</dt><dd className="mono">{fingerprint}</dd></div>
