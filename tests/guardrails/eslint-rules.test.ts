@@ -44,6 +44,16 @@ describe('mandatory ESLint guardrails', () => {
     expect(verify('class Runner { async preflight() { return measurements.verify() } }', 'g6-no-provider-in-preflight', 'packages/stage-runner/src/valid.js')).toHaveLength(0)
   })
 
+  it('G6 rejects guardedDispatch inside preflight()', () => {
+    const messages = verify('class Runner { async preflight() { return guardedDispatch(adapter, request) } }', 'g6-no-provider-in-preflight', 'packages/stage-runner/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('providerCall')
+  })
+
+  it('G6 rejects taking a provider method reference inside preflight()', () => {
+    const messages = verify('class Runner { async preflight() { const call = provider.dispatch; return call({}) } }', 'g6-no-provider-in-preflight', 'packages/stage-runner/src/violation.js')
+    expect(messages.map((message) => message.messageId)).toContain('providerCall')
+  })
+
   it('G9 rejects direct provider dispatch outside the framework', () => {
     const messages = verify('provider.dispatch(request, key)', 'g9-guarded-dispatch-only', 'packages/creative/src/violation.js')
     expect(messages.map((message) => message.messageId)).toContain('directDispatch')

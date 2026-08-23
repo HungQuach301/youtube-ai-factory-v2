@@ -93,6 +93,21 @@ importers:
         specifier: workspace:*
         version: link:../core-hash
 
+  packages/stage-runner:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-command':
+        specifier: workspace:*
+        version: link:../core-command
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':

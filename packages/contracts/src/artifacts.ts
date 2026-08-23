@@ -1,6 +1,8 @@
 import type { z } from 'zod'
 
 import type { CapabilityId, Hex64, PackageId, StageInstanceId, TraceId } from './ids.js'
+import type { ProfileName } from './enums.js'
+import type { PROFILE } from './thresholds.js'
 
 export interface CapabilityRef {
   readonly capabilityId: CapabilityId
@@ -22,6 +24,8 @@ export interface RunContext {
   readonly packageId: PackageId
   readonly stageInstanceId: StageInstanceId
   readonly traceId: TraceId
+  readonly profile: ProfileName
+  readonly profileSettings: (typeof PROFILE)[ProfileName]
 }
 
 export type PreflightResult =

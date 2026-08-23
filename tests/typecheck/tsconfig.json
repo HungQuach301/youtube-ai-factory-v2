@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "baseUrl": "../..",
+    "paths": {
+      "@youtube-ai-factory/contracts": ["packages/contracts/src/index.ts"]
+    }
+  },
+  "include": ["preflight-provider-denied.ts"]
+}

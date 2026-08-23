@@ -32,7 +32,7 @@
 | `03-DATA-SCHEMA.sql` | `2e83410eebcefba269e296dfef656411b592e810e45deba185cf516a1db8ae10` | Data source of truth; 10 migrations; WP-09 immutable capability, qualification and dispatch-block invariants aligned |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
-| `02-CONTRACTS.md` | `f7a1a3fcb14a24c7d9ecdc6528be69173ca288a560c1144d53495bb525ff3557` | Type và mọi ngưỡng số — WP-09 dispatch execution context và guard runtime aligned |
+| `02-CONTRACTS.md` | `13aa0efd5a6cb381fefecaa75d49aaa61d2dc4e96d42d61965a54189ab4fded0` | Type và mọi ngưỡng số — WP-10 Stage Runner lifecycle, PROFILE context và G6 boundary aligned |
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
