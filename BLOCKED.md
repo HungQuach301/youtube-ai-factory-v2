@@ -58,7 +58,7 @@ deploy đúng image digest rồi health-check production.
 
 ## B-005 · WP-12B numeric checkpoint cần owner xác nhận sau phép đo
 
-Trạng thái: `OPEN — MANDATORY STOP`
+Trạng thái: `CLOSED — OWNER CONFIRMED 2026-08-23`
 
 Benchmark đã đo đủ 16 case và kết luận trong phạm vi WP-12B:
 
@@ -69,4 +69,6 @@ Benchmark đã đo đủ 16 case và kết luận trong phạm vi WP-12B:
 Cả ba dưới trần `$30/video`, nhưng đây không phải all-in factory cost và pricing
 fixture chưa phải capability `QUALIFIED`. `docs/04-BUILD-ORDER.md` yêu cầu owner
 xác nhận con số **sau khi đo** trước WP-13. Standing authorization không thay thế
-được quyết định evidence-specific này; agent phải dừng fail-closed tại đây.
+được quyết định evidence-specific này. Owner đã xác nhận cả bảng và chọn
+`PROFILE=REDUCED`; WP-13 được mở khóa. Các caveat phạm vi đo, qualification và
+cost reservation vẫn giữ nguyên.

@@ -557,7 +557,7 @@ WP-12.
 
 ---
 
-## WP-12B · Cost Benchmark — AWAITING OWNER NUMERIC CONFIRMATION
+## WP-12B · Cost Benchmark — OWNER CONFIRMED; PROFILE=REDUCED
 
 ## Mode: BUILD
 
@@ -583,9 +583,48 @@ stock, music, storage egress và rework. Stage 14 dùng pricing fixture
 qualified và không dispatch provider. Fly compute dùng mức bảo thủ
 `$0.00000355/started-second` cho shared CPU 1x + 1 GiB.
 
-## Điểm dừng bắt buộc
+## Numeric checkpoint
 
-Theo `docs/04-BUILD-ORDER.md`, owner phải xác nhận các con số sau khi đã biết kết
-quả. Ủy quyền triển khai chung không được dùng để giả mạo một quyết định owner về
-evidence chưa tồn tại tại thời điểm ủy quyền. WP-13 và các WP sau giữ `BLOCKED`
-cho tới typed/recorded owner confirmation của bảng trên.
+Owner xác nhận bảng kết quả ngày 2026-08-23 và chọn `PROFILE=REDUCED`. `B-005`
+đã đóng; WP-13 được mở khóa. Không có provider qualification hoặc actual spend
+nào được suy ra từ xác nhận này.
+
+---
+
+## WP-13 · MSR-01 Deterministic Measurement
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Đủ đúng 15 phép đo MSR-01 | `packages/measurement/tests/measurement.test.ts` có test đánh số 01–15 và wrapper kiểm đúng 15 evidence hash |
+| Black/freeze/silence có interval xác định | Ba fixture FFmpeg log biết trước start/end và tổng thời lượng |
+| Clipping/loudness giữ số đo công cụ, không suy diễn bằng model | Fixture `astats`/`ebur128` biết trước giá trị |
+| Drop frame và stream profile tái lập | Fixture duration×fps và probe profile biết trước kết quả |
+| Phoneme mismatch đo ở mức phoneme | Fixture edit distance 1/3; kết quả bắt buộc `gateEvaluated=false` trước WP-15 |
+| Seam, semantic motion, duplicate và near-static xác định | Fixture correlation/MFCC/F0, residual flow, pHash Hamming và SSIM interval |
+| Mobile legibility và safe zone dùng ngưỡng SSOT/hình học | Fixture x-height/WCAG và bbox có phần tử pass/fail biết trước |
+| Timeline lint tìm đúng gap/overlap | Fixture có một gap và một overlap, tolerance đọc từ `thresholds.SHOT` |
+| Control wrapper fail-closed ở boundary | Zod strict schema; aggregate chỉ phát sau đủ 15 phép đo và evidence hash canonical |
+
+## Ranh giới P5/P6
+
+WP-13 không gọi provider hoặc LLM. Worker/media tool tạo raw measurement;
+wrapper control-side chỉ validate, tính kết quả xác định và bind canonical
+evidence. `phoneme_mismatch_rate` được đo nhưng không tạo PASS/FAIL vì
+`ALIGNER_ERROR_FLOOR` chưa được đo ở WP-15; hạ nó thành hard gate lúc này sẽ vi
+phạm P5.
+
+## Lệnh xác minh
+
+`pnpm verify:source` · `pnpm typecheck` · `pnpm lint` ·
+`pnpm test:guardrails` · `pnpm test:unit` · `pnpm test:migrations` ·
+`pnpm test:integration`
+
+## Điểm dừng
+
+WP-13 không dispatch provider thật, không ghi production data, không tạo actual
+spend và không bật auto-publish. WP-14 chỉ bắt đầu sau khi PR WP-13 pass CI và
+được merge.
