@@ -720,3 +720,31 @@ emergency freeze, owner confirm 24 giờ, clean streak 15 và kill criterion 12.
 Các URL chính thức chỉ được resolve/snapshot trong OPERATE; BUILD không tự đổi
 gate và không khẳng định capability/provider qualification. Auto-publish tiếp tục
 bị khóa.
+
+---
+
+## WP-18 · Creative Layer (CRE-01..CRE-04)
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Taxonomy hook và narrative đóng | Zod enum trong `packages/creative/src/types.ts` |
+| PROFILE điều khiển route và critic Stage 04 | `stage04TournamentSettings`; REDUCED = 2 route, 3 critic |
+| Trùng `hook × narrativeDevice` fail-closed | `creative.test.ts` fixture FULL route thứ tư trùng cặp |
+| Champion dưới 95 hoặc thiếu lý do loại bị từ chối | `sealCreativeContract` đọc ngưỡng SSOT và seal canonical hash |
+| Packaging promise phải bind vào claim của script | `lintPackagingAgainstScript`; title cosine dùng anti-copy threshold |
+| Mọi beat thay đổi knowledge state; vòng tò mò đóng đúng hạn | `lintStory` kiểm hook, promise, midpoint, payoff, loop và entity density |
+| Prediction được seal trước sản xuất | `sealPrediction` dùng baseline `v0-flat`, curve 5% và weights runtime |
+| Nhịp script dựa trên ARPAbet syllable | `lintScript` kiểm pacing theo section, câu và breath group |
+| Mọi số trong script truy về claim và as-of evidence | `auditNumbers` bind deterministic từng số được parse |
+| Không hard-code ngưỡng ngoài contracts | Pacing, entity window và prediction baseline nằm ở `thresholds.ts` + `docs/02-CONTRACTS.md` |
+
+## Ranh giới
+
+WP-18 chỉ xây Creative Layer deterministic và contract seal. Không dispatch
+provider, không tạo reservation/actual spend, không ghi production data và không
+bật auto-publish. Baseline retention `v0-flat` phải được tái hiệu chỉnh sau 6
+video có analytics hợp lệ; không được trình bày như calibration evidence thực.

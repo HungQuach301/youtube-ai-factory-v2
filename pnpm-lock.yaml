@@ -51,6 +51,21 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/creative:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+      '@youtube-ai-factory/truth-layer':
+        specifier: workspace:*
+        version: link:../truth-layer
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/core-hash:
     dependencies:
       '@youtube-ai-factory/contracts':
