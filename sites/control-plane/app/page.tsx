@@ -16,7 +16,8 @@ const workPackages = [
   { id: "WP-10", name: "Stage Runner Framework", status: "Complete", detail: "The framework now owns the nine-step lifecycle, deterministic preflight, mandatory read-back and idempotent typed commands." },
   { id: "WP-11", name: "Tournament Engine", status: "Complete", detail: "Blind judge payloads, deterministic seeded selection, anchored rubrics, eligibility-first filtering and rejected-candidate evidence are enforced." },
   { id: "WP-12", name: "Media Worker Runtime", status: "Complete", detail: "Pinned CPU-only image, deterministic job plans, immutable read-back and the no-D1 worker boundary now pass CI." },
-  { id: "WP-12B", name: "Cost Benchmark", status: "Decision", detail: "Sixteen measured render cases place all three benchmarked profiles below $30; owner numeric confirmation remains mandatory." },
+  { id: "WP-12B", name: "Cost Benchmark", status: "Complete", detail: "Owner confirmed the measured economic checkpoint and selected PROFILE=REDUCED for downstream work." },
+  { id: "WP-13", name: "Deterministic Measurement", status: "Complete", detail: "All 15 MSR-01 measurements now use strict inputs, known-result tests and canonical evidence hashes." },
 ];
 
 const controls = [
@@ -87,9 +88,9 @@ export default function Home() {
           <div className="panel roadmap-panel">
             <div className="section-heading">
             <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · controlled execution in progress</h2></div>
-              <span className="progress-label">13 / 33 work packages</span>
+              <span className="progress-label">14 / 33 work packages</span>
             </div>
-            <div className="progress-track" aria-label="13 of 33 work packages complete"><span style={{ width: "39.39%" }} /></div>
+            <div className="progress-track" aria-label="14 of 33 work packages complete"><span style={{ width: "42.42%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -111,7 +112,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-12 is complete. WP-12B measured FULL at $0.2667, REDUCED at $0.1232 and deterministic-max REDUCED at $0.1271 within its scoped model. The mandatory owner numeric checkpoint remains fail-closed.</p>
+              <p>WP-12B is owner-confirmed with PROFILE=REDUCED. WP-13 now binds 15 deterministic measurements to immutable evidence. Phoneme mismatch is measured but remains warning-only until WP-15 establishes a real aligner error floor.</p>
             </div>
             <p className="safety-note">This progress update changes no production permission: provider transport, spend and publishing remain locked.</p>
           </aside>
