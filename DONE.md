@@ -647,3 +647,25 @@ spend và không bật auto-publish. WP-14 chỉ bắt đầu sau khi PR WP-13 p
 | Migration `0003` tái lập | UP/DOWN ×2 và trigger test |
 
 Không dispatch provider, không ghi production data và không thay đổi auto-publish.
+
+
+---
+
+## WP-17 · Intelligence Layer (INT-01, INT-02) + Stage 01, 02
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Audience job đúng cấu trúc và không chứa topic name | `packages/intelligence/tests/intelligence.test.ts` kiểm format EN/VI, tối thiểu năm từ mỗi thành phần và topic-name rejection |
+| Freshness dùng đúng cửa sổ SSOT | Test kiểm dữ liệu research/intelligence hết hạn; policy được tách khỏi freshness vì hiệu lực phải được xác minh riêng |
+| Anti-copy bắt exact shared 7-gram và đo 5-gram Jaccard | Fixture biết trước bị chặn ở text dimension |
+| Beat, thumbnail và title có phép đo xác định | Normalized Levenshtein, pHash Hamming và cosine similarity dùng ngưỡng SSOT |
+| Bốn chiều anti-copy đều phải qua | `measureAntiCopy` fail-closed nếu bất kỳ text/beat/thumbnail/title vi phạm |
+| Differentiation chỉ được đo, chưa dựng gate | Test Euclidean distance tới reference centroid; ngưỡng vẫn `UNCALIBRATED` |
+
+WP-17 không gọi provider thật, không ghi production data, không tạo actual spend
+và không bật auto-publish. Differentiation score không trở thành hard gate trước
+khi có dữ liệu calibration theo P5.
