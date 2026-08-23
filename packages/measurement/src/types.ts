@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import type { DeterministicMeasurements } from '@youtube-ai-factory/contracts'
+
 export const MeasurementCodeSchema = z.enum([
   'BLACK_FRAME',
   'FREEZE_FRAME',
@@ -206,6 +208,6 @@ export interface TimelineMeasurement {
 }
 
 export interface MeasurementBundle {
-  readonly measurements: import('@youtube-ai-factory/contracts').DeterministicMeasurements
+  readonly measurements: DeterministicMeasurements
   readonly evidence: readonly MeasurementEvidence<unknown>[]
 }
