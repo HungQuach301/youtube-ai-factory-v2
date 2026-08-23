@@ -32,6 +32,10 @@ describe('contracts v2', () => {
     })
   })
 
+  it('keeps provider evidence for at least the documented twelve months', () => {
+    expect(thresholds.EVIDENCE.PROVIDER_RETENTION_MONTHS).toBe(12)
+  })
+
   it('rejects a production envelope without a 64-character settings hash', () => {
     const result = JobEnvelopeSchema.safeParse({
       traceId: 'trace', packageId: 'package', stageInstanceId: 'stage', fencingToken: 1,
