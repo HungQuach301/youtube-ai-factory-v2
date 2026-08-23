@@ -346,3 +346,43 @@ ESLint mới cưỡng chế ba ranh giới: code ngoài framework không đượ
 ## Ngoài phạm vi WP-07
 
 Không thêm concrete provider SDK hoặc chọn provider, không gọi provider thật, không tạo spend và không thêm migration. Evidence binding, cost reservation/ledger và chín bước capability dispatch guard lần lượt thuộc WP-08/WP-09. Auto-publish tiếp tục bị khóa.
+
+---
+
+## WP-08 · PRV-02 Cost Reservation & Ledger
+
+## Mode: BUILD
+
+## Owner decision đã ghi vào SSOT
+
+Owner xác nhận ngày 2026-08-23: `$30/video`, `$400 qualification`, `$350 Track G`. `DECISIONS-ANSWERED.md`, `BLOCKED.md`, `docs/02-CONTRACTS.md`, source manifest và checksum đã được cập nhật cùng WP; hệ thống không được tự nâng các trần này.
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| 50 dispatch intent song song với trần đủ 10 → đúng 10 qua, 40 bị từ chối | `packages/cost/tests/reservation.test.ts` kiểm 10 `HELD`, 40 `BUDGET_DENIED`; `tests/migrations/0006-cost.test.mjs` lặp 50 insert qua atomic SQL trigger và cho đúng 10/40 |
+| 40 intent bị từ chối có zero spend | Test chứng minh chỉ 10 transport intent được mở, `cost_ledger` vẫn có 0 entry cho 40 denial |
+| Trần phân cấp không thể bị né | Service buộc production/staging có portfolio + channel + package; atomic migration abort khi thiếu ceiling và kiểm mọi ceiling khớp, kể cả stage nếu được cấu hình |
+| Production và qualification không trộn ngân sách | Ceiling/reservation/ledger có namespace; service test chứng minh utilization tách biệt và từ chối cost kind sai namespace |
+| Reservation hai pha | `HELD → SETTLED` chỉ một lần, actual cost không vượt estimate, phần hold dư được giải phóng; test ở cả service và SQL trigger |
+| Orphan fail closed | Reservation quá hạn thành `EXPIRED`, provider request `OPEN` thành `ORPHANED`, estimate tiếp tục chiếm ceiling và package mới bị `RECONCILIATION_REQUIRED` |
+| G8 tồn tại ở cả service và database | Test `SCHEMA_VIOLATION`, `RIGHTS_DENIED`, `BUDGET_DENIED`, `CONTENT_FILTERED` không thể có attempt tiếp theo; `TRANSIENT`/`RATE_LIMIT` vẫn được phép |
+| Kinh tế đơn vị không dùng mẫu số giả | Test cost/sealed artifact, cost/published video, tournament share và orphan rate; mẫu số bằng 0 trả `null` |
+| Migration an toàn | `0006_cost.sql` UP/DOWN lặp hai lần; CHECK tiền không âm, idempotency key 64 ký tự, unique attempt và provider request chỉ từ reservation `HELD` |
+
+## Atomicity và fail-closed
+
+`CostReservationLedger` tuần tự hóa critical section trong một control-plane process. `0006_cost.sql` là lớp cưỡng chế bền vững: `BEFORE INSERT` kiểm atomically tổng `SETTLED actual + HELD/EXPIRED/ORPHANED estimate + NEW estimate` trên mọi ceiling đang áp dụng. Thiếu ceiling bắt buộc hoặc vượt một scope bất kỳ đều abort trước khi tồn tại provider request.
+
+## Unit economics
+
+Ledger theo dõi `PRODUCTION`, `QUALIFICATION`, `REJECTED_CANDIDATE`; API trả tổng cost, cost/sealed artifact, cost/published video, tournament share và orphan rate. Không đặt gate mới lên các chỉ số này trước WP-12B vì chưa có benchmark thực.
+
+## Lệnh xác minh
+
+`pnpm verify:source` · `pnpm typecheck` · `pnpm lint` · `pnpm test:guardrails` · `pnpm test:unit` · `pnpm test:migrations` · runtime smoke 10/50 · migration trigger smoke
+
+## Ngoài phạm vi WP-08
+
+Không gọi provider thật, không ghi production D1, không tạo reservation/spend thật và không bật auto-publish. WP-09 sở hữu capability registry, binding, settings hash và dispatch guard chín bước; WP-12B sở hữu benchmark chi phí thực so với các trần owner đã xác nhận.
