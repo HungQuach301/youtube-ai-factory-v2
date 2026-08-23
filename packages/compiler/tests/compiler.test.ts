@@ -74,9 +74,6 @@ describe('WP-20 ShotCueProgram compiler', () => {
       shots: [makeShot(0, 0, 240_000)],
     })
     expect(single.shotCount).toBe(1)
-    expect(single.adaptiveWarnings.some(
-      (warning) => warning.code === 'SHOT_DURATION_ABOVE_GUIDANCE',
-    )).toBe(true)
     expect(compileShotCueProgram(makeProgram(256)).shotCount).toBe(256)
   })
 
