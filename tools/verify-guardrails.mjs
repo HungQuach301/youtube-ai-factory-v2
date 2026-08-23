@@ -16,6 +16,16 @@ const cases = [
     name: 'G6', rule: 'g6-no-provider-in-preflight',
     filename: 'packages/stage-runner/src/violation.js',
     code: 'class Runner { async preflight() { return provider.dispatch({}) } }', expected: 'providerCall'
+  },
+  {
+    name: 'G9', rule: 'g9-guarded-dispatch-only',
+    filename: 'packages/creative/src/violation.js',
+    code: 'provider.dispatch(request, key)', expected: 'directDispatch'
+  },
+  {
+    name: 'G9-computed', rule: 'g9-guarded-dispatch-only',
+    filename: 'packages/creative/src/computed-violation.js',
+    code: "provider['dispatch'](request, key)", expected: 'directDispatch'
   }
 ]
 
@@ -32,4 +42,4 @@ for (const testCase of cases) {
   }
 }
 
-console.log('G1, G2 and G6 adversarial fixtures were rejected as required.')
+console.log('G1, G2, G6 and G9 adversarial fixtures were rejected as required.')
