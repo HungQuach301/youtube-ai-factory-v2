@@ -21,7 +21,7 @@ describe('WP-29 policy defense', () => {
   test('requires all PC1..PC8 and evidence for every PASS', () => {
     expect(evaluatePolicyChecklist(checks).state).toBe('PASS')
     expect(evaluatePolicyChecklist(checks.slice(0, 7)).state).toBe('FAIL')
-    expect(() => evaluatePolicyChecklist([{ ...checks[0], evidenceR2Key: null }])).toThrow(/PASS requires evidence/iu)
+    expect(() => evaluatePolicyChecklist([{ code: 'PC1', state: 'PASS', evidenceR2Key: null, evaluatedAt: at }])).toThrow(/PASS requires evidence/iu)
   })
 
   test('blocks publish unless checklist, disclosure, prediction, owner and freeze gates pass', () => {
