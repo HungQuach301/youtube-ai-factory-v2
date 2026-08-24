@@ -178,7 +178,7 @@ function sumBy<T>(rows: readonly T[], key: (row: T) => string, value: (row: T) =
 
 function percentile(values: readonly number[]): Percentiles {
   const sorted = [...values].sort((left, right) => left - right)
-  const at = (quantile: number): number => sorted[Math.floor((sorted.length - 1) * quantile)] ?? 0
+  const at = (quantile: number): number => sorted[Math.max(0, Math.ceil(sorted.length * quantile) - 1)] ?? 0
   return { p50: at(0.5), p95: at(0.95), p99: at(0.99) }
 }
 
