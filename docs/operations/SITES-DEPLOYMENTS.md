@@ -32,7 +32,11 @@ GitHub repository. A URL alone is not evidence of source equality.
 
 | 2026-08-24T06:36:52Z | `c067049363d9973fcd5ee0a9a1f7c58ad567479c` | [#68](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/68) | `a1a28a39212533d0a004390e6f2f560f220dd7fa30c84b26e69fb0bc9ab1094e` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 20 | SUCCEEDED | custom; owner-controlled |
 
-| 2026-08-24T14:39:39Z | `ce235919eea7ef2c643ba48ce701fbea43a1d1d4` | [#71](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/71) | `07ec4b40932ce957ddbc7b4219a3f8b014a01d266af866236632eb568f81f3f3` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 21 | SUCCEEDED | custom; owner-controlled |\n\n## Verification evidence
+| 2026-08-24T14:39:39Z | `ce235919eea7ef2c643ba48ce701fbea43a1d1d4` | [#71](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/71) | `07ec4b40932ce957ddbc7b4219a3f8b014a01d266af866236632eb568f81f3f3` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 21 | SUCCEEDED | custom; owner-controlled |
+
+| 2026-08-24T16:41:37Z | `07c7920aa8ea8dc6374699aaf3148db92e0832d9` | [#74](https://github.com/HungQuach301/youtube-ai-factory-v2/pull/74) | `a94175d8a50a6aad5a40a487477ded40b64e6a25dd5b2249b9f0e8412494226e` | [youtube-ai-factory-v2](https://youtube-ai-factory-v2.quach-hung.chatgpt.site) | 22 | SUCCEEDED | custom; owner-controlled |
+
+## Verification evidence
 
 - GitHub root build: passed.
 - Imported source integrity: passed.
