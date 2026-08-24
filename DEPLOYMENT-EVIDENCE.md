@@ -3,6 +3,33 @@
 Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
+## 2026-08-24 — ChatGPT Sites v16
+
+- Mode: `BUILD`
+- Surface: `YouTube AI Factory V2` control plane
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commit: `7f3d8ddbf3a9a707259605da04b06539da474857`
+- Canonical source path: `sites/control-plane`
+- Source-lock aggregate SHA-256: `52755da8ca988b586423b76fe0a144f7e98c687ce99ccb885d38dbbc4b9ae993`
+- Checkpoint verification: source lock passed; build passed; production deployment
+  reached terminal status `succeeded` and was verified directly by deployment ID.
+- Delivery chain: WP-21 PR #55; control-plane sync PR #56.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; production spend USD 0; auto-publish OFF;
+  MUSIC remains fail-closed without license evidence.
+
+### Evidence-bound remaining states
+
+- WP-14 implementation is complete; full calibration remains pending at least 30
+  gold samples including 15 real rejected masters.
+- WP-15 implementation is complete; hard calibration remains pending 10–15 real
+  human-reader audio samples with transcripts.
+- WP-28 minimum implementation is complete; activation remains fail-closed until
+  an explicit real-human allowlist identity is configured.
+- WP-21 implementation is complete; licensed production music remains disabled
+  until asset-level rights evidence is present.
+
 ## 2026-08-23 — ChatGPT Sites v14
 
 - Mode: `BUILD`
