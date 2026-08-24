@@ -907,3 +907,37 @@ Mọi transport tiếp tục OFF; code chỉ chuẩn bị manifest/session sau a
 
 Không gọi YouTube API, không tạo upload session thật, không ghi video ID giả,
 không tạo spend và không bật auto-publish.
+
+
+---
+
+## WP-24 · Learning (LRN-01..03) + Stage 16
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Chỉ analytics thật được nạp | Runtime từ chối `simulated=true`, source khác YouTube Analytics API, evidence rỗng và cửa sổ ngoài 14–28 ngày; migration có trigger/check tương ứng |
+| Analytics bind đúng video/master | Runtime đối chiếu package, YouTube video ID, master ID/SHA và verified readback evidence; migration đối chiếu `youtube_video_binding` + `media_master` |
+| MAE, beat-level error và CTR delta xác định | `analyzeDeviation` nội suy trên lưới 5% của SSOT; unit test kiểm MAE 0.1, ba beat error và CTR delta 0.02 |
+| Calibration có version và lineage | Hồi quy least-squares dùng feature evidence; thiếu 6 video hợp lệ bị chặn; model mới bind parent version + toàn bộ analytics hash |
+| Experiment chỉ thử một biến và giữ hằng số tường minh | `registerExperiment` yêu cầu `variableTested`, held constants, min sample size và decision criterion |
+| Learning thiếu cỡ mẫu không READY/promote | Runtime + migration chặn dưới `experiment.min_sample_size`, dưới hai video độc lập hoặc direction không nhất quán |
+| PORTFOLIO không học từ một kênh/không mang voice | Runtime + migration yêu cầu ≥2 channel ID độc lập; `VOICE` bị chặn theo P8 |
+| Promotion chỉ qua owner command | Runtime yêu cầu executed signed `PROMOTE_LEARNING`; migration bind command payload, active OWNER, signature/evidence và tăng đúng một version |
+| Learning không ghi trực tiếp Standard Registry | Package chỉ phát promotion record/intent; không import hoặc expose write API tới Standard Registry |
+| Migration `0007` tái lập | UP/DOWN ×2; trigger test real-only analytics, sample/consistency/scope và owner promotion |
+
+## Trạng thái activation
+
+WP-24 implementation hoàn tất ở chế độ BUILD. B-008 vẫn mở: chưa có YouTube
+Analytics production evidence sau cửa sổ 14–28 ngày, nên chưa calibration thật,
+learning READY thật hoặc `PROMOTE_LEARNING` thật. `v0-flat` vẫn là baseline đã
+seal, không được trình bày như model đã hiệu chỉnh.
+
+## Ranh giới
+
+Không gọi YouTube Analytics API, không ghi analytics/video ID/owner command giả,
+không chạy experiment production và không cập nhật Standard Registry.
