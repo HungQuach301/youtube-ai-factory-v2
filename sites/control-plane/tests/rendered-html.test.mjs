@@ -16,7 +16,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /YouTube AI Factory V2/i);
   assert.match(html, /Single source of truth policy active/i);
   assert.match(html, /Production remains locked/i);
-  assert.match(html, /21 evidence-ready · 25 implemented \/ 33/i);
+  assert.match(html, /22 evidence-ready · 26 implemented \/ 33/i);
   assert.match(html, /Lease &amp; Fencing/i);
   assert.match(html, /Definition of Ready Resolver/i);
   assert.match(html, /Standard &amp; Policy Registry/i);
@@ -53,9 +53,10 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Human Evidence/i);
   assert.match(html, /explicit real-human allowlist identity/i);
   assert.match(html, /Policy Defense · Minimum/i);
-  assert.match(html, /publishing controls implemented/i);
-  assert.match(html, /WP-16, WP-17, WP-20, WP-21, WP-23 and minimum WP-29 are evidence-ready/i);
+  assert.match(html, /Stage 16 learning controls implemented/i);
+  assert.match(html, /WP-16, WP-17, WP-20, WP-21, WP-23, WP-24 and minimum WP-29 are evidence-ready/i);
   assert.match(html, /WP-22 remains warning-only pending anchors, gold evidence and critic qualification/i);
+  assert.match(html, /WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command/i);
   assert.match(html, /YouTube transport and production provider dispatch remain locked/i);
   assert.match(html, /Provider dispatch[\s\S]*OFF/i);
   assert.match(html, /Production spend[\s\S]*\$0/i);
