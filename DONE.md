@@ -976,3 +976,36 @@ canonical khi Track G tạo stage attempt thật.
 
 Không tạo trace/alert/metric giả trong production, không đổi gate state, không tạo
 owner action, không dispatch provider và không coi operator fixture là release evidence.
+
+
+---
+
+## WP-27 · Evolution Pipeline (EVO-01)
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Chiều nghiêm ngặt được tính từ cấu trúc | `createProposal` dùng `classifyRuleChange`; test khai RELAX thành NEUTRAL bị `STRICTNESS_DIRECTION_MISMATCH` |
+| Threshold/gate shadow trên ≥10 artifact production gần nhất | `runThresholdShadow` dùng `EVOLUTION.SHADOW_MIN_ARTIFACTS`, chỉ chạy namespace `qualification`, giữ bảng before/after verdict và evidence từng artifact |
+| Capability shadow chạy toàn bộ gold set | `runCapabilityShadow` đối chiếu đủ sample/class và chặn bất kỳ recall/precision giảm hoặc variance tăng theo defect class |
+| Evidence bundle đủ năm mục | `buildEvidenceBundle` bind exact diff, shadow result, actual/projected cost, strictness + RELAX risk, recommendation + rollback và canonical hash |
+| Thiếu shadow evidence không thành EVIDENCE_READY | Runtime trả `SHADOW_EVIDENCE_MISSING`; migration yêu cầu shadow run, evidence key/hash và rollback ref |
+| RELAX không promote thiếu owner | Runtime chỉ nhận executed signed `PROMOTE_EVOLUTION`; migration bind đúng command, proposal, active OWNER, evidence hash, target và rollback |
+| Promotion audit append-only | `evolution_promotion` là record bất biến; direct update proposal sang PROMOTED bị chặn nếu thiếu record đã bind |
+| Đổi đúng một registry location | `applyPromoteEvolutionCommand` đối chiếu exact before rule rồi chỉ thay `targetRef`; unit test giữ nguyên registry key còn lại |
+| Rollback đưa registry về nguyên trạng | `rollbackPromotion` yêu cầu đúng `rollback_ref`, exact current rule và chỉ phục hồi `targetRef` |
+| Migration `0008` tái lập | UP/DOWN ×2; smoke + migration test owner command, evidence, rollback, append-only và G11/G12/G14 |
+
+## Trạng thái activation
+
+WP-27 triển khai harness và lớp cưỡng chế trong BUILD. Không có proposal thật nào
+được tự chuyển `PROMOTED`: production activation vẫn yêu cầu shadow run thật trong
+`qualification`, evidence bundle đã lưu và lệnh `PROMOTE_EVOLUTION` do owner ký.
+
+## Ranh giới
+
+Không tạo owner identity, chữ ký, shadow evidence hoặc promotion giả; không sửa
+ngưỡng production, không dispatch provider, không tạo spend và không bật publish.
