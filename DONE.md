@@ -874,3 +874,36 @@ critic qualification provider run. Không có critic production nào được t�
 
 Không gọi provider, không tạo qualification spend, không ghi production verdict,
 không suy diễn anchor/owner judgment và không bật auto-publish.
+
+
+---
+
+## WP-23 · Publishing (PUB-01) + Stage 15
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Release và publish là hai quyết định owner riêng | `authorizeRelease` và `authorizePublish` yêu cầu đúng hai command ID/type khác nhau, owner active, signature và evidence hash |
+| Đối soát cuối bind đúng master | Release chặn active request/exception, thiếu rights/cost/hash evidence và assurance checksum lệch distribution master |
+| Warning-only không âm thầm thành PASS | Assurance warning được ghi tường minh; reported FAIL vẫn chặn release, HARD_GATE bắt buộc PASS |
+| P9 + G15 chặn trước upload | Thiếu sealed prediction hoặc bất kỳ PC1..PC8 PASS evidence nào → không tạo manifest |
+| Disclosure metadata không trôi | Toggle trong metadata phải khớp decision đã ghi; migration kiểm lại tại persistence |
+| Không hidden upload default | Title, description, tags, category, privacy, made-for-kids, disclosure, language, chapters đều bắt buộc trong artifact |
+| Thumbnail owner-selected và có rights | Chính xác 1280×720 PNG/JPEG, rights evidence và HP-02 D3 selection evidence bắt buộc |
+| Auto-publish bất khả thi | Runtime chỉ phát `autoPublish: false`; DB `CHECK (auto_publish = 0)` |
+| Upload resumable không gửi lại byte đã xác nhận | Chunk kế bắt đầu từ server-confirmed offset; ack không monotonic bị từ chối ở runtime và migration |
+| YouTube ID bind đúng checksum | Chỉ session VERIFIED đủ byte mới tạo binding append-only với master SHA và readback evidence |
+
+## Trạng thái activation
+
+WP-23 implementation hoàn tất nhưng không có publish production: chưa có package
+Stage 00–14 thật đủ evidence, owner commands thật hoặc YouTube provider dispatch.
+Mọi transport tiếp tục OFF; code chỉ chuẩn bị manifest/session sau authorization.
+
+## Ranh giới
+
+Không gọi YouTube API, không tạo upload session thật, không ghi video ID giả,
+không tạo spend và không bật auto-publish.
