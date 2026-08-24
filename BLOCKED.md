@@ -98,3 +98,17 @@ Trạng thái: `OPEN — harness tiếp tục, M2 hard gate vẫn fail-closed`
   chưa đủ.
 - Trong lúc blocker mở, Assurance Panel chỉ có thể giữ
   `gateState=NOT_EVALUATED`; kết quả cảnh báo không được dùng để authorize release.
+
+## B-008 · WP-24 chưa có YouTube Analytics production evidence
+
+Trạng thái: `OPEN — ETL/analysis harness hoàn tất, learning activation fail-closed`
+
+- Chưa có video production đã bind với distribution master thật và đủ cửa sổ
+  YouTube Analytics 14–28 ngày; không được dùng fixture/simulated analytics để
+  tạo `actual_performance` hoặc calibration evidence.
+- Chưa có YouTube Analytics credential/transport đã xác thực trong phiên build;
+  không gọi API, không tạo response hash/evidence R2 key hoặc video ID giả.
+- Model `v0-flat` chỉ được hiệu chỉnh sau tối thiểu 6 video analytics hợp lệ.
+  Learning còn thiếu `experiment.min_sample_size`, ít nhất hai video độc lập
+  cùng chiều hoặc owner command thật phải giữ `INSUFFICIENT_EVIDENCE` và không
+  được tạo promotion.
