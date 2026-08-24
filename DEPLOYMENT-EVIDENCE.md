@@ -3,6 +3,34 @@
 Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
+## 2026-08-24 — ChatGPT Sites v17
+
+- Mode: `BUILD`
+- Surface: `YouTube AI Factory V2` control plane
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commit: `d8918f344ee1522fa91e174ba48ff3eb30e77b91`
+- Canonical source path: `sites/control-plane`
+- Source-lock aggregate SHA-256: `276b2838547480d057a4e2d7c6ac5ff81f6de38cb79a69d1f3878463d3f9fbb7`
+- Checkpoint verification: source lock, lint, build and rendered HTML tests passed;
+  production deployment reached terminal status `succeeded` and was verified
+  directly by deployment ID.
+- Delivery chain: WP-22 PR #58; control-plane sync PR #59.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; production spend USD 0; auto-publish OFF;
+  Stage 14 M2 remains warning-only pending B-007 evidence.
+
+### Evidence-bound remaining states
+
+- WP-14 implementation is complete; full calibration remains pending at least 30
+  gold samples including 15 real rejected masters.
+- WP-15 implementation is complete; hard calibration remains pending 10–15 real
+  human-reader audio samples with transcripts.
+- WP-22 implementation is complete; HARD_GATE activation remains blocked until
+  36 real-human rubric anchors, a ready gold set and paid critic qualification exist.
+- WP-28 minimum implementation is complete; activation remains fail-closed until
+  an explicit real-human allowlist identity is configured.
+
 ## 2026-08-24 — ChatGPT Sites v16
 
 - Mode: `BUILD`
