@@ -29,6 +29,7 @@ const workPackages = [
   { id: "WP-24", name: "Learning & Stage 16", status: "Complete", detail: "Real-only Analytics ETL, retention MAE, beat-boundary error, calibrated model lineage and sample-gated owner promotion are implemented. Activation waits for 14–28 day production analytics evidence." },
   { id: "WP-25", name: "Observability & Operator UI", status: "Complete", detail: "Trace reconstruction now proves the complete provider, cost and output chain; minimum metrics, mandatory alerts and the five operator display controls are enforced fail-closed." },
   { id: "WP-26", name: "G11–G15 Enforcement", status: "Complete", detail: "Sealed threshold diffs, OPERATE protected paths, shadow-gated meta-change, append-only gold retirement and PC1–PC8 publishing checks are now enforced in CI and D1." },
+  { id: "WP-27", name: "Evolution Pipeline", status: "Complete", detail: "Structural strictness audit, qualification shadow replay, five-part evidence bundles, exact owner-command promotion binding and one-key rollback are enforced fail-closed." },
   { id: "WP-28", name: "Human Evidence", status: "Activation", detail: "Editorial Imprint, the 300-minute attention ceiling and reproducible evidence reports are merged; activation waits for an explicit real-human allowlist identity." },
   { id: "WP-29", name: "Policy Defense · Minimum", status: "Complete", detail: "PC1–PC8, disclosure default-on, incident freeze/unfreeze and policy-watch diff controls are enforced fail-closed." },
 ];
@@ -100,10 +101,10 @@ export default function Home() {
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 · Self-upgrade governance enforcement implemented</h2></div>
-              <span className="progress-label">24 evidence-ready · 28 implemented / 33</span>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 · Evolution pipeline implemented</h2></div>
+              <span className="progress-label">25 evidence-ready · 29 implemented / 33</span>
             </div>
-            <div className="progress-track" aria-label="24 of 33 work packages evidence-ready; 28 implemented"><span style={{ width: "72.73%" }} /></div>
+            <div className="progress-track" aria-label="25 of 33 work packages evidence-ready; 29 implemented"><span style={{ width: "75.76%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -125,7 +126,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25, WP-26 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-28 awaits an explicit human allowlist identity. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
+              <p>WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25, WP-26, WP-27 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
             </div>
             <div className="operator-proof" aria-label="WP-25 operator display contract">
               <div className="operator-proof-heading"><strong>OPS-02 DISPLAY CONTRACT</strong><span>IMPLEMENTED</span></div>
