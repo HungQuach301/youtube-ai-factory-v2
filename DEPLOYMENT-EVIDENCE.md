@@ -3,6 +3,31 @@
 Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
+## 2026-08-24 — ChatGPT Sites v18
+
+- Mode: `BUILD`
+- Surface: `YouTube AI Factory V2` control plane
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commit: `60a30493b8cb94b2b7725fd362bdfaa5bd7a7a8c`
+- Canonical source path: `sites/control-plane`
+- Source-lock aggregate SHA-256: `bcaecbbb01f78bbbdeb113ebfe288091c426de26df616716ebd7dc2c13624dd5`
+- Checkpoint verification: source lock, lint, build and rendered HTML tests passed;
+  production deployment reached terminal status `succeeded` and was verified
+  directly by deployment ID.
+- Delivery chain: WP-23 PR #61; control-plane sync PR #62.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; YouTube transport OFF; production spend
+  USD 0; auto-publish OFF.
+
+### Evidence-bound remaining states
+
+- WP-14/15 still require real calibration inputs.
+- WP-22 HARD_GATE still requires anchors, gold readiness and critic qualification.
+- WP-23 production activation requires a real package, distinct owner commands
+  and configured YouTube transport; implementation created no upload or video ID.
+- WP-28 still requires an explicit real-human allowlist identity.
+
 ## 2026-08-24 — ChatGPT Sites v17
 
 - Mode: `BUILD`
