@@ -4,8 +4,8 @@ import type {
   GateTier,
   Hex64,
   ProfileName,
+  thresholds,
 } from '@youtube-ai-factory/contracts'
-import { thresholds } from '@youtube-ai-factory/contracts'
 
 export type AssuranceDimension = keyof typeof thresholds.ASSURANCE.FLOORS
 export type AssuranceMode = 'WARNING_ONLY' | 'HARD_GATE'
