@@ -168,6 +168,18 @@ h2 { font-size: clamp(20px, 2.1vw, 28px); letter-spacing: -.025em; margin: 0; }
 .foundation-boundary { background: rgba(243, 188, 101, .08); border: 1px solid rgba(243, 188, 101, .22); border-radius: 13px; margin-top: 18px; padding: 14px; }
 .foundation-boundary strong { color: var(--amber); font-size: 10px; letter-spacing: .1em; }
 .foundation-boundary p { color: #c3b18f; font-size: 12px; line-height: 1.55; margin: 7px 0 0; }
+.operator-proof { background: rgba(121, 184, 255, .055); border: 1px solid rgba(121, 184, 255, .2); border-radius: 13px; margin-top: 14px; padding: 14px; }
+.operator-proof-heading { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
+.operator-proof-heading strong { color: var(--blue); font-size: 10px; letter-spacing: .1em; }
+.operator-proof-heading span { background: rgba(118, 231, 196, .1); border-radius: 999px; color: var(--mint); font-size: 8px; font-weight: 800; letter-spacing: .08em; padding: 5px 7px; }
+.gate-lanes { display: grid; gap: 7px; grid-template-columns: 1fr 1fr; margin-top: 13px; }
+.gate-lanes span { border-radius: 9px; font-size: 9px; font-weight: 800; line-height: 1.35; padding: 9px; }
+.gate-fail { background: rgba(236, 102, 113, .11); border: 1px solid rgba(236, 102, 113, .28); color: #ff9ba5; }
+.gate-unknown { background: rgba(121, 184, 255, .1); border: 1px solid rgba(121, 184, 255, .25); color: #9dccff; }
+.fixture-label { background: rgba(243, 188, 101, .08); border: 1px solid rgba(243, 188, 101, .2); border-radius: 9px; color: var(--amber); font-size: 9px; font-weight: 800; line-height: 1.45; margin: 9px 0 0; padding: 9px; }
+.fixture-label small { color: #aa9673; display: block; font-size: 8px; font-weight: 600; letter-spacing: .05em; margin-bottom: 3px; text-transform: uppercase; }
+.operator-proof ul { color: var(--muted); display: grid; font-size: 10px; gap: 5px; margin: 11px 0 0; padding-left: 17px; }
+.operator-proof > p:last-child { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.5; margin: 12px 0 0; padding-top: 10px; }
 
 .continuity { margin-top: 22px; }
 .contract-version { color: var(--mint); }
