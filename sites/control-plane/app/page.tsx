@@ -23,6 +23,7 @@ const workPackages = [
   { id: "WP-16", name: "Truth Layer", status: "Complete", detail: "Source tiers, critical-claim enforcement, deterministic numeric parsing and bilingual advice lint now pass CI." },
   { id: "WP-17", name: "Intelligence & Anti-copy", status: "Complete", detail: "Audience jobs, freshness and four-dimensional anti-copy primitives are deterministic; differentiation remains measurement-only until calibrated." },
   { id: "WP-20", name: "ShotCueProgram Compiler", status: "Complete", detail: "Stage 08 now compiles exact full-duration timelines with interval-tree lint, three claim-bound assertions per shot and no fixed shot-count gate." },
+  { id: "WP-21", name: "Media Layer", status: "Complete", detail: "Stage 09–13 now enforce pre-byte rights eligibility, render-once composition, stitched narration, two-pass audio, OTIO edit evidence and archival-parent masters in PROFILE=REDUCED." },
   { id: "WP-28", name: "Human Evidence", status: "Activation", detail: "Editorial Imprint, the 300-minute attention ceiling and reproducible evidence reports are merged; activation waits for an explicit real-human allowlist identity." },
   { id: "WP-29", name: "Policy Defense · Minimum", status: "Complete", detail: "PC1–PC8, disclosure default-on, incident freeze/unfreeze and policy-watch diff controls are enforced fail-closed." },
 ];
@@ -94,10 +95,10 @@ export default function Home() {
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 2 · minimum policy boundary implemented</h2></div>
-              <span className="progress-label">19 evidence-ready · 22 implemented / 33</span>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 3 · media specification implemented</h2></div>
+              <span className="progress-label">20 evidence-ready · 23 implemented / 33</span>
             </div>
-            <div className="progress-track" aria-label="19 of 33 work packages evidence-ready; 22 implemented"><span style={{ width: "57.58%" }} /></div>
+            <div className="progress-track" aria-label="20 of 33 work packages evidence-ready; 23 implemented"><span style={{ width: "60.61%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -119,7 +120,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-16, WP-17, WP-20 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-28 awaits an explicit human allowlist identity. These are activation gates, not permission prompts.</p>
+              <p>WP-16, WP-17, WP-20, WP-21 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-28 awaits an explicit human allowlist identity. Production provider dispatch remains locked until activation evidence exists.</p>
             </div>
             <p className="safety-note">This progress update changes no production permission: provider transport, spend and publishing remain locked.</p>
           </aside>
