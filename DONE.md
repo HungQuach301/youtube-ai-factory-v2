@@ -941,3 +941,38 @@ seal, không được trình bày như model đã hiệu chỉnh.
 
 Không gọi YouTube Analytics API, không ghi analytics/video ID/owner command giả,
 không chạy experiment production và không cập nhật Standard Registry.
+
+
+---
+
+## WP-25 · Observability & Operator UI (OPS-01, OPS-02)
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Một `trace_id` tái dựng toàn bộ stage attempt | `reconstructTrace` sắp thứ tự sự kiện, bắt đầu/kết thúc đúng biên và trả đủ provider call, cost, output cùng canonical hash |
+| Chuỗi thiếu evidence không được coi là hoàn chỉnh | Unit test chặn sequence gap, provider thiếu response/cost và trace thiếu terminal; migration `0014` kiểm lại trước khi hoàn tất |
+| Structured log bền vững, append-only | `trace_event` khóa scope package/stage, sequence liên tục, lifecycle request→response→cost và cấm UPDATE/DELETE |
+| Bộ metric tối thiểu đủ OPS-01 + v2 addendum | Latency p50/p95/p99, lỗi, cost, first-pass/P0/variance, capability, orphan/lease/queue, attention/HP age, proposal và defect density |
+| Cảnh báo bắt buộc không hardcode số ngoài SSOT | 80% spend, critic variance và HP queue đọc `thresholds`; schema rate nhận từ active standard; orphan 24h theo đặc tả OPS-01 |
+| `NOT_EVALUATED` tách khỏi `FAIL` | Operator view model tạo hai group/count và hai color token khác nhau |
+| Fixture không thể leo thành release candidate | Runtime trả `releaseCandidate=false` và banner `QUALIFICATION FIXTURE — NOT A RELEASE CANDIDATE`; SQL chỉ cho đúng nhãn và cấm mutation |
+| Workspace có đủ năm yêu cầu v2 | Queue HP hợp nhất; D1–D5 side-by-side + diff; rejection form có schema; Generate Evidence Report action; attention budget clock |
+| Hành động kế tiếp không mơ hồ | Workspace từ chối nếu không có chính xác một `nextValidAction`; prior work chỉ hiện on-demand |
+| Incident I2 chưa freeze hiện cảnh báo cứng | Operator workspace phát `I2_INCIDENT_REQUIRES_CHANNEL_FREEZE` khi canonical incident I2/I3 chưa có freeze |
+| Migration `0014` tái lập | UP/DOWN ×2; test sequence/lifecycle/append-only và fixture label |
+
+## Trạng thái activation
+
+WP-25 implementation hoàn tất ở chế độ BUILD. Fixture trong test chỉ là dữ liệu
+qualification có nhãn cấm release; không phải trace, alert, metric hoặc operator
+evidence production. Dashboard production chỉ được dựng từ D1/R2 và các ledger
+canonical khi Track G tạo stage attempt thật.
+
+## Ranh giới
+
+Không tạo trace/alert/metric giả trong production, không đổi gate state, không tạo
+owner action, không dispatch provider và không coi operator fixture là release evidence.
