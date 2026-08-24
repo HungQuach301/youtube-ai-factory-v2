@@ -24,7 +24,6 @@ function createDb() {
       actor_identity TEXT NOT NULL, actor_signature TEXT, evidence_hash TEXT, created_at TEXT NOT NULL
     );
     CREATE TABLE qualification_run (id TEXT PRIMARY KEY);
-    CREATE TABLE promotion (id TEXT PRIMARY KEY, target_kind TEXT NOT NULL, target_ref TEXT NOT NULL);
     CREATE TABLE gate_definition (
       id TEXT PRIMARY KEY, tier TEXT NOT NULL, threshold_json TEXT,
       strictness_rank INTEGER NOT NULL, active INTEGER NOT NULL
@@ -75,16 +74,39 @@ describe('migration 0008_evolution', () => {
 
   it('G12 requires shadow evidence and owner promotion sequencing', () => {
     const db = createDb()
-    db.exec(`INSERT INTO evolution_proposal VALUES (
+    db.exec(`INSERT INTO evolution_proposal (
+      id, kind, source, target_ref, diff_r2_key, strictness_direction,
+      shadow_run_id, evidence_r2_key, evidence_hash, status, rollback_ref,
+      created_at, decided_at, decided_by, promotion_id, promotion_command_id
+    ) VALUES (
       'proposal', 'THRESHOLD', 'HUMAN', 'QUALITY.SCORE_MIN', 'diff.json', 'TIGHTEN',
-      NULL, NULL, 'PROPOSED', NULL, '2026-08-24', NULL, NULL
+      NULL, NULL, NULL, 'PROPOSED', NULL, '2026-08-24', NULL, NULL, NULL, NULL
     )`)
     expect(() => db.exec("UPDATE evolution_proposal SET status='EVIDENCE_READY' WHERE id='proposal'"))
       .toThrow(/requires shadow_run_id and evidence/iu)
     db.exec("INSERT INTO qualification_run VALUES ('shadow')")
-    db.exec("UPDATE evolution_proposal SET shadow_run_id='shadow', evidence_r2_key='evidence/shadow.json', status='EVIDENCE_READY' WHERE id='proposal'")
+    expect(() => db.exec(`UPDATE evolution_proposal SET
+      shadow_run_id='shadow', evidence_r2_key='evidence/shadow.json', evidence_hash='${h('a')}',
+      status='EVIDENCE_READY' WHERE id='proposal'`)).toThrow(/rollback_ref/iu)
+    db.exec(`UPDATE evolution_proposal SET
+      shadow_run_id='shadow', evidence_r2_key='evidence/shadow.json', evidence_hash='${h('a')}',
+      rollback_ref='registry:v1', status='EVIDENCE_READY' WHERE id='proposal'`)
     expect(() => db.exec("UPDATE evolution_proposal SET status='PROMOTED', decided_by='agent' WHERE id='proposal'"))
-      .toThrow(/active owner identity/iu)
+      .toThrow(/evolution_promotion/iu)
+
+    db.exec(`INSERT INTO command_log VALUES (
+      'promote', 'PROMOTE_EVOLUTION', '{"proposalId":"proposal"}', 'owner', 'signature',
+      '${h('a')}', datetime('now')
+    )`)
+    db.exec(`INSERT INTO evolution_promotion VALUES (
+      'evo-promotion', 'proposal', 'promote', 'QUALITY.SCORE_MIN', 'registry:v1',
+      'owner', '${h('a')}', '{"kind":"MINIMUM","value":94}',
+      '{"kind":"MINIMUM","value":95}', '${h('b')}', datetime('now')
+    )`)
+    expect(db.prepare("SELECT status FROM evolution_proposal WHERE id='proposal'").get().status)
+      .toBe('PROMOTED')
+    expect(() => db.exec("UPDATE evolution_promotion SET rollback_ref='other' WHERE id='evo-promotion'"))
+      .toThrow(/append-only/iu)
   })
 
   it('G14 makes gold samples append-only and binds retirement to a signed owner command', () => {

@@ -15,6 +15,21 @@ importers:
         specifier: workspace:*
         version: link:../core-hash
 
+  packages/evolution:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+      '@youtube-ai-factory/core-policy':
+        specifier: workspace:*
+        version: link:../core-policy
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/learning:
     dependencies:
       '@youtube-ai-factory/contracts':
