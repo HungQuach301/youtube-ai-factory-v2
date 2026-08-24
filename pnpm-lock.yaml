@@ -6,6 +6,15 @@ settings:
 
 importers:
 
+  packages/assurance:
+    dependencies:
+      '@youtube-ai-factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@youtube-ai-factory/core-hash':
+        specifier: workspace:*
+        version: link:../core-hash
+
   packages/aligner-calibration:
     dependencies:
       '@youtube-ai-factory/contracts':
