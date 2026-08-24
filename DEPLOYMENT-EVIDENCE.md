@@ -3,6 +3,36 @@
 Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
+## 2026-08-24 — ChatGPT Sites v21
+
+- Mode: `BUILD`
+- Surface: `YouTube AI Factory V2` control plane
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commit: `ce235919eea7ef2c643ba48ce701fbea43a1d1d4`
+- Canonical source path: `sites/control-plane`
+- Site source commit: `39b8e9670212e78c76d29a32ca48bb00befe116f`
+- Source-lock aggregate SHA-256: `07ec4b40932ce957ddbc7b4219a3f8b014a01d266af866236632eb568f81f3f3`
+- Checkpoint verification: source lock, build and rendered HTML tests passed;
+  production deployment `appgdep_6a8c579655988191a70a48edcb40d026`
+  reached terminal status `succeeded` and was verified directly.
+- Delivery chain: WP-26 PR #70; control-plane sync PR #71.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; YouTube upload and Analytics transport OFF;
+  production spend USD 0; auto-publish OFF.
+
+### Evidence-bound remaining states
+
+- WP-14/15 still require real calibration inputs.
+- WP-22 HARD_GATE still requires anchors, gold readiness and critic qualification.
+- WP-24 production activation still requires verified published video/master
+  bindings, 14–28 day real Analytics and an owner-issued promotion command.
+- WP-25 production dashboards still require canonical D1/R2 records from real
+  stage attempts; qualification fixtures cannot authorize release.
+- WP-26 introduced no threshold relaxation or synthetic promotion evidence;
+  any future RELAX remains blocked without exact owner-signed promotion evidence.
+- WP-28 still requires an explicit real-human allowlist identity.
+
 ## 2026-08-24 — ChatGPT Sites v20
 
 - Mode: `BUILD`
