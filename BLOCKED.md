@@ -84,3 +84,17 @@ Trạng thái: `OPEN — harness tiếp tục, hard gate vẫn fail-closed`
   `ALIGNER_ERROR_FLOOR` cho tới khi có 10–15 audio người đọc chuẩn cùng transcript.
 - Trong khi blocker mở, `AUDIO.PHONEME_MISMATCH_BASE` tiếp tục thuộc
   `UNCALIBRATED`; measurement chỉ phát cảnh báo và tuyệt đối không chặn M0/M1.
+
+## B-007 · WP-22 rubric anchors và critic qualification chưa hiện diện
+
+Trạng thái: `OPEN — harness tiếp tục, M2 hard gate vẫn fail-closed`
+
+- Mỗi dimension trong `ASSURANCE.FLOORS` còn thiếu ba ví dụ thật
+  fail/borderline/pass do người thật chọn, tổng cộng 36 anchor có evidence.
+- Gold set chưa đạt tối thiểu 30 mẫu với 15 rejected masters có owner judgment;
+  vì vậy chưa critic nào được phép nhận trạng thái `QUALIFIED` cho Stage 14.
+- Qualification cần chạy provider có chi phí và là điểm dừng bắt buộc của WP-22.
+  Không dispatch provider hoặc ghi qualification giả khi hai lớp evidence trên
+  chưa đủ.
+- Trong lúc blocker mở, Assurance Panel chỉ có thể giữ
+  `gateState=NOT_EVALUATED`; kết quả cảnh báo không được dùng để authorize release.
