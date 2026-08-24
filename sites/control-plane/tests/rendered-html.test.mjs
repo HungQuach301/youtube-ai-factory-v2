@@ -16,7 +16,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /YouTube AI Factory V2/i);
   assert.match(html, /Single source of truth policy active/i);
   assert.match(html, /Production remains locked/i);
-  assert.match(html, /23 evidence-ready · 27 implemented \/ 33/i);
+  assert.match(html, /24 evidence-ready · 28 implemented \/ 33/i);
   assert.match(html, /Lease &amp; Fencing/i);
   assert.match(html, /Definition of Ready Resolver/i);
   assert.match(html, /Standard &amp; Policy Registry/i);
@@ -53,9 +53,11 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Human Evidence/i);
   assert.match(html, /explicit real-human allowlist identity/i);
   assert.match(html, /Policy Defense · Minimum/i);
-  assert.match(html, /Observability and operator controls implemented/i);
+  assert.match(html, /Self-upgrade governance enforcement implemented/i);
   assert.match(html, /Observability &amp; Operator UI/i);
   assert.match(html, /Trace reconstruction now proves the complete provider, cost and output chain/i);
+  assert.match(html, /G11–G15 Enforcement/i);
+  assert.match(html, /Sealed threshold diffs, OPERATE protected paths, shadow-gated meta-change, append-only gold retirement and PC1–PC8 publishing checks/i);
   assert.match(html, /FAIL · measured failure/i);
   assert.match(html, /NOT_EVALUATED · not measured/i);
   assert.match(html, /QUALIFICATION FIXTURE — NOT A RELEASE CANDIDATE/i);
@@ -65,7 +67,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Generate Evidence Report action/i);
   assert.match(html, /Attention budget clock/i);
   assert.match(html, /trace_id[\s\S]*provider request\/response, settled cost and sealed output/i);
-  assert.match(html, /WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25 and minimum WP-29 are evidence-ready/i);
+  assert.match(html, /WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25, WP-26 and minimum WP-29 are evidence-ready/i);
   assert.match(html, /WP-22 remains warning-only pending anchors, gold evidence and critic qualification/i);
   assert.match(html, /WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command/i);
   assert.match(html, /YouTube transport and production provider dispatch remain locked/i);
