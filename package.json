@@ -18,6 +18,8 @@
     "test:integration": "vitest run packages/core-hash/tests/lineage.test.ts tests/integration",
     "test:typecheck-boundaries": "tsc --noEmit -p tests/typecheck/tsconfig.json",
     "verify:guardrails": "node tools/verify-guardrails.mjs",
+    "verify:g11": "node tools/g11-threshold-diff.mjs",
+    "verify:g13": "node tools/g13-mode-guard.mjs",
     "verify:source": "sha256sum --check docs/SOURCE_SHA256SUMS",
     "ci": "pnpm verify:source && pnpm typecheck && pnpm test:typecheck-boundaries && pnpm lint && pnpm test:guardrails && pnpm test:unit && pnpm test:migrations && pnpm test:integration"
   },
