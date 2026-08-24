@@ -840,3 +840,37 @@ WP-21 triển khai control-side media specification cho cấu hình owner đã c
 evidence theo §5; Track G chỉ hợp lệ với ambience/silence đã có rights evidence.
 Không dispatch provider, không tạo actual spend, không ghi production data và
 không tuyên bố Fly production đã deploy.
+
+
+---
+
+## WP-22 · Assurance Panel (MSR-02, MSR-03) + Stage 12, 14
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| M0/M1 chạy trước M2 | Engine chặn trước dispatch; migration `0012` chặn INSERT/UPDATE M2 khi bất kỳ gate active M0/M1 chưa PASS |
+| Critic count/set đọc từ PROFILE | REDUCED bắt buộc đúng bốn critic không thay thế được bằng deterministic measurement; FULL bắt buộc đủ chín |
+| Critic blind và độc lập | Mỗi call chỉ nhận blind master hash, sample refs, rubric clone, temperature 0, seed cố định; không có package/owner identity hoặc verdict trước |
+| Rubric anchoring fail-closed | Thiếu bất kỳ fail/borderline/pass anchor nào → `NOT_RUN`, zero provider call, M2 `NOT_EVALUATED` |
+| Qualification không thể giả | Gold/anchor chưa ready → `INCONCLUSIVE`; P0 recall 100%, P1 recall 90%, precision 80%, variance ≤3 mới trả `QUALIFIED` |
+| Critic DB assignment phải qualified | Migration trigger kiểm đúng capability/archetype binding `QUALIFIED` có passing run |
+| Vùng biên n=3 median | Điểm trong floor ±3 chạy đúng ba total samples; median được dùng, toàn bộ evidence ref được giữ |
+| Variance cao không được dùng | Vượt 3 điểm variance → bỏ verdict, M2 `NOT_EVALUATED`, yêu cầu requalify critic |
+| Track G không biến warning thành gate | `WARNING_ONLY` có thể tính verdict khi evidence đủ nhưng luôn trả gate `NOT_EVALUATED` |
+| HARD_GATE cần human evidence | Migration yêu cầu 36 anchor append-only do active real human chọn, gold evidence, qualification evidence và đúng critic count PROFILE |
+
+## Trạng thái activation
+
+WP-22 harness và lớp cưỡng chế bền vững đã được triển khai. Activation vẫn
+fail-closed vì B-007 còn mở: chưa có 36 rubric anchor thật, gold set đủ chuẩn và
+critic qualification provider run. Không có critic production nào được tự gắn
+`QUALIFIED`; M2 chưa được phép authorize Stage 15.
+
+## Ranh giới
+
+Không gọi provider, không tạo qualification spend, không ghi production verdict,
+không suy diễn anchor/owner judgment và không bật auto-publish.
