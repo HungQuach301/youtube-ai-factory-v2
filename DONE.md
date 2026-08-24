@@ -810,3 +810,33 @@ WP-20 chỉ biên dịch ShotCueProgram xác định cho Stage 08. Shot count 98
 fixture là kết quả dẫn xuất của full timeline, không phải ngưỡng. Không gọi
 provider, không tạo reservation/actual spend, không ghi production data và không
 bật auto-publish.
+
+
+---
+
+## WP-21 · Media Layer (MED-01..06) + Stage 09–13
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Eligibility chạy trước byte acquisition | `filterSourceCandidates` chỉ trả `bytesAllowedCandidateIds` sau metadata, rights, watermark, provenance và pHash filter |
+| Kiến trúc render-once là mặc định | `planCompositions` chọn FFmpeg filter graph; Chromium chỉ cho path/chart/morph; render-per-frame được đếm tường minh |
+| TTS request stitching và delta retry | `planNarrationRequests` truyền context/request trước; `planNarrationRetry` chỉ trả section fail |
+| Phoneme mismatch chưa hiệu chuẩn không làm hard gate | `evaluatePhonemeMismatch` trả `WARNING_UNCALIBRATED` cho tới khi có measured floor WP-15 |
+| Track G không lách license audio | `ambience_only` từ chối mọi cue MUSIC; asset âm thanh khác vẫn cần license evidence |
+| Loudness dùng hai pass | Pass 1 đo; pass 2 bắt buộc `measured_*` và `linear=true`; ducking dùng ngưỡng SSOT |
+| Edit dùng OTIO và caption từ alignment | Timeline zero-gap/canonical-duration; mọi caption giữ alignment evidence ref và tối đa 5 từ |
+| Deterministic QA fail-closed | Duplicate, near-static, debug overlay, watermark và template residue đều chặn |
+| Master hai lớp | Plan FFV1/PCM archival trước VP9/Opus distribution; readback R2 + Drive và framemd5 bắt buộc |
+| Distribution không tồn tại thiếu archival cha | Migration `0011` trigger cùng package; master seal immutable; UP/DOWN ×2 test |
+
+## Ranh giới
+
+WP-21 triển khai control-side media specification cho cấu hình owner đã chọn
+`PROFILE=REDUCED`. Production music vẫn fail-closed vì chưa có provider/license
+evidence theo §5; Track G chỉ hợp lệ với ambience/silence đã có rights evidence.
+Không dispatch provider, không tạo actual spend, không ghi production data và
+không tuyên bố Fly production đã deploy.
