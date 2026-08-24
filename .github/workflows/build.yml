@@ -2,6 +2,7 @@ name: build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -13,6 +14,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  mode-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: G13 protected OPERATE paths
+        env:
+          PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node tools/g13-mode-guard.mjs
+
+  threshold-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: G11 compare thresholds with sealed base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node tools/g11-threshold-diff.mjs
+
   quality:
     runs-on: ubuntu-latest
     steps:
