@@ -111,6 +111,16 @@ describe('migration 0013_publishing', () => {
     expect(() => db.exec(manifestSql())).not.toThrow()
   })
 
+  it('G15 blocks publish when PC-4 disclosure decision is missing', () => {
+    const db = createDb()
+    insertRelease(db)
+    db.exec("INSERT INTO predicted_performance VALUES ('prediction', 'pkg', '2026-08-24')")
+    for (let index = 1; index <= 8; index += 1) {
+      db.prepare('INSERT INTO policy_check VALUES (?, ?, ?)').run('pkg', `PC${index}`, 'PASS')
+    }
+    expect(() => db.exec(manifestSql())).toThrow(/PC-4/iu)
+  })
+
   it('keeps resumable offsets monotonic and binds only a verified exact master', () => {
     const db = createDb()
     insertRelease(db)
