@@ -25,7 +25,15 @@ ChatGPT conversation, ChatGPT Library, Sites, Google Drive, local workspace, ema
 - Quyết định owner đã commit thắng đề xuất/mặc định.
 - Thiếu bằng chứng được xử lý fail-closed.
 
-## 5. Tách biệt project cũ
+## 5. Tách biệt project cũ và khóa identity
 
-Repository này không chia sẻ Git history, remote, secret, production data hoặc artifact với project cũ. Việc tham khảo project cũ trong tương lai phải qua một migration proposal có inventory, provenance, impact analysis và owner approval.
+- Canonical repository duy nhất của YouTube AI Factory V2 là `HungQuach301/youtube-ai-factory-v2`.
+- `HungQuach301/youtube-ai-factory` là repository bị loại trừ: không được dùng làm upstream, mirror, fallback, recovery input hoặc đích commit cho V2.
+- Repository này không chia sẻ Git history, remote, secret, production data hoặc artifact với project cũ.
+- Trước mọi mutation, agent phải xác minh exact `owner/repo`, branch, HEAD, remote và chạy `pnpm verify:repo`. Mismatch hoặc identity không xác minh được trả `REPOSITORY_IDENTITY_BLOCKED` và dừng trước edit/commit/deploy.
+- Việc tham khảo project cũ trong tương lai chỉ được thực hiện qua migration proposal có inventory, provenance, impact analysis và owner approval; không cherry-pick ngầm.
+
+## 6. Incident receipt — 2026-08-25
+
+Ba commit Phase 45 đã bị ghi nhầm vào `HungQuach301/youtube-ai-factory`. Chúng được hoàn tác không phá lịch sử qua pull request `HungQuach301/youtube-ai-factory#3`; source tree sau revert được đối chiếu byte-equivalent với baseline trước sự cố `5f874568`. Không force-push và không có code nào từ sự cố được tự động nhập vào V2. Guardrail identity trong `AGENTS.md`, `tools/verify-repository-identity.mjs` và GitHub CI là biện pháp phòng tái diễn.
 
