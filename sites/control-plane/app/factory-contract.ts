@@ -1,0 +1,45 @@
+export const approvedChannel = {
+  id: "channel_ai_era_money_defense_v1",
+  name: "AI-Era Money Defense",
+  nicheKey: "ai-era-money-defense",
+  market: "United States",
+  locale: "en-US",
+  identityContractId: "identity_ai_era_money_defense_v1",
+  identityVersion: 1,
+  ownerDecisionKey: "HP-01:AI-ERA-MONEY-DEFENSE:2026-08-25",
+  viewerPromise: "See the trap before it touches your money.",
+  audience: "Adults 30–55 managing household money and supporting aging parents",
+  format: "Premium faceless documentary / explainer",
+  positioning: "Evidence-led explainers showing how AI, social engineering and digital payments are used to take household money, and the verification habits that interrupt the loss.",
+  pillar: {
+    id: "pillar_modern_money_traps_v1",
+    name: "How Modern Money Traps Work",
+    version: 1,
+  },
+  episodes: [
+    "The Bank Fraud Alert That Sends Your Money to the Scammer",
+    "Your Boss’s Voice Is Real. The Payment Request Isn’t",
+    "The Wrong Number Text: Inside a 30-Day Scam Funnel",
+    "Why Instant Payments Are So Hard to Reverse",
+    "The AI Investment Ad That Never Existed",
+    "From Data Breach to Perfect Impersonation",
+    "The Fake Job That Turns You Into a Money Mule",
+    "The Family Emergency Call and the Voice-Clone Trap",
+    "The “Safe Account” Lie: How Bank Impersonation Hijacks Trust",
+    "The 10-Minute Verification Routine Before Moving Money",
+  ],
+  controls: {
+    profile: "REDUCED",
+    videoCeilingUsd: 30,
+    trackGCeilingUsd: 350,
+    disclosure: "ON",
+    soundscape: "ambience_only",
+    autoPublish: false,
+  },
+} as const;
+
+export const activationBlockers = [
+  "qualified_voice_fingerprint",
+  "fly_media_runtime",
+  "critic_qualification_and_real_calibration_evidence",
+] as const;

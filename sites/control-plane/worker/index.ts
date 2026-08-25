@@ -1,8 +1,9 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { runWithFactoryEnv, type FactoryRuntimeEnv } from "../app/runtime-env";
 
-interface Env {
+interface Env extends FactoryRuntimeEnv {
   ASSETS: Fetcher;
   DB: D1Database;
   IMAGES: {
@@ -40,7 +41,7 @@ const worker = {
       }, allowedWidths);
     }
 
-    return handler.fetch(request, env, ctx);
+    return runWithFactoryEnv(env, () => handler.fetch(request, env, ctx));
   },
 };
 

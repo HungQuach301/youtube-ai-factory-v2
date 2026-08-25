@@ -1,4 +1,5 @@
 import sourceLock from "../source-lock.json";
+import { getRuntimeReadiness } from "./operator-runtime";
 
 const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 
@@ -38,12 +39,11 @@ const workPackages = [
   { id: "WP-31", name: "OPERATE Mode Harness", status: "Complete", detail: "Daily orphan, FAIL, spend and incident triage plus append-only OPS-LOG auditing now pass CI without automatic state writes." },
 ];
 
-const trackGChecks = [
+const staticTrackGChecks = [
   { label: "Required work packages", state: "PASS", detail: "WP-12B, WP-16, WP-17 and minimum WP-28/WP-29 are implemented." },
   { label: "Profile and cost controls", state: "PASS", detail: "PROFILE=REDUCED · $30/video · $350 Track G · disclosure ON · ambience only." },
   { label: "HP-01 niche decision", state: "PASS", detail: "AI-Era Money Defense was owner-approved on 2026-08-25 and sealed in the canonical V2 repository." },
-  { label: "Production state store", state: "BLOCKED", detail: "The control-plane has no D1 binding; channel records cannot be persisted truthfully." },
-  { label: "Human and voice evidence", state: "BLOCKED", detail: "Real-human allowlist identity and qualified voice fingerprint evidence are absent." },
+  { label: "Voice and calibration evidence", state: "BLOCKED", detail: "Qualified voice fingerprint and real calibration evidence are absent." },
   { label: "Media execution", state: "G-02 BLOCK", detail: "Fly.io production deployment credentials remain unavailable for the first end-to-end video." },
 ] as const;
 
@@ -99,8 +99,28 @@ const controls = [
   ["Sites checkpoint", "Derived from approved source"],
 ];
 
-export default function Home() {
+export default async function Home() {
   const fingerprint = sourceLock.aggregate_sha256.slice(0, 16);
+  const runtime = await getRuntimeReadiness();
+  const trackGChecks = [
+    ...staticTrackGChecks,
+    { label: "Production state store", state: runtime.d1, detail: runtime.detail },
+    {
+      label: "Authenticated owner identity",
+      state: runtime.owner,
+      detail: runtime.owner === "PASS"
+        ? "A real owner identity was read back from Production D1."
+        : "The owner must authenticate and issue the first Production command.",
+    },
+    {
+      label: "Approved channel state",
+      state: runtime.channel === "PREPARED" ? "PASS" : "BLOCKED",
+      detail: runtime.channel === "PREPARED"
+        ? "The approved channel contract and queue are persisted as PREPARED."
+        : "PREPARE_CHANNEL has not completed in Production.",
+    },
+  ];
+  const channelPersisted = runtime.channel === "PREPARED";
 
   return (
     <main>
@@ -118,7 +138,7 @@ export default function Home() {
       <section className="shell" id="overview">
         <div className="status-strip" role="status">
           <span className="status-icon" aria-hidden="true">✓</span>
-          <div><strong>Single source of truth policy active</strong><p>GitHub <code>main</code> is authoritative. This Site is a read-only deployment mirror.</p></div>
+          <div><strong>Split authority policy active</strong><p>GitHub <code>main</code> governs source; Production D1 governs operational commands, runs and state.</p></div>
           <span className="fingerprint">SOURCE {fingerprint}</span>
         </div>
 
@@ -128,7 +148,8 @@ export default function Home() {
             <h1>Move from build-complete to evidence-backed activation.</h1>
             <p className="hero-copy">The factory foundation is implemented. Track G starts only when channel identity, human evidence and production state can be proven—not inferred.</p>
             <div className="hero-actions">
-              <a className="primary-action" href="#g01-decision">View approved channel</a>
+              <a className="primary-action" href="/operate">Open Production Operator</a>
+              <a className="secondary-action" href="#g01-decision">View approved channel</a>
               <a className="secondary-action" href="#continuity">Review continuity contract</a>
             </div>
           </section>
@@ -141,11 +162,11 @@ export default function Home() {
             <dl className="authority-list">
               <div><dt>Repository</dt><dd>HungQuach301/youtube-ai-factory-v2</dd></div>
               <div><dt>Branch</dt><dd>main</dd></div>
-              <div><dt>Site role</dt><dd>Deployment mirror</dd></div>
+              <div><dt>Site role</dt><dd>Authenticated working surface</dd></div>
               <div><dt>Managed files</dt><dd>{sourceLock.files.length}</dd></div>
               <div><dt>Source fingerprint</dt><dd className="mono">{fingerprint}</dd></div>
             </dl>
-            <p className="authority-note">Chat messages, temporary files and direct Site edits cannot become factory truth.</p>
+            <p className="authority-note">A chat instruction becomes factory truth only after an authenticated typed command is persisted and read back from Production D1.</p>
           </aside>
         </div>
 
@@ -159,7 +180,7 @@ export default function Home() {
         <section className="panel track-g-panel" id="g01-decision" aria-labelledby="track-g-title">
           <div className="section-heading">
             <div><p className="eyebrow">TRACK G · G-01</p><h2 id="track-g-title">HP-01 decision & channel strategy</h2></div>
-            <span className="decision-badge">HP-01 SEALED · ACTIVATION BLOCKED</span>
+            <span className="decision-badge">{channelPersisted ? "CHANNEL PREPARED · ACTIVATION BLOCKED" : "HP-01 SEALED · PREPARATION READY"}</span>
           </div>
           <p className="track-g-intro">The owner has selected a new niche for the US market. Strategy deliverables are canonical; production persistence remains fail-closed until real bindings and evidence exist.</p>
 
@@ -187,7 +208,7 @@ export default function Home() {
           </div>
           <div className="activation-rule" role="note">
             <strong>Activation rule</strong>
-            <p>HP-01 is sealed in GitHub. No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created; D1, real-human and voice evidence remain mandatory.</p>
+            <p>PREPARED requires an authenticated owner command plus Production D1 read-back. ACTIVE still requires real voice, calibration and media-runtime evidence; no placeholder evidence may satisfy those gates.</p>
           </div>
         </section>
 
@@ -214,7 +235,7 @@ export default function Home() {
             <div className="section-heading">
               <div><p className="eyebrow">CHANNEL IDENTITY CONTRACT v1</p><h2>Approved strategy source</h2></div>
             </div>
-            <span className="persistence-badge">APPROVED SOURCE · PERSISTENCE PENDING</span>
+            <span className="persistence-badge">{channelPersisted ? "PRODUCTION D1 · PREPARED" : "APPROVED SOURCE · COMMAND PENDING"}</span>
             <dl className="identity-list">
               <div><dt>Positioning</dt><dd>Calm, evidence-first money defense—not scam-baiting entertainment</dd></div>
               <div><dt>Visual DNA</dt><dd>Transaction maps, scam funnels, timelines, annotated evidence and voice-clone comparisons</dd></div>
@@ -282,7 +303,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-00 through WP-31 are implemented, including WP-30 failure mining and the WP-31 OPERATE harness. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. HP-01 is sealed in GitHub; G-01 activation still requires a production D1 binding, real-human identity and qualified voice evidence. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
+              <p>WP-00 through WP-31 are implemented, including WP-30 failure mining and the WP-31 OPERATE harness. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command. G-01A1 accepts only the authenticated PREPARE_CHANNEL command and persists its receipt in D1. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
             </div>
             <div className="operator-proof" aria-label="WP-25 operator display contract">
               <div className="operator-proof-heading"><strong>OPS-02 DISPLAY CONTRACT</strong><span>IMPLEMENTED</span></div>

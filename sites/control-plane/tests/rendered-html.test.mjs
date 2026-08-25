@@ -14,7 +14,7 @@ test("renders the canonical-source control plane", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   assert.match(html, /YouTube AI Factory V2/i);
-  assert.match(html, /Single source of truth policy active/i);
+  assert.match(html, /Split authority policy active/i);
   assert.match(html, /Production remains locked/i);
   assert.match(html, /29 activation-ready · 33 implemented \/ 33/i);
   assert.match(html, /Lease &amp; Fencing/i);
@@ -60,14 +60,14 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Phase 5 complete · G-01 decision sealed/i);
   assert.match(html, /TRACK G · G-01/i);
   assert.match(html, /HP-01 decision &amp; channel strategy/i);
-  assert.match(html, /HP-01 SEALED · ACTIVATION BLOCKED/i);
+  assert.match(html, /HP-01 SEALED · PREPARATION READY/i);
   assert.match(html, /AI-Era Money Defense/i);
   assert.match(html, /OWNER APPROVED · 2026-08-25/i);
   assert.match(html, /Evidence-led, faceless explainers/i);
   assert.match(html, /See the trap before it touches your money/i);
   assert.match(html, /United States · English \(en-US\)/i);
   assert.match(html, /Adults 30–55 managing household money/i);
-  assert.match(html, /APPROVED SOURCE · PERSISTENCE PENDING/i);
+  assert.match(html, /APPROVED SOURCE · COMMAND PENDING/i);
   assert.match(html, /How Modern Money Traps Work/i);
   assert.match(html, /10 episodes queued/i);
   assert.match(html, /The Bank Fraud Alert That Sends Your Money to the Scammer/i);
@@ -79,8 +79,9 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /\$16B[\s\S]*\$3\.5B/i);
   assert.match(html, /68%[\s\S]*AI/i);
   assert.match(html, /Hidden Systems Behind Money[\s\S]*not imported/i);
-  assert.match(html, /control-plane has no D1 binding/i);
-  assert.match(html, /No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created/i);
+  assert.match(html, /Production D1 or its operational schema is unavailable/i);
+  assert.match(html, /PREPARED requires an authenticated owner command plus Production D1 read-back/i);
+  assert.match(html, /Open Production Operator/i);
   assert.match(html, /Observability &amp; Operator UI/i);
   assert.match(html, /Trace reconstruction now proves the complete provider, cost and output chain/i);
   assert.match(html, /G11–G15 Enforcement/i);
@@ -97,7 +98,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Attention budget clock/i);
   assert.match(html, /trace_id[\s\S]*provider request\/response, settled cost and sealed output/i);
   assert.match(html, /WP-00 through WP-31 are implemented/i);
-  assert.match(html, /HP-01 is sealed in GitHub; G-01 activation still requires a production D1 binding/i);
+  assert.match(html, /G-01A1 accepts only the authenticated PREPARE_CHANNEL command and persists its receipt in D1/i);
   assert.match(html, /WP-22 remains warning-only pending anchors, gold evidence and critic qualification/i);
   assert.match(html, /WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command/i);
   assert.match(html, /WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command/i);
@@ -106,4 +107,32 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Production spend[\s\S]*\$0/i);
   assert.match(html, /Automatic publishing[\s\S]*BLOCKED/i);
   assert.doesNotMatch(html, /codex-preview/i);
+});
+
+test("renders the authenticated Production operator surface", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("operator-test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/operate", {
+      headers: {
+        accept: "text/html",
+        "oai-authenticated-user-email": "owner@example.com",
+        "oai-authenticated-user-full-name": "Factory%20Owner",
+        "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
+      },
+    }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(html, /PRODUCTION WORKING SURFACE/i);
+  assert.match(html, /Command the factory/i);
+  assert.match(html, /Run PREPARE_CHANNEL/i);
+  assert.match(html, /D1 WRITE/i);
+  assert.match(html, /append-only receipt/i);
+  assert.match(html, /Persisted deliverables/i);
+  assert.match(html, /Production episode queue/i);
+  assert.match(html, /auto-publish OFF/i);
 });

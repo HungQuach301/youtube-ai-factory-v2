@@ -1087,3 +1087,30 @@ Deliverable này seal HP-01 và projection các outcome đã phê duyệt lên P
 Nó không kích hoạt channel, không persist identity, không dispatch provider,
 không phát lệnh owner và không tạo production evidence khi binding/evidence thật
 còn thiếu.
+
+
+---
+
+## G-01A1 · Production Command Runtime
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Lệnh từ giao diện được ghi thành runtime truth, không phải dashboard tĩnh | Authenticated `/operate` → `POST /api/operator` → Production D1 |
+| Owner thật và allowlist fail-closed | ChatGPT auth header + hosted `FACTORY_OWNER_EMAIL`; thiếu/lệch identity trả lỗi |
+| `PREPARE_CHANNEL` idempotent và atomic | SHA-256 payload binding, UNIQUE idempotency, D1 batch, replay trả run cũ |
+| Outcome và deliverables đọc lại được | channel `PREPARED`, contract v1, HP-01, pillar, 10 episode, 1 run, 4 ordered events |
+| Receipt không thể sửa/xóa | D1 triggers cho command log, HP decision và operation event |
+| Không vượt activation boundary | provider dispatch OFF, auto-publish OFF, cost $0; ACTIVE vẫn bị voice/calibration/Fly blockers |
+| Production projection phản ánh D1 | root readiness và operator surface đọc operational state từ D1 |
+
+## Lệnh xác minh
+
+`npm run verify:source` · `npm run lint` · `npm test` trong `sites/control-plane`; Miniflare integration áp migration thật, chạy/replay typed command, đọc lại 10 episode và chứng minh append-only trigger từ chối UPDATE.
+
+## Ngoài phạm vi G-01A1
+
+MCP connection từ ChatGPT thuộc G-01A2. Provider/media execution và YouTube transport không được mở bởi work package này.
