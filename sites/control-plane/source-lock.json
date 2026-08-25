@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "192cb3790386ea27cfe67730bf9de6e2c976151cfb7be01436d597fa5cddf557",
+  "aggregate_sha256": "10517e42e61e55f8155654b8ea42748613f646f2cfe72fc8b0ad77a45c3bfd68",
   "files": [
     {
       "path": ".gitignore",
@@ -53,7 +53,7 @@
     },
     {
       "path": "app/operate/page.tsx",
-      "sha256": "df8e95eb915dfa640eb8c080b99b56edee43c43711e074a4055fcb96553538ba"
+      "sha256": "3aa7e276f8030234032362f5eba654fff6db1550e37ef7ab02ae0e4b2ab8751b"
     },
     {
       "path": "app/operator-runtime.ts",
@@ -61,7 +61,7 @@
     },
     {
       "path": "app/page.tsx",
-      "sha256": "36d52c984522de36c9021af9bccc1170fc35f47de8c8072e39d80e35e4ffb091"
+      "sha256": "c282433e7c50ee870bc9088476e248281abb122e23b635be0641406ac7f37c7a"
     },
     {
       "path": "app/runtime-env.ts",

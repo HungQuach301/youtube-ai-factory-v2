@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireChatGPTUser } from "../chatgpt-auth";
 import OperatorClient from "./operator-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function OperatePage() {
   await requireChatGPTUser("/operate");
   return (
