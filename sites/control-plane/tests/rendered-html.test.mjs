@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
+
+test("declares the Production MCP surface in the Sites manifest", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"));
+  assert.equal(manifest.project_id, "appgprj_6a89c0bda86c8191aa39b0b00a729e80");
+  assert.equal(manifest.d1, "DB");
+  assert.equal(manifest.mcp, true);
+});
 
 test("renders the canonical-source control plane", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
