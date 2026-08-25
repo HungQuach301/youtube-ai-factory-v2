@@ -59,6 +59,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Repository identity
+        run: pnpm verify:repo
       - run: pnpm install --frozen-lockfile
       - name: Source integrity
         run: pnpm verify:source
