@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "8eb87574bbf6f3ec56f36e66814d478f137845c5821f49444bf0c2bd5e3ac32f",
+  "aggregate_sha256": "3facee90ac417234df53ae7b3ec1c66a461929e90cad1b737e81143ac537b5e8",
   "files": [
     {
       "path": ".codex/config.toml",
-      "sha256": "ae36f42c371ae9dcc85a94985cc618a6bba2630244fd1e14d1e1e468cbf41c3e"
+      "sha256": "3e113420542c092d93d0dc4dc196f6c9fdb98e909dd9faa75accbe311e326f48"
     },
     {
       "path": ".gitignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/oauth-server.ts",
-      "sha256": "ca43321e8c2966cafbdf8fdd425a86b8e8376efe8811b951ca70683a5456758f"
+      "sha256": "f7e19a5df07a11e7fcd87cf738dfd3be8a0ef14c205c40d7ce883a9ea6b9009a"
     },
     {
       "path": "app/oauth/authorize/approve/route.ts",
@@ -209,7 +209,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "e968555dd96e7a60aff640ac56aaf24dbd002efec3299b2d2ba36179c9cf2e70"
+      "sha256": "2049e22c9bd06878c18622bcc24f377a8af7e802f8eb5089d72436d71752fa26"
     },
     {
       "path": "tests/rendered-html.test.mjs",

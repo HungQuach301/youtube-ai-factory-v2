@@ -1,6 +1,10 @@
+mcp_oauth_callback_port = 44401
+mcp_oauth_callback_url = "http://terminal.local:44401/callback"
+
 [mcp_servers.youtube-ai-factory-v2-production]
 url = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site/api/mcp"
 auth = "oauth"
+oauth_client_id = "youtube-ai-factory-v2-work"
 enabled = true
 enabled_tools = ["get_factory_state", "prepare_approved_channel"]
 default_tools_approval_mode = "writes"
