@@ -3,6 +3,8 @@ import { getRuntimeReadiness } from "./operator-runtime";
 
 const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 
+export const dynamic = "force-dynamic";
+
 const workPackages = [
   { id: "WP-00", name: "Scaffold & Contracts", status: "Complete", detail: "Contracts v2, strict TypeScript, guardrails and frozen CI install." },
   { id: "WP-01", name: "Canonical Hashing & Lineage", status: "Complete", detail: "Deterministic identity, streaming SHA-256 and fail-closed lineage." },
