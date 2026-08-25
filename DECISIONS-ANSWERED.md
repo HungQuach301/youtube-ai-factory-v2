@@ -7,6 +7,53 @@ Mọi thay đổi về sau đi qua Evolution pipeline như mọi meta-change kh�
 
 **Nguyên tắc điền.** Các giá trị dưới đây được chọn để (a) nhất quán với nhau — nhịp §1 nằm trong trần chú ý §11, ngân sách §3 nằm trong cấu hình REDUCED của Track G; (b) thiên về thận trọng ở mọi chỗ rủi ro chính sách; (c) đủ cụ thể để agent không bị chặn. Ngân sách §3 được owner xác nhận ngày 2026-08-23; các xác nhận còn lại được liệt kê ở cuối.
 
+## Track G · G-01 · HP-01 niche/channel strategy ✅ **[OWNER CONFIRMED — 2026-08-25]**
+
+Owner phê duyệt outcome niche discovery và chọn **AI-Era Money Defense** cho thị
+trường **United States · English (en-US)**.
+
+- Audience: người trưởng thành 30–55 tuổi đang quản lý tiền hộ gia đình và hỗ
+  trợ cha mẹ lớn tuổi.
+- Format: premium faceless documentary/explainer.
+- Promise: **“See the trap before it touches your money.”**
+- Positioning: explainer dựa trên evidence về cách AI, social engineering và
+  digital payments được dùng để lấy tiền hộ gia đình, cùng thói quen xác minh
+  giúp ngắt dòng tổn thất; không đưa lời khuyên tài chính/đầu tư cá nhân hóa.
+- First pillar: **How Modern Money Traps Work**.
+- Voice: chính xác, điều tra, tôn trọng, không đổ lỗi nạn nhân.
+- Visual DNA: transaction map, scam funnel, timeline, annotated evidence và
+  voice-clone comparison.
+- Safety: không claim suy đoán, không hướng dẫn tội phạm có thể tái sử dụng.
+- Legacy exclusion: **Hidden Systems Behind Money không được import** vào quyết
+  định V2 này.
+
+Bảng xếp hạng đã phê duyệt: AI-Era Money Defense 90; Digital Credit & BNPL
+Decoder 85; Cash-Flow Resilience Lab 84; AI Workflow ROI for Non-Tech Workers
+81; AI Money-Management Tool Reviews 77.
+
+Queue 10 video đầu:
+
+1. The Bank Fraud Alert That Sends Your Money to the Scammer
+2. Your Boss’s Voice Is Real. The Payment Request Isn’t
+3. The Wrong Number Text: Inside a 30-Day Scam Funnel
+4. Why Instant Payments Are So Hard to Reverse
+5. The AI Investment Ad That Never Existed
+6. From Data Breach to Perfect Impersonation
+7. The Fake Job That Turns You Into a Money Mule
+8. The Family Emergency Call and the Voice-Clone Trap
+9. The “Safe Account” Lie: How Bank Impersonation Hijacks Trust
+10. The 10-Minute Verification Routine Before Moving Money
+
+Control giữ nguyên: `PROFILE=REDUCED`, `$30/video`, `$350 Track G`,
+sampling OFF, freeze OFF, disclosure ON và `ambience_only`.
+
+**Ranh giới production.** HP-01 đã được seal trong GitHub. Channel Identity
+hiển thị `APPROVED SOURCE · PERSISTENCE PENDING` cho đến khi D1 binding,
+real-human allowlist identity và qualified voice fingerprint evidence là thật.
+Không được tạo placeholder hoặc production evidence giả. Fly.io vẫn chặn G-02.
+
+Chi tiết outcome, nguồn và deliverables: `TRACK-G-G01-DECISION.md`.
+
 ## Ủy quyền triển khai thường trực ✅ **[OWNER CONFIRMED — 2026-08-23]**
 
 Owner ủy quyền cho agent tiếp tục triển khai code, CI, ChatGPT Sites, môi trường

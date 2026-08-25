@@ -114,23 +114,22 @@ Trạng thái: `OPEN — ETL/analysis harness hoàn tất, learning activation f
   được tạo promotion.
 
 
-## B-009 · Track G G-01 chưa có production state và activation evidence
+## B-009 · Track G G-01 đã chốt HP-01; activation evidence còn thiếu
 
-Trạng thái: `OPEN — G-01 fail-closed; readiness surface đã triển khai`
+Trạng thái: `PARTIALLY RESOLVED — HP-01 SEALED; ACTIVATION FAIL-CLOSED`
 
-Kiểm tra ngày 2026-08-25 xác nhận các điều kiện chương trình đã đủ: WP-12B,
-WP-16, WP-17 và mức tối thiểu WP-28/WP-29 đã được triển khai; owner đã chốt
-`PROFILE=REDUCED`, `$30/video`, `$350 Track G`, disclosure mặc định ON và
-`ambience_only`. Tuy nhiên G-01 chưa được phép tạo channel production vì:
+Owner phê duyệt **AI-Era Money Defense** ngày 2026-08-25; outcome, ranking,
+Channel Identity source và queue 10 video đã được seal trong canonical V2
+repository và được projection lên Production control-plane. Các blocker còn lại:
 
-- chưa có HP-01 niche decision được seal trong canonical V2 repository;
 - `sites/control-plane/.openai/hosting.json` vẫn có `d1=null`, `r2=null`;
 - chưa có real-human allowlist identity để bind các quyết định;
 - chưa có qualified production voice + fingerprint evidence; tuyệt đối không
-  dùng placeholder để seal `ChannelIdentityContract v1`;
+  dùng placeholder để seal production `ChannelIdentityContract v1`;
 - Fly.io credential/tool vẫn thiếu theo B-004, nên G-02 end-to-end tiếp tục bị chặn.
 
-Control-plane chỉ hiển thị activation preflight đọc-only. Không thêm mutation
-endpoint, không tạo D1 một phần, không phát owner command, không dispatch provider
-và không ghi production evidence giả. Blocker đóng khi HP-01, D1 binding,
-real-human identity và voice evidence đều được xác minh; Fly.io cần đóng trước G-02.
+Production phải hiển thị đúng `APPROVED SOURCE · PERSISTENCE PENDING`, không
+thêm mutation endpoint, không tạo D1 một phần, không phát owner command, không
+dispatch provider và không ghi production evidence giả. B-009 đóng khi D1
+binding, real-human identity và voice evidence đều được xác minh; Fly.io cần
+đóng trước G-02.

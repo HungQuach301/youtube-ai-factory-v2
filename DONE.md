@@ -1062,3 +1062,28 @@ ChannelIdentityContract xuyên kênh.
 WP-31 xây harness deterministic trong mode BUILD. Harness chỉ đọc snapshot và phát
 action plan; không dispatch provider, không phát owner command, không ghi production,
 không tự waive gate, không tự đổi ceiling và không sửa vùng cấm G13.
+
+
+---
+
+## Track G · G-01 Production Projection · HP-01 Owner Decision
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| HP-01 owner decision được seal trong GitHub | `DECISIONS-ANSWERED.md` + `TRACK-G-G01-DECISION.md` ghi ngày, niche, market, audience, positioning và legacy exclusion |
+| Production thể hiện đúng outcome niche discovery | Rendered HTML test kiểm champion, 5 candidate scores, market evidence và queue 10 video |
+| Channel identity không giả trạng thái persistence | UI và test bắt buộc `APPROVED SOURCE · PERSISTENCE PENDING` |
+| Blocker còn thiếu không bị che giấu | Readiness surface vẫn BLOCKED cho D1, real-human identity, voice fingerprint và Fly.io |
+| Canonical source không drift | `source-lock.json` + build-verified + rendered HTML test |
+| Không mở đường mutation/dispatch/publish | Chỉ thay projection read-only; không D1 giả, không provider call, không owner command, không auto-publish |
+
+## Ranh giới
+
+Deliverable này seal HP-01 và projection các outcome đã phê duyệt lên Production.
+Nó không kích hoạt channel, không persist identity, không dispatch provider,
+không phát lệnh owner và không tạo production evidence khi binding/evidence thật
+còn thiếu.
