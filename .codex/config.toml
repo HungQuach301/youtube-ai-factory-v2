@@ -1,0 +1,8 @@
+[mcp_servers.youtube-ai-factory-v2-production]
+url = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site/api/mcp"
+auth = "oauth"
+enabled = true
+enabled_tools = ["get_factory_state", "prepare_approved_channel"]
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 20
+tool_timeout_sec = 60
