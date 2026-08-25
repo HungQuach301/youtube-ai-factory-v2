@@ -36,9 +36,15 @@ async function createFactoryFixture(databaseName) {
     bindings: { FACTORY_OWNER_EMAIL: "owner@example.com" },
   });
   const d1 = await mf.getD1Database("DB");
-  const migration = await readFile(new URL("../drizzle/0000_opposite_random.sql", import.meta.url), "utf8");
-  for (const statement of migration.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
-    await d1.prepare(statement).run();
+  const migrationRoot = fileURLToPath(new URL("../drizzle", import.meta.url));
+  const migrations = (await readdir(migrationRoot))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .sort();
+  for (const migrationName of migrations) {
+    const migration = await readFile(resolve(migrationRoot, migrationName), "utf8");
+    for (const statement of migration.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
+      await d1.prepare(statement).run();
+    }
   }
   return { mf, d1 };
 }
@@ -153,6 +159,134 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(eventCount.count, 4);
   } finally {
     await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP calls", async () => {
+  const { mf } = await createFactoryFixture("g01a-oauth-test");
+  const productionOrigin = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site";
+  const resource = `${productionOrigin}/mcp`;
+  const verifier = "factory-owner-pkce-verifier-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const clientId = "https://chatgpt.com/oauth/client.json";
+  const redirectUri = "https://chatgpt.com/connector_platform_oauth_redirect";
+
+  try {
+    const unauthenticated = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+    });
+    assert.equal(unauthenticated.status, 401);
+    assert.match(unauthenticated.headers.get("www-authenticate") ?? "", /oauth-protected-resource/);
+
+    const resourceMetadataResponse = await mf.dispatchFetch(`${productionOrigin}/.well-known/oauth-protected-resource`);
+    const resourceMetadata = await resourceMetadataResponse.json();
+    assert.equal(resourceMetadata.resource, resource);
+    assert.deepEqual(resourceMetadata.authorization_servers, [productionOrigin]);
+    assert.deepEqual(resourceMetadata.scopes_supported, ["factory.read", "factory.prepare"]);
+
+    const issuerMetadataResponse = await mf.dispatchFetch(`${productionOrigin}/.well-known/oauth-authorization-server`);
+    const issuerMetadata = await issuerMetadataResponse.json();
+    assert.equal(issuerMetadata.issuer, productionOrigin);
+    assert.equal(issuerMetadata.client_id_metadata_document_supported, true);
+    assert.deepEqual(issuerMetadata.code_challenge_methods_supported, ["S256"]);
+
+    const authorize = new URL(`${productionOrigin}/oauth/authorize`);
+    authorize.searchParams.set("response_type", "code");
+    authorize.searchParams.set("client_id", clientId);
+    authorize.searchParams.set("redirect_uri", redirectUri);
+    authorize.searchParams.set("state", "oauth-state-123");
+    authorize.searchParams.set("code_challenge", challenge);
+    authorize.searchParams.set("code_challenge_method", "S256");
+    authorize.searchParams.set("resource", resource);
+    authorize.searchParams.set("scope", "factory.read factory.prepare");
+    const consentResponse = await mf.dispatchFetch(authorize, { headers: ownerHeaders });
+    const consentHtml = await consentResponse.text();
+    assert.equal(consentResponse.status, 200);
+    assert.match(consentHtml, /Connect ChatGPT to YouTube AI Factory V2/i);
+    const nonce = consentHtml.match(/name="nonce" value="([A-Za-z0-9_-]+)"/)?.[1];
+    assert.ok(nonce);
+
+    const approvalResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/authorize/approve`, {
+      method: "POST",
+      headers: { ...ownerHeaders, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ nonce }),
+      redirect: "manual",
+    });
+    assert.equal(approvalResponse.status, 303);
+    const callback = new URL(approvalResponse.headers.get("location"));
+    assert.equal(callback.origin + callback.pathname, redirectUri);
+    assert.equal(callback.searchParams.get("state"), "oauth-state-123");
+    assert.equal(callback.searchParams.get("iss"), productionOrigin);
+    const code = callback.searchParams.get("code");
+    assert.ok(code);
+
+    const tokenResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+        resource,
+      }),
+    });
+    const token = await tokenResponse.json();
+    assert.equal(tokenResponse.status, 200);
+    assert.equal(token.token_type, "Bearer");
+    assert.equal(token.scope, "factory.read factory.prepare");
+    assert.ok(token.access_token);
+
+    const replayResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+        resource,
+      }),
+    });
+    assert.equal(replayResponse.status, 400);
+    assert.equal((await replayResponse.json()).error, "invalid_grant");
+
+    const rawToolsResponse = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.access_token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-06-18",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/list", params: {} }),
+    });
+    const rawTools = await rawToolsResponse.json();
+    assert.deepEqual(rawTools.result.tools.find((tool) => tool.name === "get_factory_state")?.securitySchemes, [
+      { type: "oauth2", scopes: ["factory.read"] },
+    ]);
+
+    const transport = new StreamableHTTPClientTransport(new URL(resource), {
+      requestInit: { headers: { authorization: `Bearer ${token.access_token}` } },
+      fetch: (input, init) => mf.dispatchFetch(input, init),
+    });
+    const client = new Client({ name: "factory-oauth-e2e-test", version: "1.0.0" });
+    await client.connect(transport);
+    const tools = await client.listTools();
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "get_factory_state",
+      "prepare_approved_channel",
+    ]);
+    const state = await client.callTool({ name: "get_factory_state", arguments: {} });
+    assert.equal(state.structuredContent.ownerAuthorized, true);
+    assert.equal(state.structuredContent.providerDispatch, "OFF");
+    await client.close();
+  } finally {
     await mf.dispose();
   }
 });
