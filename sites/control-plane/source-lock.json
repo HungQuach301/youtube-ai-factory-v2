@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "2bfff04f398e4ae2dba49e93e0c6a773bd9afbd1f72070f0795afb77d1b029f9",
+  "aggregate_sha256": "e40162cb5790e112bdda4989fc04ba77ecd29ccb7730befbf654bbd38c30f7de",
   "files": [
     {
       "path": ".gitignore",
@@ -13,7 +13,7 @@
     },
     {
       "path": ".openai/hosting.json",
-      "sha256": "6f13408ad5215306cebfb3d8fa5f605ee2f8eb2bad2cc8d878ed24e426749102"
+      "sha256": "7812b288a6ee1953900174a1ec03fc72ddfbc6672bb168ca6f20fedd6f47e853"
     },
     {
       "path": "G01A-PRODUCTION-COMMAND-RUNTIME.md",
@@ -21,7 +21,7 @@
     },
     {
       "path": "G01A2-MCP-COMMAND-SURFACE.md",
-      "sha256": "5263cdf24825b80c78b003258e18645117f2ddf67524bef6477e04b1eedf4da0"
+      "sha256": "d68628154e9aaaeea1271158d915ec2c5055d4fcf8f91e123a731f78824255bf"
     },
     {
       "path": "README.md",
@@ -177,7 +177,7 @@
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "b7e430e0b82993284a12b35b0eea77b00dcf5ae1e093d7cd91e434a7ffc3a38d"
+      "sha256": "1650564168e7e428ba5a7a7c157a557226007bd9cd972e2df8efa79a810f15f8"
     },
     {
       "path": "tsconfig.json",

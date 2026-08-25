@@ -6,6 +6,8 @@ The Factory exposes a standards-based Streamable HTTP MCP endpoint at `/mcp`.
 An authenticated owner can inspect Production state and issue the approved
 `PREPARE_CHANNEL` command directly from ChatGPT. The command uses the same D1
 runtime as `/operate`; it does not create a second source of operational truth.
+The Sites hosting manifest explicitly enables this MCP surface so a published
+checkpoint can advertise its connection metadata to ChatGPT.
 
 ## Tools
 
