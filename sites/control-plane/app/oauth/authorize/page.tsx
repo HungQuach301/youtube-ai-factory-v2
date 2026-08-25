@@ -23,7 +23,7 @@ export default async function OAuthAuthorizePage({ searchParams }: { searchParam
   let authorization: { nonce: string; requestedScopes: string[] } | null = null;
   let errorMessage: string | null = null;
   try {
-    const parsed = parseAuthorizationSearchParams(query, `${oauthProductionOrigin}/mcp`);
+    const parsed = parseAuthorizationSearchParams(query, `${oauthProductionOrigin}/api/mcp`);
     authorization = {
       nonce: await createAuthorizationRequest(user, parsed),
       requestedScopes: parsed.scope.split(" "),

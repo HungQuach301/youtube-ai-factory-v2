@@ -64,7 +64,7 @@ export function oauthIssuer(request: Request): string {
 }
 
 export function oauthResource(request: Request): string {
-  return `${factoryOrigin(request)}/mcp`;
+  return `${factoryOrigin(request)}/api/mcp`;
 }
 
 export function protectedResourceMetadataUrl(request: Request): string {
@@ -108,7 +108,7 @@ export function parseAuthorizationParams(request: Request): OAuthAuthorizationPa
 
 export function parseAuthorizationSearchParams(
   searchParams: URLSearchParams,
-  expectedResource = `${oauthProductionOrigin}/mcp`,
+  expectedResource = `${oauthProductionOrigin}/api/mcp`,
 ): OAuthAuthorizationParams {
   const responseType = searchParams.get("response_type");
   const clientId = searchParams.get("client_id") ?? "";

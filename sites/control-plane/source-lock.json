@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "2a38f228bd52766ffd1200141997beb83c53771368944bc92b0e810311d24154",
+  "aggregate_sha256": "7779f07c2c3871b865329fd2c919a3615a72f20d196ede8305ee69b48db42917",
   "files": [
     {
       "path": ".gitignore",
@@ -21,7 +21,7 @@
     },
     {
       "path": "G01A2-MCP-COMMAND-SURFACE.md",
-      "sha256": "1d59c832e5859db21f98c37c931f17ac85764a073ec13b140c4d2b6c10194a80"
+      "sha256": "f7c68fef642720612ae99acb3a56d753aa19c45668732e1746b3fdaeba009806"
     },
     {
       "path": "README.md",
@@ -34,6 +34,10 @@
     {
       "path": "app/[...path]/route.ts",
       "sha256": "fe42fd5528968ec59996c4fe90f1dab5fde94cdbfe036aaae5e9ae15b781b73f"
+    },
+    {
+      "path": "app/api/mcp/route.ts",
+      "sha256": "01dabcce16ecc3f55a593eebbb99cec85cac39fa8e3b2ea4d1bfb9b77ebf8bf9"
     },
     {
       "path": "app/api/operator/route.ts",
@@ -61,7 +65,7 @@
     },
     {
       "path": "app/oauth-server.ts",
-      "sha256": "8c46663da1a5a7bc49bbb7511487291f260c1a41ee99c0505ce42af3a412123e"
+      "sha256": "829f8994ce82a4b104fb09c481647965510367de2f4ed6690e17f02847c7a096"
     },
     {
       "path": "app/oauth/authorize/approve/route.ts",
@@ -69,7 +73,7 @@
     },
     {
       "path": "app/oauth/authorize/page.tsx",
-      "sha256": "c68c0b6e5a53d5fef517fd152d932abdb1da27b2b686d3eb9304024703c177a9"
+      "sha256": "48bbbd3d9bb9a1cce223eded3ae92767f7b988ef616084af9d06c8925e11ff10"
     },
     {
       "path": "app/oauth/token/route.ts",
@@ -201,7 +205,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "9cb2a561e3f5182aaed44c6e0a022a135c284ca67200b9950f18ddb3049fa828"
+      "sha256": "81ffa6a61216b2867491c45dc2b0f4c9489f8c4d33dd487721585b38483b87e3"
     },
     {
       "path": "tests/rendered-html.test.mjs",
