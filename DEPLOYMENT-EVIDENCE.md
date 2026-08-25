@@ -4,6 +4,36 @@ Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
 
+## 2026-08-25 — ChatGPT Sites v24
+
+- Mode: `BUILD`
+- Surface: Track G G-01 owner decision and production projection
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commit: `19633a60798d475516f05d1e908e6a4e69f89714`
+- Canonical source path: `sites/control-plane`
+- Site source commit: `c18fcbac4a88abdfb591fcd7c0026787df8edf9c`
+- Source-lock aggregate SHA-256: `4fae5ef2c5d613d84474c202ffcb824740ef79c676381da54a5809fe1f43570e`
+- Checkpoint verification: source lock, build, lint and rendered HTML tests passed;
+  Preview DOM QA verified the approved niche, owner date, identity state, first
+  pillar, 10-episode queue and remaining blockers; Production reached terminal
+  status `succeeded` and was verified directly by deployment ID.
+- Delivery chain: G-01 owner-decision Production PR #81.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; production spend USD 0; auto-publish OFF;
+  HP-01 is sealed but Channel Identity remains `APPROVED SOURCE · PERSISTENCE
+  PENDING`.
+
+### Evidence-bound remaining states
+
+- Production D1/R2 bindings remain null; no production channel or identity record
+  can be persisted.
+- WP-28 remains fail-closed until an explicit real-human allowlist identity exists.
+- Production voice activation remains blocked until a qualified voice fingerprint
+  and its evidence bundle exist.
+- G-02 remains blocked by B-004 until Fly.io application credentials and deployment
+  authority are available.
+
 ## 2026-08-25 — ChatGPT Sites v23
 
 - Mode: `BUILD`
