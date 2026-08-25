@@ -4,6 +4,35 @@ Append-only evidence for production deployment surfaces. GitHub `main` remains
 the sole source of truth; deployments are derived, immutable checkpoints.
 
 
+## 2026-08-25 — ChatGPT Sites v27
+
+- Mode: `BUILD`
+- Surface: G-01A2 authenticated ChatGPT MCP command surface and manifest recovery
+- Status: `SUCCEEDED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source commits: `b32043b1a475446954b23748027e01855d53031c` (MCP runtime), `76b735203219504a32cc80ec017a68a0bb03386b` (valid manifest recovery)
+- Canonical source path: `sites/control-plane`
+- Site source commit: `dec3849530204af212385155013dec5edb6404be`
+- Source-lock aggregate SHA-256: `c694083d0129fa158d73622bde91303bdac6f8eeb0b888c5a96565bd5a4d14da`
+- Version: `appgver_26ad8a8e0fe081918d6062ca032cbb1e`
+- Deployment: `appgdep_6a8d907836c8819195763dbb132dbead`
+- Verification: source lock, lint, build and 4/4 tests passed; the build contains
+  `/mcp`; deployment reached terminal status `succeeded`; all nine Production D1
+  tables were inspected and remain empty.
+- Delivery chain: G-01A2 PR #85; invalid manifest correction PR #87.
+- Access posture: owner-only custom access retained.
+- Safety posture: provider dispatch OFF; production spend USD 0; auto-publish OFF.
+
+### Connection boundary
+
+- The MCP server route and persistent command runtime are deployed.
+- Sites does not currently advertise native MCP connection metadata for this
+  project; `MCP_CONNECTION_BLOCKED` remains the truthful state.
+- No command, operation run, receipt, channel, identity contract, pillar or episode
+  row was inserted to simulate a ChatGPT action.
+- The next persistent command must originate from a supported authenticated custom
+  MCP app selected by the owner in ChatGPT web.
+
 ## 2026-08-25 — ChatGPT Sites v24
 
 - Mode: `BUILD`
