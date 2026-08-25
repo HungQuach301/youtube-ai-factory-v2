@@ -6,8 +6,13 @@ The Factory exposes a standards-based Streamable HTTP MCP endpoint at `/mcp`.
 An authenticated owner can inspect Production state and issue the approved
 `PREPARE_CHANNEL` command directly from ChatGPT. The command uses the same D1
 runtime as `/operate`; it does not create a second source of operational truth.
-The Sites hosting manifest explicitly enables this MCP surface so a published
-checkpoint can advertise its connection metadata to ChatGPT.
+
+The Production route is deployed, but the current Sites publishing surface does
+not yet advertise a native MCP connection. An attempted undocumented `mcp`
+field was rejected by the Sites hosting schema and has been removed. Until a
+supported connection supplies the platform authorization flow, the status is
+`MCP_CONNECTION_BLOCKED`; the Factory must not bypass identity or write D1
+directly to simulate a ChatGPT command.
 
 ## Tools
 
@@ -45,7 +50,8 @@ publishing remain OFF, and the run incurs zero provider spend.
 
 ## Next boundary
 
-After the checkpoint is live, ChatGPT must connect to the Production MCP URL,
-call `get_factory_state`, call `prepare_approved_channel` under the explicit
-owner instruction, and read state again. Production D1 and the operator UI must
-then show the exact command receipt and persisted deliverables.
+After a supported authenticated ChatGPT connection is available, ChatGPT must
+connect to the Production MCP URL, call `get_factory_state`, call
+`prepare_approved_channel` under the explicit owner instruction, and read state
+again. Production D1 and the operator UI must then show the exact command
+receipt and persisted deliverables.
