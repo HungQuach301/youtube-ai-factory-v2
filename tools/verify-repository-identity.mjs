@@ -8,11 +8,11 @@ export function normalizeRepositoryIdentity(value) {
   const raw = String(value ?? "").trim().replace(/\/$/, "");
   if (!raw) return "UNKNOWN";
 
-  const shorthand = raw.match(/^([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
-  if (shorthand) return `${shorthand[1]}/${shorthand[2]}`;
-
   const scp = raw.match(/^[^@\s]+@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
   if (scp) return `${scp[1]}/${scp[2]}`;
+
+  const shorthand = raw.match(/^([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
+  if (shorthand) return `${shorthand[1]}/${shorthand[2]}`;
 
   try {
     const parsed = new URL(raw);
