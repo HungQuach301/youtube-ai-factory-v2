@@ -16,7 +16,7 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /YouTube AI Factory V2/i);
   assert.match(html, /Single source of truth policy active/i);
   assert.match(html, /Production remains locked/i);
-  assert.match(html, /25 evidence-ready · 29 implemented \/ 33/i);
+  assert.match(html, /29 activation-ready · 33 implemented \/ 33/i);
   assert.match(html, /Lease &amp; Fencing/i);
   assert.match(html, /Definition of Ready Resolver/i);
   assert.match(html, /Standard &amp; Policy Registry/i);
@@ -42,6 +42,8 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /10–15 real human-reader samples/i);
   assert.match(html, /Truth Layer/i);
   assert.match(html, /Intelligence &amp; Anti-copy/i);
+  assert.match(html, /Creative Layer/i);
+  assert.match(html, /Design Layer/i);
   assert.match(html, /ShotCueProgram Compiler/i);
   assert.match(html, /no fixed shot-count gate/i);
   assert.match(html, /Media Layer/i);
@@ -53,7 +55,15 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Human Evidence/i);
   assert.match(html, /explicit real-human allowlist identity/i);
   assert.match(html, /Policy Defense · Minimum/i);
-  assert.match(html, /Evolution pipeline implemented/i);
+  assert.match(html, /Failure Mining/i);
+  assert.match(html, /OPERATE Mode Harness/i);
+  assert.match(html, /Phase 5 complete · Track G preflight/i);
+  assert.match(html, /TRACK G · G-01/i);
+  assert.match(html, /Activation preflight/i);
+  assert.match(html, /BLOCKED · FAIL-CLOSED/i);
+  assert.match(html, /No Track G niche selection is sealed/i);
+  assert.match(html, /control-plane has no D1 binding/i);
+  assert.match(html, /No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created/i);
   assert.match(html, /Observability &amp; Operator UI/i);
   assert.match(html, /Trace reconstruction now proves the complete provider, cost and output chain/i);
   assert.match(html, /G11–G15 Enforcement/i);
@@ -69,7 +79,8 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Generate Evidence Report action/i);
   assert.match(html, /Attention budget clock/i);
   assert.match(html, /trace_id[\s\S]*provider request\/response, settled cost and sealed output/i);
-  assert.match(html, /WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25, WP-26, WP-27 and minimum WP-29 are evidence-ready/i);
+  assert.match(html, /WP-00 through WP-31 are implemented/i);
+  assert.match(html, /G-01 also remains blocked until HP-01 and a production D1 binding exist/i);
   assert.match(html, /WP-22 remains warning-only pending anchors, gold evidence and critic qualification/i);
   assert.match(html, /WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command/i);
   assert.match(html, /WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command/i);

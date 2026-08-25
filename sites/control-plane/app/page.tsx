@@ -22,6 +22,8 @@ const workPackages = [
   { id: "WP-15", name: "Aligner Calibration", status: "Evidence", detail: "Pinned calibration harness is merged. The phoneme gate remains warning-only until 10–15 real human-reader samples establish the error floor." },
   { id: "WP-16", name: "Truth Layer", status: "Complete", detail: "Source tiers, critical-claim enforcement, deterministic numeric parsing and bilingual advice lint now pass CI." },
   { id: "WP-17", name: "Intelligence & Anti-copy", status: "Complete", detail: "Audience jobs, freshness and four-dimensional anti-copy primitives are deterministic; differentiation remains measurement-only until calibrated." },
+  { id: "WP-18", name: "Creative Layer", status: "Complete", detail: "Creative routes, story contracts, prediction sealing and claim-bound script controls now pass deterministic acceptance." },
+  { id: "WP-19", name: "Design Layer", status: "Complete", detail: "Channel identity, voice inheritance, visual routing and ambience-only soundscape controls are sealed fail-closed." },
   { id: "WP-20", name: "ShotCueProgram Compiler", status: "Complete", detail: "Stage 08 now compiles exact full-duration timelines with interval-tree lint, three claim-bound assertions per shot and no fixed shot-count gate." },
   { id: "WP-21", name: "Media Layer", status: "Complete", detail: "Stage 09–13 now enforce pre-byte rights eligibility, render-once composition, stitched narration, two-pass audio, OTIO edit evidence and archival-parent masters in PROFILE=REDUCED." },
   { id: "WP-22", name: "Assurance Panel", status: "Evidence", detail: "MSR-02/MSR-03 now enforce blind PROFILE critics, M0/M1-before-M2, borderline median and variance requalification. HARD_GATE waits for 36 human anchors, a ready gold set and qualified critics." },
@@ -32,7 +34,18 @@ const workPackages = [
   { id: "WP-27", name: "Evolution Pipeline", status: "Complete", detail: "Structural strictness audit, qualification shadow replay, five-part evidence bundles, exact owner-command promotion binding and one-key rollback are enforced fail-closed." },
   { id: "WP-28", name: "Human Evidence", status: "Activation", detail: "Editorial Imprint, the 300-minute attention ceiling and reproducible evidence reports are merged; activation waits for an explicit real-human allowlist identity." },
   { id: "WP-29", name: "Policy Defense · Minimum", status: "Complete", detail: "PC1–PC8, disclosure default-on, incident freeze/unfreeze and policy-watch diff controls are enforced fail-closed." },
+  { id: "WP-30", name: "Failure Mining", status: "Complete", detail: "Rejected masters, escaped defects, repeated gate failures and quarantine clusters now feed only gold samples or tighten-only evolution proposals." },
+  { id: "WP-31", name: "OPERATE Mode Harness", status: "Complete", detail: "Daily orphan, FAIL, spend and incident triage plus append-only OPS-LOG auditing now pass CI without automatic state writes." },
 ];
+
+const trackGChecks = [
+  { label: "Required work packages", state: "PASS", detail: "WP-12B, WP-16, WP-17 and minimum WP-28/WP-29 are implemented." },
+  { label: "Profile and cost controls", state: "PASS", detail: "PROFILE=REDUCED · $30/video · $350 Track G · disclosure ON · ambience only." },
+  { label: "HP-01 niche decision", state: "BLOCKED", detail: "No Track G niche selection is sealed in the canonical V2 repository." },
+  { label: "Production state store", state: "BLOCKED", detail: "The control-plane has no D1 binding; channel records cannot be persisted truthfully." },
+  { label: "Human and voice evidence", state: "BLOCKED", detail: "Real-human allowlist identity and qualified voice fingerprint evidence are absent." },
+  { label: "Media execution", state: "G-02 BLOCK", detail: "Fly.io production deployment credentials remain unavailable for the first end-to-end video." },
+] as const;
 
 const controls = [
   ["GitHub main", "Only canonical source"],
@@ -52,7 +65,7 @@ export default function Home() {
           <span><strong>YouTube AI Factory</strong><small>V2 · Control Plane</small></span>
         </a>
         <div className="topbar-actions">
-          <span className="mode-pill"><i /> BUILD</span>
+          <span className="mode-pill"><i /> G-01 PREFLIGHT</span>
           <a className="repo-link" href={repositoryUrl} target="_blank" rel="noreferrer">Open canonical repository</a>
         </div>
       </header>
@@ -67,8 +80,8 @@ export default function Home() {
         <div className="hero-grid">
           <section className="hero-card">
             <p className="eyebrow">FACTORY FOUNDATION</p>
-            <h1>Build a factory that can survive any AI handoff.</h1>
-            <p className="hero-copy">Research, production, measurement and improvement will evolve here, while identity, policy and human control remain fail-closed.</p>
+            <h1>Move from build-complete to evidence-backed activation.</h1>
+            <p className="hero-copy">The factory foundation is implemented. Track G starts only when channel identity, human evidence and production state can be proven—not inferred.</p>
             <div className="hero-actions">
               <a className="primary-action" href="#roadmap">View build state</a>
               <a className="secondary-action" href="#continuity">Review continuity contract</a>
@@ -98,13 +111,33 @@ export default function Home() {
           <article><strong>7</strong><span>Human touchpoints</span><small>quality + policy control</small></article>
         </section>
 
+        <section className="panel track-g-panel" id="track-g" aria-labelledby="track-g-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">TRACK G · G-01</p><h2 id="track-g-title">Activation preflight</h2></div>
+            <span className="blocked-badge">BLOCKED · FAIL-CLOSED</span>
+          </div>
+          <p className="track-g-intro">G-01 may prepare one channel at <code>PROFILE=REDUCED</code>, but it cannot seal or persist production identity until every blocking evidence item is real.</p>
+          <div className="readiness-grid">
+            {trackGChecks.map((check) => (
+              <article className={`readiness-item ${check.state === "PASS" ? "pass" : "blocked"}`} key={check.label}>
+                <div><strong>{check.label}</strong><span>{check.state}</span></div>
+                <p>{check.detail}</p>
+              </article>
+            ))}
+          </div>
+          <div className="activation-rule" role="note">
+            <strong>Activation rule</strong>
+            <p>No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created. The next valid state is a sealed HP-01 decision plus real bindings and evidence.</p>
+          </div>
+        </section>
+
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 · Evolution pipeline implemented</h2></div>
-              <span className="progress-label">25 evidence-ready · 29 implemented / 33</span>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 complete · Track G preflight</h2></div>
+              <span className="progress-label">29 activation-ready · 33 implemented / 33</span>
             </div>
-            <div className="progress-track" aria-label="25 of 33 work packages evidence-ready; 29 implemented"><span style={{ width: "75.76%" }} /></div>
+            <div className="progress-track" aria-label="29 of 33 work packages activation-ready; 33 implemented"><span style={{ width: "87.88%" }} /></div>
             <div className="work-list">
               {workPackages.map((item) => (
                 <article className="work-item" key={item.id}>
@@ -126,7 +159,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-16, WP-17, WP-20, WP-21, WP-23, WP-24, WP-25, WP-26, WP-27 and minimum WP-29 are evidence-ready. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
+              <p>WP-00 through WP-31 are implemented, including WP-30 failure mining and the WP-31 OPERATE harness. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. G-01 also remains blocked until HP-01 and a production D1 binding exist. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
             </div>
             <div className="operator-proof" aria-label="WP-25 operator display contract">
               <div className="operator-proof-heading"><strong>OPS-02 DISPLAY CONTRACT</strong><span>IMPLEMENTED</span></div>
