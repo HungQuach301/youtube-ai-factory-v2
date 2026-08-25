@@ -41,10 +41,55 @@ const workPackages = [
 const trackGChecks = [
   { label: "Required work packages", state: "PASS", detail: "WP-12B, WP-16, WP-17 and minimum WP-28/WP-29 are implemented." },
   { label: "Profile and cost controls", state: "PASS", detail: "PROFILE=REDUCED · $30/video · $350 Track G · disclosure ON · ambience only." },
-  { label: "HP-01 niche decision", state: "BLOCKED", detail: "No Track G niche selection is sealed in the canonical V2 repository." },
+  { label: "HP-01 niche decision", state: "PASS", detail: "AI-Era Money Defense was owner-approved on 2026-08-25 and sealed in the canonical V2 repository." },
   { label: "Production state store", state: "BLOCKED", detail: "The control-plane has no D1 binding; channel records cannot be persisted truthfully." },
   { label: "Human and voice evidence", state: "BLOCKED", detail: "Real-human allowlist identity and qualified voice fingerprint evidence are absent." },
   { label: "Media execution", state: "G-02 BLOCK", detail: "Fly.io production deployment credentials remain unavailable for the first end-to-end video." },
+] as const;
+
+const nicheCandidates = [
+  { name: "AI-Era Money Defense", score: 90, status: "CHAMPION", detail: "Highest combined demand, differentiation, faceless fit and durable evidence potential." },
+  { name: "Digital Credit & BNPL Decoder", score: 85, status: "RUNNER-UP", detail: "Strong monetization and visual fit; narrower topic ceiling and higher advice risk." },
+  { name: "Cash-Flow Resilience Lab", score: 84, status: "RUNNER-UP", detail: "Evergreen household need, but crowded and harder to differentiate without advice." },
+  { name: "AI Workflow ROI for Non-Tech Workers", score: 81, status: "ALTERNATE", detail: "Large demand and B2B value, offset by fast decay and intense tutorial competition." },
+  { name: "AI Money-Management Tool Reviews", score: 77, status: "ALTERNATE", detail: "Good advertiser fit, but freshness cost and affiliate trust risk reduce durability." },
+] as const;
+
+const episodes = [
+  "The Bank Fraud Alert That Sends Your Money to the Scammer",
+  "Your Boss’s Voice Is Real. The Payment Request Isn’t",
+  "The Wrong Number Text: Inside a 30-Day Scam Funnel",
+  "Why Instant Payments Are So Hard to Reverse",
+  "The AI Investment Ad That Never Existed",
+  "From Data Breach to Perfect Impersonation",
+  "The Fake Job That Turns You Into a Money Mule",
+  "The Family Emergency Call and the Voice-Clone Trap",
+  "The “Safe Account” Lie: How Bank Impersonation Hijacks Trust",
+  "The 10-Minute Verification Routine Before Moving Money",
+] as const;
+
+const evidence = [
+  {
+    metric: "20% · $56B",
+    label: "US household fraud exposure",
+    detail: "20% experienced financial fraud or scams; estimated net non-card fraud loss was $56B in 2025.",
+    source: "Federal Reserve",
+    href: "https://www.federalreserve.gov/publications/2026-economic-well-being-of-us-households-in-2025-banking.htm",
+  },
+  {
+    metric: "$16B · $3.5B",
+    label: "Reported fraud and imposter loss",
+    detail: "Reported fraud losses reached about $16B; imposter scams accounted for $3.5B in 2025.",
+    source: "Federal Trade Commission",
+    href: "https://www.ftc.gov/news-events/news/press-releases/2026/06/ftc-data-show-people-reported-losing-3-point-5-billion-imposter-scams-2025",
+  },
+  {
+    metric: "68%",
+    label: "AI-scam concern",
+    detail: "68% of Americans expect increased AI use to make online scams and attacks more common.",
+    source: "Pew Research Center",
+    href: "https://www.pewresearch.org/internet/2025/07/31/online-scams-and-attacks-in-america-today/",
+  },
 ] as const;
 
 const controls = [
@@ -65,7 +110,7 @@ export default function Home() {
           <span><strong>YouTube AI Factory</strong><small>V2 · Control Plane</small></span>
         </a>
         <div className="topbar-actions">
-          <span className="mode-pill"><i /> G-01 PREFLIGHT</span>
+          <span className="mode-pill"><i /> G-01 DECISION SEALED</span>
           <a className="repo-link" href={repositoryUrl} target="_blank" rel="noreferrer">Open canonical repository</a>
         </div>
       </header>
@@ -83,7 +128,7 @@ export default function Home() {
             <h1>Move from build-complete to evidence-backed activation.</h1>
             <p className="hero-copy">The factory foundation is implemented. Track G starts only when channel identity, human evidence and production state can be proven—not inferred.</p>
             <div className="hero-actions">
-              <a className="primary-action" href="#roadmap">View build state</a>
+              <a className="primary-action" href="#g01-decision">View approved channel</a>
               <a className="secondary-action" href="#continuity">Review continuity contract</a>
             </div>
           </section>
@@ -111,12 +156,27 @@ export default function Home() {
           <article><strong>7</strong><span>Human touchpoints</span><small>quality + policy control</small></article>
         </section>
 
-        <section className="panel track-g-panel" id="track-g" aria-labelledby="track-g-title">
+        <section className="panel track-g-panel" id="g01-decision" aria-labelledby="track-g-title">
           <div className="section-heading">
-            <div><p className="eyebrow">TRACK G · G-01</p><h2 id="track-g-title">Activation preflight</h2></div>
-            <span className="blocked-badge">BLOCKED · FAIL-CLOSED</span>
+            <div><p className="eyebrow">TRACK G · G-01</p><h2 id="track-g-title">HP-01 decision & channel strategy</h2></div>
+            <span className="decision-badge">HP-01 SEALED · ACTIVATION BLOCKED</span>
           </div>
-          <p className="track-g-intro">G-01 may prepare one channel at <code>PROFILE=REDUCED</code>, but it cannot seal or persist production identity until every blocking evidence item is real.</p>
+          <p className="track-g-intro">The owner has selected a new niche for the US market. Strategy deliverables are canonical; production persistence remains fail-closed until real bindings and evidence exist.</p>
+
+          <div className="decision-hero">
+            <div>
+              <span className="decision-stamp">OWNER APPROVED · 2026-08-25</span>
+              <h3>AI-Era Money Defense</h3>
+              <p>Evidence-led, faceless explainers showing how AI, social engineering and digital payment systems are used to take household money—and the verification habits that interrupt the loss—without personalized financial or investment advice.</p>
+            </div>
+            <dl>
+              <div><dt>Market</dt><dd>United States · English (en-US)</dd></div>
+              <div><dt>Audience</dt><dd>Adults 30–55 managing household money and supporting aging parents</dd></div>
+              <div><dt>Format</dt><dd>Premium faceless documentary / explainer</dd></div>
+              <div><dt>Viewer promise</dt><dd>“See the trap before it touches your money.”</dd></div>
+            </dl>
+          </div>
+
           <div className="readiness-grid">
             {trackGChecks.map((check) => (
               <article className={`readiness-item ${check.state === "PASS" ? "pass" : "blocked"}`} key={check.label}>
@@ -127,14 +187,77 @@ export default function Home() {
           </div>
           <div className="activation-rule" role="note">
             <strong>Activation rule</strong>
-            <p>No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created. The next valid state is a sealed HP-01 decision plus real bindings and evidence.</p>
+            <p>HP-01 is sealed in GitHub. No placeholder channel, owner identity, signature, voice, D1 record or production evidence may be created; D1, real-human and voice evidence remain mandatory.</p>
           </div>
+        </section>
+
+        <section className="g01-grid" aria-label="G-01 approved deliverables">
+          <article className="panel ranking-panel">
+            <div className="section-heading">
+              <div><p className="eyebrow">NICHE DISCOVERY OUTCOME</p><h2>Evidence-weighted comparison</h2></div>
+              <span className="verified-badge">5 CANDIDATES</span>
+            </div>
+            <p className="section-copy">Weighted across viewer attraction, competition, differentiation, monetization, faceless feasibility, expertise fit, evergreen potential and production cost.</p>
+            <div className="candidate-list">
+              {nicheCandidates.map((candidate, index) => (
+                <div className={`candidate-row ${index === 0 ? "champion" : ""}`} key={candidate.name}>
+                  <span className="candidate-rank">{String(index + 1).padStart(2, "0")}</span>
+                  <div><strong>{candidate.name}</strong><p>{candidate.detail}</p></div>
+                  <span className="candidate-status">{candidate.status}</span>
+                  <b>{candidate.score}</b>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <aside className="panel identity-panel">
+            <div className="section-heading">
+              <div><p className="eyebrow">CHANNEL IDENTITY CONTRACT v1</p><h2>Approved strategy source</h2></div>
+            </div>
+            <span className="persistence-badge">APPROVED SOURCE · PERSISTENCE PENDING</span>
+            <dl className="identity-list">
+              <div><dt>Positioning</dt><dd>Calm, evidence-first money defense—not scam-baiting entertainment</dd></div>
+              <div><dt>Visual DNA</dt><dd>Transaction maps, scam funnels, timelines, annotated evidence and voice-clone comparisons</dd></div>
+              <div><dt>Voice</dt><dd>Precise, investigative, respectful and never victim-shaming</dd></div>
+              <div><dt>Safety</dt><dd>No personalized advice, no speculative claims and no reusable criminal instructions</dd></div>
+              <div><dt>Controls</dt><dd>REDUCED · $30/video · $350 Track G · sampling OFF · freeze OFF · disclosure ON · ambience_only</dd></div>
+            </dl>
+            <p className="exclusion-note"><strong>Legacy exclusion</strong> Hidden Systems Behind Money is not imported into this V2 channel decision.</p>
+          </aside>
+        </section>
+
+        <section className="panel evidence-panel" aria-labelledby="evidence-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">MARKET & AUDIENCE EVIDENCE</p><h2 id="evidence-title">Why this niche can win</h2></div>
+            <span className="verified-badge">PRIMARY SOURCES</span>
+          </div>
+          <div className="evidence-grid">
+            {evidence.map((item) => (
+              <article key={item.source}>
+                <strong>{item.metric}</strong><span>{item.label}</span><p>{item.detail}</p>
+                <a href={item.href} target="_blank" rel="noreferrer">{item.source} ↗</a>
+              </article>
+            ))}
+          </div>
+          <p className="conditions"><strong>Conditions to win</strong> Use primary-source claim graphs; begin with a familiar financial action; visualize the complete scam and payment flow; separate evergreen mechanism explainers from fast-decay news; preserve anti-copy controls; end with a durable verification mental model.</p>
+        </section>
+
+        <section className="panel queue-panel" aria-labelledby="queue-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">FIRST PILLAR · APPROVED DELIVERABLE</p><h2 id="queue-title">How Modern Money Traps Work</h2></div>
+            <span className="verified-badge">10 episodes queued</span>
+          </div>
+          <ol className="episode-grid">
+            {episodes.map((episode, index) => (
+              <li key={episode}><span>{String(index + 1).padStart(2, "0")}</span><strong>{episode}</strong></li>
+            ))}
+          </ol>
         </section>
 
         <section className="section-grid" id="roadmap">
           <div className="panel roadmap-panel">
             <div className="section-heading">
-            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 complete · Track G preflight</h2></div>
+            <div><p className="eyebrow">CURRENT BUILD STATE</p><h2>Phase 5 complete · G-01 decision sealed</h2></div>
               <span className="progress-label">29 activation-ready · 33 implemented / 33</span>
             </div>
             <div className="progress-track" aria-label="29 of 33 work packages activation-ready; 33 implemented"><span style={{ width: "87.88%" }} /></div>
@@ -159,7 +282,7 @@ export default function Home() {
             </ul>
             <div className="foundation-boundary" role="note">
               <strong>CONTROLLED EXECUTION</strong>
-              <p>WP-00 through WP-31 are implemented, including WP-30 failure mining and the WP-31 OPERATE harness. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. G-01 also remains blocked until HP-01 and a production D1 binding exist. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
+              <p>WP-00 through WP-31 are implemented, including WP-30 failure mining and the WP-31 OPERATE harness. WP-14/15 await real calibration evidence; WP-22 remains warning-only pending anchors, gold evidence and critic qualification; WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command; WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command; WP-28 awaits an explicit human allowlist identity. HP-01 is sealed in GitHub; G-01 activation still requires a production D1 binding, real-human identity and qualified voice evidence. YouTube transport and production provider dispatch remain locked until activation evidence exists.</p>
             </div>
             <div className="operator-proof" aria-label="WP-25 operator display contract">
               <div className="operator-proof-heading"><strong>OPS-02 DISPLAY CONTRACT</strong><span>IMPLEMENTED</span></div>
