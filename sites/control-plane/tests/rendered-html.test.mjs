@@ -128,7 +128,9 @@ test("renders the authenticated Production operator surface", async () => {
   const html = await response.text();
   assert.equal(response.status, 200);
   assert.match(html, /PRODUCTION WORKING SURFACE/i);
+  assert.match(html, /OPERATE · G-01A2/i);
   assert.match(html, /Command the factory/i);
+  assert.match(html, /ChatGPT MCP connection/i);
   assert.match(html, /Run PREPARE_CHANNEL/i);
   assert.match(html, /D1 WRITE/i);
   assert.match(html, /append-only receipt/i);
