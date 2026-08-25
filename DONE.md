@@ -1009,3 +1009,30 @@ WP-27 triển khai harness và lớp cưỡng chế trong BUILD. Không có prop
 
 Không tạo owner identity, chữ ký, shadow evidence hoặc promotion giả; không sửa
 ngưỡng production, không dispatch provider, không tạo spend và không bật publish.
+
+
+---
+
+## WP-30 · LRN-04 Failure Mining + Learning Scope
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Rejected master có HP-04 cấu trúc thành gold sample trong cùng lần chạy | `mineRejection` + fixture kiểm source, namespace, ground truth và zero provider cost |
+| Escaped defect tạo gold + proposal; P0 cờ requalify critic | `mineEscapedDefects` bind assurance PASS với evidence phát hiện và SLA 48 giờ |
+| Gate FAIL lặp chỉ tạo proposal khi đạt ngưỡng, đo được và có stage sớm hơn | `mineRepeatedFailures` đọc `OPS.GATE_FAIL_REPEAT_TO_LRN04`, chặn ID trùng |
+| Quarantine cluster chỉ đề xuất trên 20% và chưa có lint xác định | `mineQuarantine` đọc threshold SSOT, chặn ID trùng |
+| LRN-04 không có đường ghi ngoài hai bảng | Union type cố định + `allowedTables=['gold_sample','evolution_proposal']`; không export persistence adapter |
+| PORTFOLIO không thể nâng từ một kênh hoặc learning giả PROMOTED | Migration `0015` yêu cầu ≥2 channel độc lập, cùng finding/direction/STRUCTURE và promotion record |
+| Mined writes giữ namespace và không nới chuẩn | Trigger `trg_lrn04_gold_namespace` + `trg_lrn04_proposal_boundary` |
+| Migration tái lập | `0015-failure-mining.test.mjs` chạy UP/DOWN ×2 |
+
+## Ranh giới
+
+WP-30 chỉ khai thác evidence đã tồn tại và phát sinh kế hoạch INSERT vào
+`gold_sample` hoặc `evolution_proposal`. Không gọi provider, không tạo spend,
+không ghi production data, không tự promote learning/evolution và không thay đổi
+ChannelIdentityContract xuyên kênh.
