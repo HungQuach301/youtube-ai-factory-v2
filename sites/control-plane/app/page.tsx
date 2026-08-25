@@ -1,5 +1,8 @@
+import Link from "next/link";
 import sourceLock from "../source-lock.json";
+import { requireChatGPTUser } from "./chatgpt-auth";
 import { getRuntimeReadiness } from "./operator-runtime";
+import { requireOwner } from "./operator-runtime";
 
 const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 
@@ -102,6 +105,8 @@ const controls = [
 ];
 
 export default async function Home() {
+  const user = await requireChatGPTUser("/");
+  requireOwner(user);
   const fingerprint = sourceLock.aggregate_sha256.slice(0, 16);
   const runtime = await getRuntimeReadiness();
   const trackGChecks = [
@@ -150,7 +155,7 @@ export default async function Home() {
             <h1>Move from build-complete to evidence-backed activation.</h1>
             <p className="hero-copy">The factory foundation is implemented. Track G starts only when channel identity, human evidence and production state can be proven—not inferred.</p>
             <div className="hero-actions">
-              <a className="primary-action" href="/operate">Open Production Operator</a>
+              <Link className="primary-action" href="/operate">Open Production Operator</Link>
               <a className="secondary-action" href="#g01-decision">View approved channel</a>
               <a className="secondary-action" href="#continuity">Review continuity contract</a>
             </div>
