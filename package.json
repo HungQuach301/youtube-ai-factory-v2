@@ -20,7 +20,8 @@
     "verify:guardrails": "node tools/verify-guardrails.mjs",
     "verify:g11": "node tools/g11-threshold-diff.mjs",
     "verify:g13": "node tools/g13-mode-guard.mjs",
-    "verify:repo": "node tools/verify-repository-identity.mjs",\n    "verify:source": "sha256sum --check docs/SOURCE_SHA256SUMS",
+    "verify:repo": "node tools/verify-repository-identity.mjs",
+    "verify:source": "sha256sum --check docs/SOURCE_SHA256SUMS",
     "ci": "pnpm verify:repo && pnpm verify:source && pnpm typecheck && pnpm test:typecheck-boundaries && pnpm lint && pnpm test:guardrails && pnpm test:unit && pnpm test:migrations && pnpm test:integration"
   },
   "devDependencies": {
