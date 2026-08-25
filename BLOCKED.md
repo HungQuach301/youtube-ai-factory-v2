@@ -114,22 +114,24 @@ Trạng thái: `OPEN — ETL/analysis harness hoàn tất, learning activation f
   được tạo promotion.
 
 
-## B-009 · Track G G-01 đã chốt HP-01; activation evidence còn thiếu
+## B-009 · Track G G-01A1 có Production command runtime; activation evidence còn thiếu
 
-Trạng thái: `PARTIALLY RESOLVED — HP-01 SEALED; ACTIVATION FAIL-CLOSED`
+Trạng thái: `PARTIALLY RESOLVED — D1 COMMAND PATH IMPLEMENTED; ACTIVATION FAIL-CLOSED`
 
-Owner phê duyệt **AI-Era Money Defense** ngày 2026-08-25; outcome, ranking,
-Channel Identity source và queue 10 video đã được seal trong canonical V2
-repository và được projection lên Production control-plane. Các blocker còn lại:
+Owner phê duyệt **AI-Era Money Defense** ngày 2026-08-25. G-01A1 bổ sung D1
+binding, authenticated Production working surface và typed `PREPARE_CHANNEL`.
+Lệnh hợp lệ persist owner identity, HP-01 decision, Channel Identity Contract,
+pillar, 10 episode, run và append-only events; outcome hợp lệ là `PREPARED`.
 
-- `sites/control-plane/.openai/hosting.json` vẫn có `d1=null`, `r2=null`;
-- chưa có real-human allowlist identity để bind các quyết định;
-- chưa có qualified production voice + fingerprint evidence; tuyệt đối không
-  dùng placeholder để seal production `ChannelIdentityContract v1`;
-- Fly.io credential/tool vẫn thiếu theo B-004, nên G-02 end-to-end tiếp tục bị chặn.
+Các blocker còn lại:
 
-Production phải hiển thị đúng `APPROVED SOURCE · PERSISTENCE PENDING`, không
-thêm mutation endpoint, không tạo D1 một phần, không phát owner command, không
-dispatch provider và không ghi production evidence giả. B-009 đóng khi D1
-binding, real-human identity và voice evidence đều được xác minh; Fly.io cần
-đóng trước G-02.
+- Hosted `FACTORY_OWNER_EMAIL` phải được cấu hình và Production D1 migration phải
+  PASS trước lần ghi đầu tiên;
+- chưa có qualified production voice + fingerprint và real calibration evidence;
+- Fly.io credential/tool vẫn thiếu theo B-004, nên G-02 end-to-end tiếp tục bị chặn;
+- MCP command surface cho ChatGPT thuộc G-01A2, chưa được tuyên bố hoàn tất.
+
+`PREPARED` không mở provider dispatch, spend, media execution hoặc publishing.
+Production chỉ được hiển thị PASS sau khi typed command commit và state được đọc
+lại từ D1; dashboard-only projection, placeholder evidence hoặc chat text không
+được dùng làm runtime truth.

@@ -7,10 +7,14 @@
 - Canonical Site source path: `sites/control-plane`
 - ChatGPT Site: `youtube-ai-factory-v2`
 - Direction: **GitHub main → ChatGPT Sites checkpoint**
+- Operational system of record: **Production D1**
 
 ChatGPT conversations, Library files, scratch workspaces, local build output and
 the Sites editor are not sources of factory truth. A change becomes valid only
 after it exists in a GitHub pull request, passes CI and is merged into `main`.
+Authenticated operational commands do not modify source: they become runtime
+truth only after the typed command, run and ordered events are committed to D1
+and read back through the Production control plane.
 
 ## Release invariant
 
@@ -24,6 +28,10 @@ A Site checkpoint is eligible only when all conditions are true:
 
 If equality cannot be proven, the deployment state is `UNVERIFIED` and factory
 mutations, provider dispatch, spending and publishing remain blocked.
+
+Source authority and runtime authority must not be conflated. GitHub governs
+what the Factory is allowed to execute; D1 records what the approved Factory
+actually executed. Chat text or a dashboard-only projection satisfies neither.
 
 ## Change protocol
 
