@@ -1036,3 +1036,29 @@ WP-30 chỉ khai thác evidence đã tồn tại và phát sinh kế hoạch INS
 `gold_sample` hoặc `evolution_proposal`. Không gọi provider, không tạo spend,
 không ghi production data, không tự promote learning/evolution và không thay đổi
 ChannelIdentityContract xuyên kênh.
+
+
+---
+
+## WP-31 · OPERATE Mode Harness
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| §0-OPS chỉ mở phiên sau khi đọc trạng thái và nêu đúng năm điều cấm | `openOperateSession` kiểm ba OPS entry gần nhất, BLOCKED, incident register và guardrail set |
+| Incident đang mở chiếm toàn bộ phiên | Session start + daily scan fail-closed sang `POLICY_INCIDENT_RESPONSE`/halt |
+| Fixture có orphan + FAIL cho đúng báo cáo/runbook | Unit test kiểm reconcile orphan, block lease mới, propose reopen và tuyệt đối không waive |
+| Spend ≥80% cảnh báo nhưng không tự nâng ceiling | `runDailyOperationalScan` đọc `OPS.SPEND_ALERT_PCT`, yêu cầu owner decision |
+| M2 vùng biên chạy n=3 median; variance cao loại verdict | Action plan đọc `ASSURANCE.RERUN_N` và `MAX_VARIANCE` từ SSOT |
+| OPS-LOG append-only theo phiên | `formatOpsLogEntry`, `appendOpsLog`, `assertOpsLogAppend` |
+| command_log thiếu OPS-LOG bị audit phát hiện | `auditOpsLog` trả `unloggedCommandIds`; fixture có command không được log |
+| §2-OPS báo cáo tuần chỉ đọc | `buildWeeklyOwnerReport` trả `readOnly=true`, zero writes/cost |
+
+## Ranh giới
+
+WP-31 xây harness deterministic trong mode BUILD. Harness chỉ đọc snapshot và phát
+action plan; không dispatch provider, không phát owner command, không ghi production,
+không tự waive gate, không tự đổi ceiling và không sửa vùng cấm G13.
