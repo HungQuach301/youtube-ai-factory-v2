@@ -110,7 +110,7 @@ test("executes PREPARE_CHANNEL idempotently against real local D1", async () => 
 
 test("exposes owner-authorized MCP tools and persists the Production command path", async () => {
   const { mf, d1 } = await createFactoryFixture("g01a-mcp-test");
-  const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
+  const transport = new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"), {
     requestInit: { headers: ownerHeaders },
     fetch: (input, init) => mf.dispatchFetch(input, init),
   });
@@ -166,7 +166,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
 test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP calls", async () => {
   const { mf } = await createFactoryFixture("g01a-oauth-test");
   const productionOrigin = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site";
-  const resource = `${productionOrigin}/mcp`;
+  const resource = `${productionOrigin}/api/mcp`;
   const verifier = "factory-owner-pkce-verifier-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const clientId = "https://chatgpt.com/oauth/client.json";
