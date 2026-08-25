@@ -290,3 +290,89 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     await mf.dispose();
   }
 });
+
+test("accepts only the callback-bound Codex CIMD client and loopback redirect", async () => {
+  const { mf } = await createFactoryFixture("g01a-codex-oauth-test");
+  const productionOrigin = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site";
+  const resource = `${productionOrigin}/api/mcp`;
+  const callbackId = "taI8_cm2QJRi";
+  const clientId = `https://chatgpt.com/oauth/codex/${callbackId}/client.json`;
+  const redirectUri = `http://127.0.0.1:38311/callback/${callbackId}`;
+  const verifier = "codex-owner-pkce-verifier-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+
+  function authorizationUrl(candidateClientId = clientId, candidateRedirectUri = redirectUri) {
+    const url = new URL(`${productionOrigin}/oauth/authorize`);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("client_id", candidateClientId);
+    url.searchParams.set("redirect_uri", candidateRedirectUri);
+    url.searchParams.set("state", "codex-oauth-state");
+    url.searchParams.set("code_challenge", challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+    url.searchParams.set("resource", resource);
+    url.searchParams.set("scope", "factory.read factory.prepare");
+    return url;
+  }
+
+  try {
+    const consentResponse = await mf.dispatchFetch(authorizationUrl(), { headers: ownerHeaders });
+    const consentHtml = await consentResponse.text();
+    assert.equal(consentResponse.status, 200);
+    const nonce = consentHtml.match(/name="nonce" value="([A-Za-z0-9_-]+)"/)?.[1];
+    assert.ok(nonce);
+
+    const mismatchedCallback = await mf.dispatchFetch(
+      authorizationUrl(clientId, "http://127.0.0.1:38311/callback/not-the-client"),
+      { headers: ownerHeaders },
+    );
+    assert.match(await mismatchedCallback.text(), /OAUTH_REDIRECT_URI_NOT_ALLOWED/);
+
+    const lookalikeClient = await mf.dispatchFetch(
+      authorizationUrl(`https://chatgpt.com.evil.example/oauth/codex/${callbackId}/client.json`, redirectUri),
+      { headers: ownerHeaders },
+    );
+    assert.match(await lookalikeClient.text(), /OAUTH_CLIENT_NOT_ALLOWED/);
+
+    const approvalResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/authorize/approve`, {
+      method: "POST",
+      headers: { ...ownerHeaders, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ nonce }),
+      redirect: "manual",
+    });
+    assert.equal(approvalResponse.status, 303);
+    const callback = new URL(approvalResponse.headers.get("location"));
+    assert.equal(callback.origin + callback.pathname, redirectUri);
+    assert.equal(callback.searchParams.get("iss"), productionOrigin);
+    const code = callback.searchParams.get("code");
+    assert.ok(code);
+
+    const tokenResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+        resource,
+      }),
+    });
+    const token = await tokenResponse.json();
+    assert.equal(tokenResponse.status, 200);
+    assert.ok(token.access_token);
+
+    const transport = new StreamableHTTPClientTransport(new URL(resource), {
+      requestInit: { headers: { authorization: `Bearer ${token.access_token}` } },
+      fetch: (input, init) => mf.dispatchFetch(input, init),
+    });
+    const client = new Client({ name: "factory-codex-oauth-test", version: "1.0.0" });
+    await client.connect(transport);
+    const state = await client.callTool({ name: "get_factory_state", arguments: {} });
+    assert.equal(state.structuredContent.ownerAuthorized, true);
+    assert.equal(state.structuredContent.providerDispatch, "OFF");
+    await client.close();
+  } finally {
+    await mf.dispose();
+  }
+});

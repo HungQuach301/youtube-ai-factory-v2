@@ -6,6 +6,8 @@ import { getFactoryEnv } from "./runtime-env";
 export const oauthProductionOrigin = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site";
 const CHATGPT_CLIENT_ID = "https://chatgpt.com/oauth/client.json";
 const CHATGPT_REDIRECT_URI = "https://chatgpt.com/connector_platform_oauth_redirect";
+const CODEX_CLIENT_PATH = /^\/oauth\/codex\/([A-Za-z0-9_-]{8,64})\/client\.json$/;
+const CODEX_REDIRECT_PATH = /^\/callback\/([A-Za-z0-9_-]{8,64})$/;
 const SUPPORTED_SCOPES = ["factory.read", "factory.prepare"] as const;
 const AUTHORIZATION_TTL_SECONDS = 10 * 60;
 const CODE_TTL_SECONDS = 5 * 60;
@@ -120,8 +122,9 @@ export function parseAuthorizationSearchParams(
   const requestedScope = searchParams.get("scope") ?? oauthScopes.join(" ");
 
   if (responseType !== "code") throw new Error("OAUTH_UNSUPPORTED_RESPONSE_TYPE");
-  if (clientId !== CHATGPT_CLIENT_ID) throw new Error("OAUTH_CLIENT_NOT_ALLOWED");
-  if (redirectUri !== CHATGPT_REDIRECT_URI) throw new Error("OAUTH_REDIRECT_URI_NOT_ALLOWED");
+  const client = allowedOAuthClient(clientId, redirectUri);
+  if (!client.clientAllowed) throw new Error("OAUTH_CLIENT_NOT_ALLOWED");
+  if (!client.redirectAllowed) throw new Error("OAUTH_REDIRECT_URI_NOT_ALLOWED");
   if (!state || state.length > 2048) throw new Error("OAUTH_STATE_REQUIRED");
   if (challengeMethod !== "S256" || !/^[A-Za-z0-9._~-]{43,128}$/.test(codeChallenge)) {
     throw new Error("OAUTH_PKCE_S256_REQUIRED");
@@ -197,7 +200,8 @@ export async function exchangeAuthorizationCode(request: Request): Promise<Respo
   const codeVerifier = stringField(body, "code_verifier");
   const resource = stringField(body, "resource");
   if (!code || !clientId || !redirectUri || !codeVerifier || !resource) return oauthError("invalid_request");
-  if (clientId !== CHATGPT_CLIENT_ID || redirectUri !== CHATGPT_REDIRECT_URI) return oauthError("invalid_client");
+  const client = allowedOAuthClient(clientId, redirectUri);
+  if (!client.clientAllowed || !client.redirectAllowed) return oauthError("invalid_client");
   if (resource !== oauthResource(request)) return oauthError("invalid_target");
 
   const d1 = getD1();
@@ -243,7 +247,7 @@ export async function authenticateBearer(request: Request): Promise<{ user: Chat
     .bind(hashSecret(match[1])).first<StoredAccessToken>();
   const now = nowSeconds();
   if (!stored || stored.revoked_at !== null || stored.expires_at <= now) return null;
-  if (stored.client_id !== CHATGPT_CLIENT_ID || stored.resource !== oauthResource(request)) return null;
+  if (!isAllowedOAuthClientId(stored.client_id) || stored.resource !== oauthResource(request)) return null;
   requireConfiguredOwner(stored.owner_identity);
   return {
     user: { displayName: stored.owner_identity, email: stored.owner_identity, fullName: null },
@@ -257,6 +261,52 @@ function normalizeScope(value: string): Array<string> {
     throw new Error("OAUTH_INVALID_SCOPE");
   }
   return scopes;
+}
+
+function allowedOAuthClient(clientId: string, redirectUri: string): {
+  clientAllowed: boolean;
+  redirectAllowed: boolean;
+} {
+  if (clientId === CHATGPT_CLIENT_ID) {
+    return { clientAllowed: true, redirectAllowed: redirectUri === CHATGPT_REDIRECT_URI };
+  }
+
+  const callbackId = codexCallbackId(clientId);
+  if (!callbackId) return { clientAllowed: false, redirectAllowed: false };
+
+  try {
+    const redirect = new URL(redirectUri);
+    const redirectCallbackId = CODEX_REDIRECT_PATH.exec(redirect.pathname)?.[1] ?? null;
+    const port = Number(redirect.port);
+    const redirectAllowed = redirect.protocol === "http:"
+      && redirect.hostname === "127.0.0.1"
+      && Number.isInteger(port)
+      && port >= 1024
+      && port <= 65535
+      && !redirect.username
+      && !redirect.password
+      && !redirect.search
+      && !redirect.hash
+      && redirectCallbackId === callbackId;
+    return { clientAllowed: true, redirectAllowed };
+  } catch {
+    return { clientAllowed: true, redirectAllowed: false };
+  }
+}
+
+function isAllowedOAuthClientId(clientId: string): boolean {
+  return clientId === CHATGPT_CLIENT_ID || codexCallbackId(clientId) !== null;
+}
+
+function codexCallbackId(clientId: string): string | null {
+  try {
+    const client = new URL(clientId);
+    if (client.protocol !== "https:" || client.hostname !== "chatgpt.com" || client.port
+      || client.username || client.password || client.search || client.hash) return null;
+    return CODEX_CLIENT_PATH.exec(client.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function requireConfiguredOwner(identity: string): void {
