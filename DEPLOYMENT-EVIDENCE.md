@@ -1,6 +1,24 @@
 # Deployment Evidence
 
 Append-only evidence for production deployment surfaces. GitHub `main` remains
+
+
+## 2026-08-25 — ChatGPT Sites v29
+
+- Mode: `BUILD`
+- Surface: G-01A3 owner OAuth 2.1 bridge for the Production MCP command surface
+- Status: `SUCCEEDED · ACCESS_POLICY_BLOCKED`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Canonical source path: `sites/control-plane`
+- Site source commits: `a5bc7a92ec8889f5a3d03f2b64d30686956b0d4e` (OAuth bridge), `3d1b8919cb467d54d0a078202c64688056d65dad` (application owner guard)
+- Source-lock aggregate SHA-256: `2a38f228bd52766ffd1200141997beb83c53771368944bc92b0e810311d24154`
+- Versions: v28 and v29; latest deployment reached terminal status `succeeded`.
+- Verification: source lock, lint, build and 5/5 tests passed; OAuth discovery, authorization-code + PKCE, one-use code exchange, bearer MCP access and tool security metadata passed against local Workers + D1.
+- D1: all 12 expected tables exist; all 12 remain empty after deployment verification.
+- Access posture: Sites custom owner-only access retained. The platform currently intercepts unauthenticated `/.well-known/*` and `/mcp` requests before the application, so ChatGPT cannot complete discovery until the owner approves the bounded access-policy transition.
+- Application posture for that transition: `/` and `/operate` require ChatGPT sign-in plus the server-side owner allowlist; `/api/operator` is identity-gated; `/mcp` requires an owner bearer token; only OAuth discovery and token exchange are network-public.
+- Safety posture: provider dispatch OFF; production spend USD 0; auto-publish OFF; no operational or OAuth records were fabricated.
+
 the sole source of truth; deployments are derived, immutable checkpoints.
 
 

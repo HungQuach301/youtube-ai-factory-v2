@@ -6,8 +6,8 @@ test("renders the canonical-source control plane", async () => {
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
   const response = await worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    new Request("http://localhost/", { headers: { accept: "text/html", "oai-authenticated-user-email": "owner@example.com" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, FACTORY_OWNER_EMAIL: "owner@example.com" },
     { waitUntil() {}, passThroughOnException() {} },
   );
   const html = await response.text();
@@ -122,7 +122,7 @@ test("renders the authenticated Production operator surface", async () => {
         "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
       },
     }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, FACTORY_OWNER_EMAIL: "owner@example.com" },
     { waitUntil() {}, passThroughOnException() {} },
   );
   const html = await response.text();

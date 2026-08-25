@@ -93,3 +93,41 @@ export const operationEvents = sqliteTable("operation_event", {
   payloadJson: text("payload_json").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("operation_event_run_ordinal_unique").on(table.runId, table.ordinal)]);
+
+export const oauthAuthorizationRequests = sqliteTable("oauth_authorization_request", {
+  nonceHash: text("nonce_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  state: text("state").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  resource: text("resource").notNull(),
+  scope: text("scope").notNull(),
+  ownerIdentity: text("owner_identity").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  usedAt: integer("used_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const oauthAuthorizationCodes = sqliteTable("oauth_authorization_code", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  resource: text("resource").notNull(),
+  scope: text("scope").notNull(),
+  ownerIdentity: text("owner_identity").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  usedAt: integer("used_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const oauthAccessTokens = sqliteTable("oauth_access_token", {
+  tokenHash: text("token_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  resource: text("resource").notNull(),
+  scope: text("scope").notNull(),
+  ownerIdentity: text("owner_identity").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  revokedAt: integer("revoked_at"),
+  createdAt: integer("created_at").notNull(),
+});

@@ -8,6 +8,11 @@ import {
   prepareApprovedChannel,
   requireOwner,
 } from "../operator-runtime";
+import {
+  authenticateBearer,
+  bearerChallenge,
+  oauthScopes,
+} from "../oauth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +26,7 @@ const corsHeaders = {
     "Last-Event-ID",
     "MCP-Protocol-Version",
   ].join(", "),
-  "Access-Control-Expose-Headers": "Mcp-Session-Id, MCP-Protocol-Version",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id, MCP-Protocol-Version, WWW-Authenticate",
 };
 
 const factoryStateSchema = {
@@ -50,7 +55,7 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
   };
 }
 
-function createFactoryServer(user: ChatGPTUser) {
+function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
     { name: "youtube-ai-factory-v2", version: "1.0.0" },
     {
@@ -74,8 +79,10 @@ function createFactoryServer(user: ChatGPTUser) {
         idempotentHint: true,
         openWorldHint: false,
       },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
     },
     async () => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
       const state = publicFactoryState(await getOperatorSnapshot(user));
       return {
         content: [{ type: "text", text: JSON.stringify(state) }],
@@ -118,8 +125,10 @@ function createFactoryServer(user: ChatGPTUser) {
         idempotentHint: true,
         openWorldHint: false,
       },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
     },
     async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
       const idempotencyKey = createHash("sha256")
         .update(`PREPARE_CHANNEL|HP-01|${objective.trim()}`)
         .digest("hex");
@@ -147,6 +156,15 @@ function createFactoryServer(user: ChatGPTUser) {
   return server;
 }
 
+function authenticationToolError(request: Request, scope: string) {
+  const challenge = bearerChallenge(request, "insufficient_scope", `Permission ${scope} is required`);
+  return {
+    content: [{ type: "text" as const, text: `Authentication required: ${scope}.` }],
+    _meta: { "mcp/www_authenticate": [challenge] },
+    isError: true,
+  };
+}
+
 function errorResponse(error: unknown): Response {
   const message = error instanceof Error ? error.message : "UNEXPECTED_MCP_ERROR";
   const status = message.includes("AUTHORIZATION") || message.includes("ALLOWLIST") ? 403 : 500;
@@ -158,25 +176,30 @@ function errorResponse(error: unknown): Response {
 
 async function handleMcp(request: Request): Promise<Response> {
   try {
-    const user = await getChatGPTUser();
+    const chatGPTUser = await getChatGPTUser();
+    const bearerIdentity = chatGPTUser ? null : await authenticateBearer(request);
+    const user = chatGPTUser ?? bearerIdentity?.user ?? null;
     if (!user) {
+      const headers = new Headers(corsHeaders);
+      headers.set("WWW-Authenticate", bearerChallenge(request));
       return Response.json(
         {
           jsonrpc: "2.0",
           error: { code: -32001, message: "CHATGPT_SIGN_IN_REQUIRED" },
           id: null,
         },
-        { status: 401, headers: corsHeaders },
+        { status: 401, headers },
       );
     }
     requireOwner(user);
+    const grantedScopes = chatGPTUser ? new Set(oauthScopes) : bearerIdentity?.scopes ?? new Set<string>();
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    const server = createFactoryServer(user);
+    const server = createFactoryServer(user, grantedScopes, request);
     await server.connect(transport);
-    const response = await transport.handleRequest(request);
+    const response = await addToolSecuritySchemes(await transport.handleRequest(request));
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
     return new Response(response.body, {
@@ -187,6 +210,29 @@ async function handleMcp(request: Request): Promise<Response> {
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+async function addToolSecuritySchemes(response: Response): Promise<Response> {
+  if (!response.headers.get("content-type")?.includes("application/json")) return response;
+  const payload = await response.clone().json().catch(() => null) as {
+    result?: { tools?: Array<{ name?: string; securitySchemes?: Array<{ type: string; scopes: string[] }> }> };
+  } | null;
+  if (!payload?.result?.tools) return response;
+  for (const tool of payload.result.tools) {
+    if (tool.name === "get_factory_state") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "prepare_approved_channel") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  return new Response(JSON.stringify(payload), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export async function GET(request: Request) {
