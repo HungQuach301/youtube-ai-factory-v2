@@ -43,8 +43,10 @@ One idempotent command creates the following D1 records in a single batch:
 - Production read-back contains one run, four ordered events and ten episodes;
 - adversarial command-log update is rejected by the append-only trigger.
 
-## Next boundary
+## G-01A2 extension
 
-G-01A2 may expose the same command contract through a ChatGPT MCP connection.
-It must reuse this authenticated runtime and cannot introduce a parallel state
-store or bypass the owner allowlist.
+G-01A2 exposes this exact command contract through the authenticated ChatGPT MCP
+connection. It reuses the same runtime, allowlist, idempotency contract and D1
+system of record; there is no parallel state store or identity bypass.
+
+See [`G01A2-MCP-COMMAND-SURFACE.md`](G01A2-MCP-COMMAND-SURFACE.md).

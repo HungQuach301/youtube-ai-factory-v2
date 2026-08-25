@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "10517e42e61e55f8155654b8ea42748613f646f2cfe72fc8b0ad77a45c3bfd68",
+  "aggregate_sha256": "2bfff04f398e4ae2dba49e93e0c6a773bd9afbd1f72070f0795afb77d1b029f9",
   "files": [
     {
       "path": ".gitignore",
@@ -17,11 +17,15 @@
     },
     {
       "path": "G01A-PRODUCTION-COMMAND-RUNTIME.md",
-      "sha256": "045a0b156f67ab80c9364bf2f0830224c8c80ff06b2176b8e31e5016e06d496d"
+      "sha256": "1414580b37617668d7d53a684cc6c02155d3df53ba357ee85bc7da7e8718e57c"
+    },
+    {
+      "path": "G01A2-MCP-COMMAND-SURFACE.md",
+      "sha256": "5263cdf24825b80c78b003258e18645117f2ddf67524bef6477e04b1eedf4da0"
     },
     {
       "path": "README.md",
-      "sha256": "8c8fc9ad81d779b2a4427121cdb11341bb2bf90bfc7be16d1dbdb3813582e788"
+      "sha256": "d6cea53d1f0d0bf7d8f14d43e8ee686152b0f256ad78b0e8591b93087624e0fd"
     },
     {
       "path": "SSOT-CONTRACT.md",
@@ -48,12 +52,16 @@
       "sha256": "84606209c9cf86276e9e4953dcf26f72b1a78d4f2b429e286b38e85a51b1f42f"
     },
     {
+      "path": "app/mcp/route.ts",
+      "sha256": "a7b603c2e4469c067cf7969a46b217648e0c1ed35a5866daa1778ce9cc6fe94a"
+    },
+    {
       "path": "app/operate/operator-client.tsx",
       "sha256": "154eb0ba76cbde15ccbd634f2a2a26316cb2772a929f7b80f4bb3943de9523af"
     },
     {
       "path": "app/operate/page.tsx",
-      "sha256": "3aa7e276f8030234032362f5eba654fff6db1550e37ef7ab02ae0e4b2ab8751b"
+      "sha256": "38d7d33612fd74398d39e09383b96b37047ff888dc71c7020295514bf8ea3f29"
     },
     {
       "path": "app/operator-runtime.ts",
@@ -113,11 +121,11 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "283dbdf55081ff6e460baff80764f39f722f13a0720e1a5fa13153ea877051a5"
+      "sha256": "6e17245434a054d23bef46d9fc7b459e80ebde1fbd8f00d68fe0bdea405357d4"
     },
     {
       "path": "package.json",
-      "sha256": "62dc6035b8bd55bd6b03f73b744fb876cf274a1d40bbc6f4857dd05b4bf6b21c"
+      "sha256": "3069a8b7730ef2d532aeef8a99ae9c846a495a2576324df707b605912c51b602"
     },
     {
       "path": "postcss.config.mjs",
@@ -165,11 +173,11 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "ff602799e24bd70acc452f2e3a6466162c71ad5600f6e56a27cd0c960da05e86"
+      "sha256": "db49132a842aef2373c4e51cbe3ad5ad87bb94dab1800f21b5cf036ed3c26a50"
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "1e616c6aa7a45979e905bc82a26f530bd4451af17d61ba800bfeb3969625796a"
+      "sha256": "b7e430e0b82993284a12b35b0eea77b00dcf5ae1e093d7cd91e434a7ffc3a38d"
     },
     {
       "path": "tsconfig.json",
