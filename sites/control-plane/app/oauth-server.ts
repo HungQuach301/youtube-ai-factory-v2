@@ -6,6 +6,8 @@ import { getFactoryEnv } from "./runtime-env";
 export const oauthProductionOrigin = "https://youtube-ai-factory-v2.quach-hung.chatgpt.site";
 const CHATGPT_CLIENT_ID = "https://chatgpt.com/oauth/client.json";
 const CHATGPT_REDIRECT_URI = "https://chatgpt.com/connector_platform_oauth_redirect";
+const WORK_CLIENT_ID = "youtube-ai-factory-v2-work";
+const WORK_REDIRECT_URI = "http://terminal.local:44401/callback/taI8_cm2QJRi";
 const CODEX_CLIENT_PATH = /^\/oauth\/codex\/([A-Za-z0-9_-]{8,64})\/client\.json$/;
 const CODEX_REDIRECT_PATH = /^\/callback\/([A-Za-z0-9_-]{8,64})$/;
 const SUPPORTED_SCOPES = ["factory.read", "factory.prepare"] as const;
@@ -271,6 +273,10 @@ function allowedOAuthClient(clientId: string, redirectUri: string): {
     return { clientAllowed: true, redirectAllowed: redirectUri === CHATGPT_REDIRECT_URI };
   }
 
+  if (clientId === WORK_CLIENT_ID) {
+    return { clientAllowed: true, redirectAllowed: redirectUri === WORK_REDIRECT_URI };
+  }
+
   const callbackId = codexCallbackId(clientId);
   if (!callbackId) return { clientAllowed: false, redirectAllowed: false };
 
@@ -295,7 +301,7 @@ function allowedOAuthClient(clientId: string, redirectUri: string): {
 }
 
 function isAllowedOAuthClientId(clientId: string): boolean {
-  return clientId === CHATGPT_CLIENT_ID || codexCallbackId(clientId) !== null;
+  return clientId === CHATGPT_CLIENT_ID || clientId === WORK_CLIENT_ID || codexCallbackId(clientId) !== null;
 }
 
 function codexCallbackId(clientId: string): string | null {
