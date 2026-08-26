@@ -1,0 +1,117 @@
+name: media-worker-deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/media-worker/**"
+      - "packages/contracts/**"
+      - "packages/core-hash/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/media-worker-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-worker-v2-production
+  cancel-in-progress: false
+
+env:
+  FLY_APP_NAME: youtube-ai-factory-v2-media-worker-prod
+  FLY_CONFIG: packages/media-worker/fly.toml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.93
+      - name: Require scoped Fly credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [[ -z "${FLY_API_TOKEN:-}" ]]; then
+            echo "FLY_API_TOKEN is not configured" >&2
+            exit 1
+          fi
+      - name: Build and push immutable worker image
+        id: image
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          image_label="git-${GITHUB_SHA}"
+          image_tag="registry.fly.io/${FLY_APP_NAME}:${image_label}"
+          flyctl deploy . \
+            --app "$FLY_APP_NAME" \
+            --config "$FLY_CONFIG" \
+            --build-only \
+            --push \
+            --remote-only \
+            --image-label "$image_label" \
+            --yes
+          flyctl auth docker
+          digest="sha256:$(docker buildx imagetools inspect "$image_tag" --raw | sha256sum | awk '{print $1}')"
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid image digest" >&2
+            exit 1
+          fi
+          docker buildx imagetools inspect "${image_tag}@${digest}" >/dev/null
+          echo "image=${image_tag}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+      - name: Deploy the exact image digest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          IMAGE_REF: ${{ steps.image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          flyctl deploy . \
+            --app "$FLY_APP_NAME" \
+            --config "$FLY_CONFIG" \
+            --image "$IMAGE_REF" \
+            --env "MEDIA_IMAGE_DIGEST=${IMAGE_DIGEST}" \
+            --ha=false \
+            --strategy immediate \
+            --wait-timeout 10m \
+            --yes
+      - name: Read back live health and immutable digest
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          health_url="https://${FLY_APP_NAME}.fly.dev/health"
+          for attempt in $(seq 1 36); do
+            health="$(curl --fail --silent --show-error "$health_url" || true)"
+            if echo "$health" | jq --exit-status --arg digest "$IMAGE_DIGEST" \
+              '.ok == true and .imageDigest == $digest and .jobDispatchEnabled == false' >/dev/null; then
+              echo "LIVE_HEALTH_OK ${FLY_APP_NAME} ${IMAGE_DIGEST}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Live health or digest read-back failed" >&2
+          exit 1
+      - name: Prove unauthenticated live dispatch remains disabled
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /tmp/live-job-response.json --write-out '%{http_code}' \
+            --request POST --header 'content-type: application/json' --data '{}' \
+            "https://${FLY_APP_NAME}.fly.dev/jobs")"
+          test "$status" = "503"
+          jq --exit-status '.ok == false and .code == "JOB_DISPATCH_DISABLED"' \
+            /tmp/live-job-response.json >/dev/null
+      - name: Show Fly deployment status
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl status --app "$FLY_APP_NAME"
+          flyctl checks list --app "$FLY_APP_NAME"
