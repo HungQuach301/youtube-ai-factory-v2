@@ -1,4 +1,5 @@
 name: media-worker-deploy
+run-name: Media worker V2 production · ${{ github.sha }}
 
 on:
   push:
