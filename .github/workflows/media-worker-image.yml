@@ -57,3 +57,6 @@ jobs:
             echo 'D1 binding detected in media worker image' >&2
             exit 1
           fi
+      - name: Clean up test container
+        if: always()
+        run: docker rm --force factory-media-worker >/dev/null 2>&1 || true
