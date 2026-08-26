@@ -10,6 +10,7 @@ const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
 if (!IMAGE_DIGEST?.match(/^sha256:[a-f0-9]{64}$/u)) {
   throw new Error('MEDIA_IMAGE_DIGEST must be the immutable digest of the running image.')
 }
+const JOB_DISPATCH_ENABLED = process.env.MEDIA_JOB_DISPATCH_ENABLED === 'true'
 
 function run(executable, args, cwd, deadlineAt) {
   return new Promise((resolve, reject) => {
@@ -111,11 +112,19 @@ async function processJob(message) {
 
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
-    response.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}')
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
+      ok: true,
+      imageDigest: IMAGE_DIGEST,
+      jobDispatchEnabled: JOB_DISPATCH_ENABLED,
+    }))
     return
   }
   if (request.method !== 'POST' || request.url !== '/jobs') {
     response.writeHead(404).end()
+    return
+  }
+  if (!JOB_DISPATCH_ENABLED) {
+    response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"JOB_DISPATCH_DISABLED"}')
     return
   }
   const chunks = []
