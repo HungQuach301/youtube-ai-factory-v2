@@ -1,8 +1,27 @@
-app = "youtube-ai-factory-media-worker"
+app = "youtube-ai-factory-v2-media-worker-prod"
 primary_region = "sin"
 
 [build]
   dockerfile = "packages/media-worker/Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 1
+    hard_limit = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
 
 [[vm]]
   cpu_kind = "shared"
@@ -12,3 +31,4 @@ primary_region = "sin"
 [env]
   MEDIA_GPU = "false"
   MEDIA_WORKER_MODE = "queue"
+  MEDIA_JOB_DISPATCH_ENABLED = "false"
