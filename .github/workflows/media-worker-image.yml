@@ -1,4 +1,5 @@
 name: media-worker-image
+run-name: Media worker image · PR #${{ github.event.pull_request.number }} · ${{ github.sha }}
 
 on:
   pull_request:
