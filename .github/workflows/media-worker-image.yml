@@ -1,4 +1,5 @@
 name: media-worker-image
+run-name: Media worker image · PR #${{ github.event.pull_request.number }} · ${{ github.sha }}
 
 on:
   pull_request:
@@ -12,6 +13,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: media-worker-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   image:
@@ -29,14 +34,29 @@ jobs:
             --env MEDIA_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
             --publish 18080:8080 factory-media-worker:test
           for attempt in $(seq 1 20); do
-            if curl --fail --silent http://127.0.0.1:18080/health; then exit 0; fi
+            health="$(curl --fail --silent http://127.0.0.1:18080/health || true)"
+            if echo "$health" | jq --exit-status \
+              '.ok == true and .jobDispatchEnabled == false and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
+              exit 0
+            fi
             sleep 1
           done
           docker logs factory-media-worker
           exit 1
+      - name: Prove live job dispatch is fail-closed by default
+        run: |
+          status="$(curl --silent --output /tmp/media-job-response.json --write-out '%{http_code}' \
+            --request POST --header 'content-type: application/json' --data '{}' \
+            http://127.0.0.1:18080/jobs)"
+          test "$status" = "503"
+          jq --exit-status '.ok == false and .code == "JOB_DISPATCH_DISABLED"' \
+            /tmp/media-job-response.json >/dev/null
       - name: Negative D1 capability check
         run: |
           if docker inspect factory-media-worker --format '{{json .Config.Env}}' | grep -Eq '(^|[^A-Z])D1([^A-Z]|$)'; then
             echo 'D1 binding detected in media worker image' >&2
             exit 1
           fi
+      - name: Clean up test container
+        if: always()
+        run: docker rm --force factory-media-worker >/dev/null 2>&1 || true
