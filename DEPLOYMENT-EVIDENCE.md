@@ -1,5 +1,22 @@
 # Deployment Evidence
 
+## 2026-08-27 — Fly.io Media Worker Production qualification
+
+- Mode: `BUILD`
+- Work package: WP-12 / EXE-04 Media Worker Runtime
+- Status: `SUCCEEDED · QUALIFIED · READY`
+- App: `youtube-ai-factory-v2-media-worker-prod`
+- Region/runtime: Fly.io Machines, `sin`, shared CPU, 1 GiB RAM, CPU-only
+- Canonical merge commit: `4fced0dd1adbb77461000d0f90a2c9a85d8d2198`
+- Immutable image digest: `sha256:03742f4b5a882fb9791ee49a5d2a384c318e40329c6bac221af23bc9f8fe07d7`
+- Machine/read-back: `48ee742b377758`, version 1, 1/1 check passing
+- GitHub evidence: image qualification run 33085036691; Production deployment run 33086046765
+- Live health: `{"ok":true,"imageDigest":"sha256:03742f4b5a882fb9791ee49a5d2a384c318e40329c6bac221af23bc9f8fe07d7","jobDispatchEnabled":false}`
+- Negative boundary: unauthenticated `POST /jobs` returned `503 JOB_DISPATCH_DISABLED`; image qualification proved no D1 binding.
+- Determinism: five isolated stateless worker fixtures returned the same output SHA-256 and frame MD5.
+- Cost posture: scale-to-zero remains enabled; this checkpoint made no provider call and created no media job spend.
+- Safety posture: provider dispatch OFF; job dispatch OFF; auto-publish OFF; no Production D1 mutation.
+
 Append-only evidence for production deployment surfaces. GitHub `main` remains
 
 
