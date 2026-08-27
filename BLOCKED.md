@@ -143,3 +143,19 @@ Các blocker activation còn lại:
 `PREPARED` không mở provider dispatch, spend, job dispatch, media execution hoặc
 publishing. Provider dispatch và auto-publish tiếp tục `OFF` cho tới khi các
 hard gate evidence còn lại PASS.
+
+---
+
+## B-010 · Qualified voice fingerprint provider evidence chưa hiện diện
+
+Trạng thái: `OPEN — G-02A CONTRACT COMPLETE; PRODUCTION FAIL-CLOSED`
+
+- Harness hiện cưỡng chế exact channel/voice/model/settings hash, mẫu chuẩn đúng
+  30 giây, audio + embedding checksum và đủ tám audio-archetype binding
+  `QUALIFIED` trong namespace `qualification`.
+- Chưa có TTS provider credential, production voice ID/model/settings đã chọn,
+  audio mẫu thật, embedding thật hoặc capability qualification run thật.
+- Unit fixture không được dùng làm Production evidence. Blocker
+  `qualified_voice_fingerprint` chỉ được đóng sau provider dispatch qua Cost
+  Reservation, evidence R2 read-back và capability registry PASS.
+- Provider dispatch, job dispatch và auto-publish tiếp tục `OFF`.
