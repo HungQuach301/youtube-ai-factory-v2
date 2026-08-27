@@ -164,20 +164,27 @@ async function transportError(response: Response): Promise<ElevenLabsTtsTranspor
   return new ElevenLabsTtsTransportError(response.status, providerStatus, message)
 }
 
+export function classifyElevenLabsTtsHttpError(
+  httpStatus: number,
+  providerStatus: string | null,
+): ErrorClass {
+  const status = providerStatus?.toLowerCase() ?? ''
+  if (status.includes('quota')) return 'BUDGET_DENIED'
+  if (status.includes('policy') || status.includes('content')) return 'CONTENT_FILTERED'
+  if (httpStatus === 429) return 'RATE_LIMIT'
+  if (httpStatus >= 500) return 'TRANSIENT'
+  if (httpStatus === 403 || httpStatus === 451) return 'RIGHTS_DENIED'
+  if (httpStatus === 400 || httpStatus === 404 || httpStatus === 422) {
+    return 'SCHEMA_VIOLATION'
+  }
+  return 'PROVIDER_ERROR'
+}
+
 function classify(error: unknown): ErrorClass {
   if (error instanceof ElevenLabsTtsValidationError) return 'SCHEMA_VIOLATION'
   if (error instanceof TypeError) return 'TRANSIENT'
   if (!(error instanceof ElevenLabsTtsTransportError)) return 'PROVIDER_ERROR'
-  const status = error.providerStatus?.toLowerCase() ?? ''
-  if (status.includes('quota')) return 'BUDGET_DENIED'
-  if (status.includes('policy') || status.includes('content')) return 'CONTENT_FILTERED'
-  if (error.status === 429) return 'RATE_LIMIT'
-  if (error.status >= 500) return 'TRANSIENT'
-  if (error.status === 403 || error.status === 451) return 'RIGHTS_DENIED'
-  if (error.status === 400 || error.status === 404 || error.status === 422) {
-    return 'SCHEMA_VIOLATION'
-  }
-  return 'PROVIDER_ERROR'
+  return classifyElevenLabsTtsHttpError(error.status, error.providerStatus)
 }
 
 export function createElevenLabsTtsAdapter(
