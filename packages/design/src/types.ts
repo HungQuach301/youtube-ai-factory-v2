@@ -22,6 +22,46 @@ export const VoiceIdentitySchema = z.object({
   fingerprintDurationSec: z.number().positive(),
 }).strict()
 
+export const AUDIO_ARCHETYPES = [
+  'high_energy_hook',
+  'number_heavy_narration',
+  'dense_mechanism',
+  'authorization_clearing_settlement',
+  'long_section_continuity',
+  'causal_sfx_ambience',
+  'music_transition',
+  'silence_consequence_payoff',
+] as const
+
+export const AudioArchetypeSchema = z.enum(AUDIO_ARCHETYPES)
+
+export const VoiceFingerprintBindingSchema = z.object({
+  archetype: AudioArchetypeSchema,
+  qualificationRunId: z.string().min(1),
+  qualificationState: z.literal('QUALIFIED'),
+  qualifiedAt: z.string().min(1),
+  evidenceR2Key: z.string().min(1),
+  evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+}).strict()
+
+export const VoiceFingerprintEvidenceSchema = z.object({
+  namespace: z.literal('qualification'),
+  channelId: z.string().min(1),
+  voiceId: z.string().min(1),
+  model: z.string().min(1),
+  settingsHash: z.string().regex(/^[0-9a-f]{64}$/u),
+  capabilityId: z.string().min(1),
+  capabilityVersion: z.string().min(1),
+  audioR2Key: z.string().min(1),
+  audioSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  audioDurationSec: z.number().positive(),
+  embeddingR2Key: z.string().min(1),
+  embeddingSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  evidenceR2Key: z.string().min(1),
+  evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  bindings: z.array(VoiceFingerprintBindingSchema).length(AUDIO_ARCHETYPES.length),
+}).strict()
+
 export const ChannelIdentityInputSchema = z.object({
   channelId: z.string().min(1),
   version: z.number().int().positive(),
@@ -72,6 +112,9 @@ export const MusicCueSchema = z.object({
   assetRef: z.string().min(1).nullable(),
 }).strict()
 
+export type AudioArchetype = z.infer<typeof AudioArchetypeSchema>
+export type VoiceFingerprintBinding = z.infer<typeof VoiceFingerprintBindingSchema>
+export type VoiceFingerprintEvidence = z.infer<typeof VoiceFingerprintEvidenceSchema>
 export type ChannelIdentityInput = z.infer<typeof ChannelIdentityInputSchema>
 export type ProtectedSpan = z.infer<typeof ProtectedSpanSchema>
 export type MusicProviderEvidence = z.infer<typeof MusicProviderEvidenceSchema>

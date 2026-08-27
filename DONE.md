@@ -1116,3 +1116,32 @@ còn thiếu.
 ## Ngoài phạm vi G-01A1
 
 MCP connection từ ChatGPT thuộc G-01A2. Provider/media execution và YouTube transport không được mở bởi work package này.
+
+---
+
+## G-02A · Voice Fingerprint Qualification Contract
+
+## Mode: BUILD
+
+## Acceptance ↔ Test
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Fingerprint bind đúng channel, voice ID, model và settings hash | `packages/design/tests/design.test.ts` — settings drift bị từ chối |
+| Mẫu chuẩn đúng 30 giây | Runtime đọc `AUDIO.VOICE_FINGERPRINT_SEC`; sai duration fail-closed |
+| Audio và embedding có R2 key + SHA-256 riêng | Strict evidence schema; key phải thuộc `qual/` và không được trùng |
+| Đủ tám audio archetype | Exact set, không thiếu/không trùng; mỗi binding phải `QUALIFIED` và có run/evidence |
+| Qualification không leo sang Production | Namespace chỉ nhận `qualification`; `production` bị từ chối |
+| Evidence có content identity xác định | `fingerprintHash` tính bằng canonical hash trên toàn bộ envelope |
+
+## Trạng thái activation
+
+Contract/harness G-02A đã triển khai nhưng Production blocker chưa đóng. Chỉ được
+ghi qualified voice fingerprint sau khi provider tạo mẫu audio thật 30 giây,
+embedding thật và capability registry đọc lại đủ tám passing qualification
+binding. Fixture unit test không phải Production evidence.
+
+## Ranh giới
+
+Không gọi TTS provider, không tạo audio/embedding giả, không ghi R2/D1, không tạo
+qualification spend và không bật provider/job dispatch hoặc auto-publish.
