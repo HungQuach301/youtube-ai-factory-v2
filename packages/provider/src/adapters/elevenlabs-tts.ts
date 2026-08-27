@@ -133,14 +133,14 @@ function requestBody(config: ElevenLabsTtsConfig, request: ElevenLabsTtsRequest)
     },
   }
   if (request.previousRequestIds !== undefined && request.previousRequestIds.length > 0) {
-    body.previous_request_ids = request.previousRequestIds
+    body['previous_request_ids'] = request.previousRequestIds
   } else if (request.previousText !== undefined) {
-    body.previous_text = request.previousText
+    body['previous_text'] = request.previousText
   }
   if (request.nextRequestIds !== undefined && request.nextRequestIds.length > 0) {
-    body.next_request_ids = request.nextRequestIds
+    body['next_request_ids'] = request.nextRequestIds
   } else if (request.nextText !== undefined) {
-    body.next_text = request.nextText
+    body['next_text'] = request.nextText
   }
   return body
 }
@@ -151,11 +151,11 @@ async function transportError(response: Response): Promise<ElevenLabsTtsTranspor
   try {
     const payload: unknown = await response.json()
     if (payload !== null && typeof payload === 'object') {
-      const detail = (payload as Record<string, unknown>).detail
+      const detail = (payload as Record<string, unknown>)['detail']
       if (detail !== null && typeof detail === 'object') {
         const record = detail as Record<string, unknown>
-        if (typeof record.status === 'string') providerStatus = record.status
-        if (typeof record.message === 'string') message = record.message
+        if (typeof record['status'] === 'string') providerStatus = record['status']
+        if (typeof record['message'] === 'string') message = record['message']
       }
     }
   } catch {
