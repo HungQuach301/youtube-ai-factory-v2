@@ -1,4 +1,7 @@
-export { createElevenLabsTtsAdapter } from './adapters/elevenlabs-tts.js'
+export {
+  classifyElevenLabsTtsHttpError,
+  createElevenLabsTtsAdapter,
+} from './adapters/elevenlabs-tts.js'
 export type {
   ElevenLabsTtsConfig,
   ElevenLabsTtsDependencies,
