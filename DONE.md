@@ -550,10 +550,12 @@ typed `PRODUCE_ARTIFACT` kèm reservation, image digest và resource report.
 ## Hạ tầng và trạng thái production
 
 `fly.toml` cố định Fly.io Machines tại `sin`, shared CPU 1 vCPU, RAM 1 GiB và
-`MEDIA_GPU=false`. Image CI chứng minh build/health/boundary; production deploy
-chỉ được ghi là hoàn tất sau khi có Fly credential/tool và digest image thực tế.
-Không gọi provider trả phí, không tạo actual spend và không bật auto-publish trong
-WP-12.
+`MEDIA_GPU=false`. Production qualification ngày 2026-08-27 đã deploy exact
+digest `sha256:03742f4b5a882fb9791ee49a5d2a384c318e40329c6bac221af23bc9f8fe07d7`
+qua run 33086046765. Live health và Fly service check PASS; unauthenticated
+`POST /jobs` vẫn trả `503 JOB_DISPATCH_DISABLED`; image qualification run
+33085036691 chứng minh không có D1 binding. B-004 được đóng, còn provider dispatch,
+job dispatch và auto-publish tiếp tục OFF.
 
 ---
 

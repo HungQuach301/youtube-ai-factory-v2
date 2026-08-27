@@ -43,18 +43,26 @@ Trạng thái: `OPEN — budget confirmation CLOSED 2026-08-23; các mục còn 
 
 Ghi chú xung đột nội bộ đã được giải quyết bằng xác nhận owner ngày 2026-08-23. Không được tự nâng các trần đã xác nhận; mọi thay đổi sau này cần quyết định owner mới.
 
-## B-004 · Fly production deployment credential/tool chưa hiện diện
+## B-004 · Fly production deployment credential/tool chưa hiện diện — RESOLVED
 
-Trạng thái: `OPEN — code/image qualification vẫn tiếp tục`
+Trạng thái: `CLOSED`
+Đóng: 2026-08-27
 
-Owner đã ủy quyền production và provider/API trả phí trong các trần đã chốt. Tuy
-nhiên, phiên triển khai hiện tại không có `flyctl`, Fly connector hoặc credential
-Fly đã xác thực. Đây là thiếu capability kỹ thuật, không phải thiếu phê duyệt.
+Fly production đã được xác thực và qualification trực tiếp đã PASS cho app
+`youtube-ai-factory-v2-media-worker-prod` tại region `sin`.
 
-WP-12 vẫn được build và kiểm định bằng GitHub Actions. Không được tuyên bố Fly
-production đã deploy, không được ghi image digest giả và không được đưa secret vào
-repository. Blocker đóng khi CI image pass và một môi trường Fly được xác thực để
-deploy đúng image digest rồi health-check production.
+- PR triển khai #93, sửa Dockerfile #94 và registry read-back #95 đã merge qua CI.
+- Deployment run 33086046765 deploy exact image digest
+  `sha256:03742f4b5a882fb9791ee49a5d2a384c318e40329c6bac221af23bc9f8fe07d7`.
+- Machine `48ee742b377758` chạy 1/1 health check passing.
+- Live `/health` xác nhận `ok=true`, đúng digest và
+  `jobDispatchEnabled=false`.
+- Live unauthenticated `POST /jobs` trả `503 JOB_DISPATCH_DISABLED`.
+- Image qualification run 33085036691 chứng minh container không có D1 binding;
+  unit test giữ DoD cùng envelope trên năm stateless worker cho cùng SHA-256.
+
+Việc đóng blocker này chỉ xác nhận Media Runtime đã `QUALIFIED/READY`. Nó không
+bật provider dispatch, job dispatch, auto-publish hoặc ghi dữ liệu Production.
 
 ## B-005 · WP-12B numeric checkpoint cần owner xác nhận sau phép đo
 
