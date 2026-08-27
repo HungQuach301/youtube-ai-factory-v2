@@ -2,7 +2,7 @@ app = "youtube-ai-factory-v2-media-worker-prod"
 primary_region = "sin"
 
 [build]
-  dockerfile = "packages/media-worker/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
