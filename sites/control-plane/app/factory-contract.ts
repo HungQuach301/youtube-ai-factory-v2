@@ -40,6 +40,5 @@ export const approvedChannel = {
 
 export const activationBlockers = [
   "qualified_voice_fingerprint",
-  "fly_media_runtime",
   "critic_qualification_and_real_calibration_evidence",
 ] as const;

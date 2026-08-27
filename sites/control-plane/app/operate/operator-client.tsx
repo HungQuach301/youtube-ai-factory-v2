@@ -84,7 +84,10 @@ export default function OperatorClient() {
   }
 
   const latestRun = snapshot?.runs[0];
-  const blockers = latestRun ? JSON.parse(latestRun.blockerJson) as string[] : snapshot?.activationBlockers ?? [];
+  // blockerJson is immutable historical evidence for the PREPARE_CHANNEL run.
+  // Current readiness must come from the versioned Factory contract so a
+  // resolved infrastructure blocker does not remain active in the operator UI.
+  const blockers = snapshot?.activationBlockers ?? [];
 
   return (
     <div className="operator-layout">

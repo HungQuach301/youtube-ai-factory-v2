@@ -122,24 +122,24 @@ Trạng thái: `OPEN — ETL/analysis harness hoàn tất, learning activation f
   được tạo promotion.
 
 
-## B-009 · Track G G-01A1 có Production command runtime; activation evidence còn thiếu
+## B-009 · Track G G-01 Production command runtime; activation evidence còn thiếu
 
-Trạng thái: `PARTIALLY RESOLVED — D1 COMMAND PATH IMPLEMENTED; ACTIVATION FAIL-CLOSED`
+Trạng thái: `PARTIALLY RESOLVED — HP-01 PERSISTED/PREPARED; ACTIVATION FAIL-CLOSED`
 
-Owner phê duyệt **AI-Era Money Defense** ngày 2026-08-25. G-01A1 bổ sung D1
-binding, authenticated Production working surface và typed `PREPARE_CHANNEL`.
-Lệnh hợp lệ persist owner identity, HP-01 decision, Channel Identity Contract,
-pillar, 10 episode, run và append-only events; outcome hợp lệ là `PREPARED`.
+Owner phê duyệt **AI-Era Money Defense** ngày 2026-08-25. Production read-back hiện
+xác nhận owner được authorize, Channel Identity Contract đã `PERSISTED`, channel
+ở `PREPARED`, pillar đầu tiên và đủ 10 episode đã được ghi qua typed
+`PREPARE_CHANNEL` command.
 
-Các blocker còn lại:
+Các blocker activation còn lại:
 
-- Hosted `FACTORY_OWNER_EMAIL` phải được cấu hình và Production D1 migration phải
-  PASS trước lần ghi đầu tiên;
-- chưa có qualified production voice + fingerprint và real calibration evidence;
-- Fly.io credential/tool vẫn thiếu theo B-004, nên G-02 end-to-end tiếp tục bị chặn;
-- MCP command surface cho ChatGPT thuộc G-01A2, chưa được tuyên bố hoàn tất.
+- chưa có qualified production voice + fingerprint evidence;
+- chưa có real aligner calibration, gold-set/rubric anchors và critic
+  qualification evidence theo B-006/B-007;
+- Fly.io Media Worker đã `QUALIFIED/READY` theo B-004 và không còn là blocker
+  hiện hành. Historical `blocker_json` của PREPARE_CHANNEL vẫn được giữ bất biến;
+  current readiness đọc từ versioned Factory contract.
 
-`PREPARED` không mở provider dispatch, spend, media execution hoặc publishing.
-Production chỉ được hiển thị PASS sau khi typed command commit và state được đọc
-lại từ D1; dashboard-only projection, placeholder evidence hoặc chat text không
-được dùng làm runtime truth.
+`PREPARED` không mở provider dispatch, spend, job dispatch, media execution hoặc
+publishing. Provider dispatch và auto-publish tiếp tục `OFF` cho tới khi các
+hard gate evidence còn lại PASS.

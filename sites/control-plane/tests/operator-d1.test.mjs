@@ -128,6 +128,10 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(before.structuredContent.channelStatus, "NOT_PREPARED");
     assert.equal(before.structuredContent.episodeCount, 0);
     assert.equal(before.structuredContent.providerDispatch, "OFF");
+    assert.deepEqual(before.structuredContent.activationBlockers, [
+      "qualified_voice_fingerprint",
+      "critic_qualification_and_real_calibration_evidence",
+    ]);
 
     const objective = "Persist the approved AI-Era Money Defense strategy through the ChatGPT Production command surface.";
     const prepared = await client.callTool({
@@ -144,6 +148,10 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(prepared.structuredContent.episodeCount, 10);
     assert.equal(prepared.structuredContent.providerDispatch, "OFF");
     assert.equal(prepared.structuredContent.autoPublish, "OFF");
+    assert.deepEqual(prepared.structuredContent.activationBlockers, [
+      "qualified_voice_fingerprint",
+      "critic_qualification_and_real_calibration_evidence",
+    ]);
 
     const replay = await client.callTool({
       name: "prepare_approved_channel",

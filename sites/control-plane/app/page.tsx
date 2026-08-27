@@ -49,7 +49,7 @@ const staticTrackGChecks = [
   { label: "Profile and cost controls", state: "PASS", detail: "PROFILE=REDUCED · $30/video · $350 Track G · disclosure ON · ambience only." },
   { label: "HP-01 niche decision", state: "PASS", detail: "AI-Era Money Defense was owner-approved on 2026-08-25 and sealed in the canonical V2 repository." },
   { label: "Voice and calibration evidence", state: "BLOCKED", detail: "Qualified voice fingerprint and real calibration evidence are absent." },
-  { label: "Media execution", state: "G-02 BLOCK", detail: "Fly.io production deployment credentials remain unavailable for the first end-to-end video." },
+  { label: "Media runtime", state: "PASS", detail: "Fly.io Production is QUALIFIED/READY on the pinned digest; job dispatch remains safely OFF until the remaining activation gates pass." },
 ] as const;
 
 const nicheCandidates = [
