@@ -1,5 +1,27 @@
 # Deployment Evidence
 
+
+## 2026-08-27 — Sites v33 Fly readiness reconciliation
+
+- Mode: `BUILD`
+- Surface: G-01 Production control plane current-readiness projection
+- Status: `SUCCEEDED · READ-BACK VERIFIED`
+- Canonical GitHub merge: `d6cc015e29d914b672549b3b06450da53f148313` (PR #97)
+- Canonical source-lock aggregate: `3d1e901738064ef93d8f851669a28ba4af1b3f164fea8c934d69227103997920`
+- Sites mirror source commit: `37a56363c0794c1cfd3244e726d8905711d46842`
+- Sites version/deployment: v33; `appgdep_6a905b10f58c81919ef8c2da64f6989c`
+- Production URL: https://youtube-ai-factory-v2.quach-hung.chatgpt.site
+- Production MCP read-back: owner authorized; channel `PREPARED`; identity contract
+  `PERSISTED`; 10 episodes; latest run `COMPLETED`.
+- Current activation blockers: `qualified_voice_fingerprint` and
+  `critic_qualification_and_real_calibration_evidence`.
+- Historical `blocker_json` remains immutable; current readiness now reads the
+  versioned Factory contract, so resolved `fly_media_runtime` evidence is not
+  rewritten or reported as active.
+- Safety posture: provider dispatch `OFF`; job dispatch `OFF`; auto-publish
+  `OFF`; no provider call, media job, spend or Production D1 mutation.
+
+
 ## 2026-08-27 — Fly.io Media Worker Production qualification
 
 - Mode: `BUILD`
