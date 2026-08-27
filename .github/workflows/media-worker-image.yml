@@ -24,6 +24,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve Fly Dockerfile path
+        run: |
+          config_dir="packages/media-worker"
+          dockerfile="$(awk -F'"' '/^[[:space:]]*dockerfile[[:space:]]*=/ { print $2; exit }' "${config_dir}/fly.toml")"
+          test -n "$dockerfile"
+          test -f "${config_dir}/${dockerfile}"
       - name: Require immutable base image
         run: grep -Eq '^FROM .+@sha256:[a-f0-9]{64}' packages/media-worker/Dockerfile
       - name: Build worker image
