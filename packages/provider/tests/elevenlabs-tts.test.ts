@@ -1,8 +1,46 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { CapabilityId, Hex64 } from '@youtube-ai-factory/contracts'
+import type {
+  ArchetypeId,
+  CapabilityId,
+  DispatchGuardRuntime,
+  FencingToken,
+  GuardedDispatchContext,
+  Hex64,
+  PackageId,
+  ReservationId,
+  StageInstanceId,
+  TraceId,
+} from '@youtube-ai-factory/contracts'
 
-import { createElevenLabsTtsAdapter } from '../src/adapters/elevenlabs-tts.js'
+import {
+  classifyElevenLabsTtsHttpError,
+  createElevenLabsTtsAdapter,
+  guardedDispatch,
+} from '../src/index.js'
+
+const PASS_THROUGH_GUARD: DispatchGuardRuntime = {
+  async execute(_input, transport) {
+    return (await transport()).response
+  },
+}
+
+function qualificationContext(settingsHash: Hex64): GuardedDispatchContext {
+  return {
+    fencingToken: 1 as FencingToken,
+    packageId: 'voice-fingerprint-package' as PackageId,
+    stageInstanceId: 'voice-fingerprint-stage' as StageInstanceId,
+    traceId: 'voice-fingerprint-trace' as TraceId,
+    namespace: 'qualification',
+    reservationId: 'voice-fingerprint-reservation' as ReservationId,
+    portfolioRef: 'ai-era-money-defense',
+    channelRef: 'ai-era-money-defense',
+    createdAt: '2026-08-27T00:00:00.000Z',
+    expiresAt: '2026-08-27T00:05:00.000Z',
+    requestSettingsHash: settingsHash,
+    dispatchGuard: PASS_THROUGH_GUARD,
+  }
+}
 
 const CONFIG = {
   apiKey: 'secret-not-part-of-identity',
@@ -28,12 +66,12 @@ describe('ElevenLabs TTS adapter', () => {
       { status: 200, headers: { 'request-id': 'request-2' } },
     ))
     const adapter = createElevenLabsTtsAdapter(CONFIG, { fetch: fetchMock })
-    const response = await adapter.dispatch({
+    const response = await guardedDispatch(adapter, 'high-energy-hook' as ArchetypeId, {
       text: 'Settlement transfers final value.',
       previousText: 'ignored when request IDs are present',
       previousRequestIds: ['request-1'],
       nextText: 'The ledger records the consequence.',
-    }, 'a'.repeat(64) as Hex64)
+    }, qualificationContext(adapter.settingsHash))
 
     expect(response).toEqual({
       audio: new Uint8Array([1, 2, 3]),
@@ -86,18 +124,8 @@ describe('ElevenLabs TTS adapter', () => {
     [403, 'voice_not_permitted', 'RIGHTS_DENIED'],
     [400, 'quota_exceeded', 'BUDGET_DENIED'],
     [422, 'invalid_request', 'SCHEMA_VIOLATION'],
-  ] as const)('normalizes HTTP %s/%s to %s', async (status, providerStatus, expected) => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      detail: { status: providerStatus, message: 'provider rejected request' },
-    }), { status, headers: { 'content-type': 'application/json' } }))
-    const adapter = createElevenLabsTtsAdapter(CONFIG, { fetch: fetchMock })
-    let caught: unknown
-    try {
-      await adapter.dispatch({ text: 'test' }, 'b'.repeat(64) as Hex64)
-    } catch (error) {
-      caught = error
-    }
-    expect(adapter.normalizeError(caught)).toBe(expected)
+  ] as const)('normalizes HTTP %s/%s to %s', (status, providerStatus, expected) => {
+    expect(classifyElevenLabsTtsHttpError(status, providerStatus)).toBe(expected)
   })
 
   it('fails closed before transport for empty text or more than three continuity IDs', () => {
