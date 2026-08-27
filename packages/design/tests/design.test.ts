@@ -2,11 +2,13 @@ import { canonicalHash } from '@youtube-ai-factory/core-hash'
 import { describe, expect, test } from 'vitest'
 
 import {
+  AUDIO_ARCHETYPES,
   DesignError,
   assertInheritedVoice,
   assertRouteFrozen,
   classifyMotion,
   planTtsSegments,
+  qualifyVoiceFingerprint,
   routeVisual,
   sealChannelIdentity,
   sealSoundscape,
@@ -107,6 +109,51 @@ describe('WP-19 design layer', () => {
     expect(() => sealSoundscape({
       ...validInput,
       cues: [{ id: 'music-1', assetKind: 'MUSIC', function: 'payoff', assetRef: 'r2://music/a.wav' }],
+    })).toThrowError(DesignError)
+  })
+
+  test('qualifies a fingerprint only with exact identity and all audio archetypes', () => {
+    const bindings = AUDIO_ARCHETYPES.map((archetype, index) => ({
+      archetype,
+      qualificationRunId: `qual-run-${index + 1}`,
+      qualificationState: 'QUALIFIED' as const,
+      qualifiedAt: '2026-08-27T00:00:00.000Z',
+      evidenceR2Key: `qual/voice-primary/${archetype}/result.json`,
+      evidenceSha256: canonicalHash({ archetype, index }),
+    }))
+    const evidence = {
+      namespace: 'qualification' as const,
+      channelId: identityInput.channelId,
+      voiceId: identityInput.voice.voiceId,
+      model: identityInput.voice.model,
+      settingsHash: identityInput.voice.settingsHash,
+      capabilityId: 'tts-voice-primary',
+      capabilityVersion: '1.0.0',
+      audioR2Key: identityInput.voice.fingerprintR2Key.replace('identity/', 'qual/identity/'),
+      audioSha256: canonicalHash({ fixture: 'voice-audio' }),
+      audioDurationSec: 30,
+      embeddingR2Key: 'qual/identity/channel-1/voice-fingerprint.embedding',
+      embeddingSha256: canonicalHash({ fixture: 'voice-embedding' }),
+      evidenceR2Key: 'qual/identity/channel-1/voice-fingerprint.json',
+      evidenceSha256: canonicalHash({ fixture: 'voice-evidence' }),
+      bindings,
+    }
+    const identity = {
+      ...identityInput,
+      voice: { ...identityInput.voice, fingerprintR2Key: evidence.audioR2Key },
+    }
+    expect(qualifyVoiceFingerprint(identity, evidence).fingerprintHash).toMatch(/^[0-9a-f]{64}$/u)
+    expect(() => qualifyVoiceFingerprint(identity, {
+      ...evidence,
+      settingsHash: '0'.repeat(64),
+    })).toThrowError(DesignError)
+    expect(() => qualifyVoiceFingerprint(identity, {
+      ...evidence,
+      bindings: bindings.slice(0, -1),
+    })).toThrowError(DesignError)
+    expect(() => qualifyVoiceFingerprint(identity, {
+      ...evidence,
+      namespace: 'production',
     })).toThrowError(DesignError)
   })
 
