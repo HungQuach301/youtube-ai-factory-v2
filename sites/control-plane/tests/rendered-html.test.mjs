@@ -34,6 +34,9 @@ test("renders the canonical-source control plane", async () => {
   assert.match(html, /Pinned CPU-only image/i);
   assert.match(html, /Cost Benchmark/i);
   assert.match(html, /selected PROFILE=REDUCED/i);
+  assert.match(html, /Media runtime[\s\S]*PASS/i);
+  assert.match(html, /Fly\.io Production is QUALIFIED\/READY/i);
+  assert.doesNotMatch(html, /Fly\.io production deployment credentials remain unavailable/i);
   assert.match(html, /Deterministic Measurement/i);
   assert.match(html, /All 15 MSR-01 measurements/i);
   assert.match(html, /Gold Set &amp; Calibration/i);
