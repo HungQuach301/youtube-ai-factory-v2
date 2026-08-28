@@ -49,6 +49,14 @@ jobs:
       - name: Build provider boundary
         run: pnpm build
 
+      - name: Install audio qualification tooling
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
       - name: Verify qualification secret exists
         shell: bash
         run: |
