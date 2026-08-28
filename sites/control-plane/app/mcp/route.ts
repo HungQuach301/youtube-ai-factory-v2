@@ -197,14 +197,14 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     async ({ objective, ownerApprovalText, audioBase64, audioSha256, embeddingJson,
       embeddingSha256, providerEvidenceJson, providerEvidenceSha256 }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
-      const idempotencyKey = createHash("sha256").update(JSON.stringify({
-        command: "REGISTER_QUALIFIED_VOICE",
-        objective: objective.trim(),
+      const idempotencyKey = createHash("sha256").update([
+        "REGISTER_QUALIFIED_VOICE",
+        objective.trim(),
         ownerApprovalText,
         audioSha256,
         embeddingSha256,
         providerEvidenceSha256,
-      })).digest("hex");
+      ].join("\0")).digest("hex");
       const result = await registerQualifiedVoice(user, {
         objective,
         ownerApprovalText,

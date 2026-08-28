@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "914eb6a8294477c3adb41f3e35e1eeb20f2d452189b64d9200fabd3f5e62b3fe",
+  "aggregate_sha256": "35de52f57b030187c8a0299f686072f4ec4716a133ae4b4a228d934b4846bbdb",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "baba0f41d3d7d31379df2ab99fa277b695720e70b66bc09ba49c1c90bc4b9965"
+      "sha256": "561b5d82c44e4e97734af0a3532b96ce9f6da8e900fc1d74baa5139caa1310b9"
     },
     {
       "path": "app/oauth-server.ts",
