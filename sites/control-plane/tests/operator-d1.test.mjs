@@ -33,6 +33,7 @@ async function createFactoryFixture(databaseName) {
     compatibilityDate: "2026-05-22",
     compatibilityFlags: ["nodejs_compat"],
     d1Databases: { DB: databaseName },
+    r2Buckets: ["BUCKET"],
     bindings: { FACTORY_OWNER_EMAIL: "owner@example.com" },
   });
   const d1 = await mf.getD1Database("DB");
@@ -47,6 +48,76 @@ async function createFactoryFixture(databaseName) {
     }
   }
   return { mf, d1 };
+}
+
+function qualificationFixture() {
+  const audio = Buffer.alloc(42);
+  audio.write("fLaC", 0, "ascii");
+  audio[4] = 0x80;
+  audio[7] = 34;
+  const sampleRate = 44_100n;
+  const totalSamples = sampleRate * 30n;
+  let streamInfo = (sampleRate << 44n) | (15n << 36n) | totalSamples;
+  for (let index = 25; index >= 18; index -= 1) {
+    audio[index] = Number(streamInfo & 0xffn);
+    streamInfo >>= 8n;
+  }
+  const audioSha256 = createHash("sha256").update(audio).digest("hex");
+  const embeddingJson = JSON.stringify({
+    schemaVersion: 1,
+    algorithm: "log-goertzel-voiceprint-v1",
+    sourceAudioSha256: audioSha256,
+    sampleRateHz: 16_000,
+    frameSize: 400,
+    hopSize: 160,
+    dimensions: 64,
+    vector: [1, ...Array(63).fill(0)],
+  });
+  const archetypes = [
+    "high_energy_hook",
+    "number_heavy_narration",
+    "dense_mechanism",
+    "authorization_clearing_settlement",
+    "long_section_continuity",
+    "causal_sfx_ambience",
+    "music_transition",
+    "silence_consequence_payoff",
+  ];
+  const providerEvidenceJson = JSON.stringify({
+    schemaVersion: 1,
+    state: "PROVIDER_GENERATED_PENDING_PERCEPTUAL_QA",
+    namespace: "qualification",
+    channelId: "ai-era-money-defense",
+    voiceId: "KXyrWqXTuK63FlJ9XZ33",
+    model: "eleven_multilingual_v2",
+    outputFormat: "mp3_44100_128",
+    voiceSettings: {
+      stability: 0.7,
+      similarityBoost: 0.75,
+      style: 0,
+      useSpeakerBoost: true,
+      speed: 1.02,
+    },
+    settingsHash: "5c982c8851e1cba1b23b515a6d1d9f98c78d7ce4eabf6e2a3e13a91cd7e76ed9",
+    capabilityId: "tts-elevenlabs-ai-era-money-defense",
+    capabilityVersion: "elevenlabs-tts-v1",
+    actualCostUsd: 0.3195,
+    maxCostUsd: 1.5,
+    fingerprint: { durationSec: 30, sha256: "a".repeat(64) },
+    generated: archetypes.map((archetype, index) => ({
+      archetype,
+      requestId: `qualification-request-${index + 1}`,
+    })),
+    productionEligible: false,
+  });
+  return {
+    audioBase64: audio.toString("base64"),
+    audioSha256,
+    embeddingJson,
+    embeddingSha256: createHash("sha256").update(embeddingJson).digest("hex"),
+    providerEvidenceJson,
+    providerEvidenceSha256: createHash("sha256").update(providerEvidenceJson).digest("hex"),
+  };
 }
 
 test("executes PREPARE_CHANNEL idempotently against real local D1", async () => {
@@ -122,6 +193,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "get_factory_state",
       "prepare_approved_channel",
+      "register_qualified_voice",
     ]);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -165,6 +237,77 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(commandCount.count, 1);
     assert.equal(runCount.count, 1);
     assert.equal(eventCount.count, 4);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("registers approved voice evidence immutably and removes only the voice blocker", async () => {
+  const { mf, d1 } = await createFactoryFixture("g02d-qualified-voice-test");
+  const transport = new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-voice-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await client.callTool({
+      name: "prepare_approved_channel",
+      arguments: {
+        objective: "Prepare the approved channel before registering its owner-approved voice.",
+        confirm: true,
+      },
+    });
+    const evidence = qualificationFixture();
+    const objective = "Register the owner-approved ElevenLabs voice and verify immutable qualification evidence.";
+    const first = await client.callTool({
+      name: "register_qualified_voice",
+      arguments: {
+        objective,
+        confirm: true,
+        ownerApprovalText: "APPROVE VOICE",
+        ...evidence,
+      },
+    });
+    assert.equal(first.isError, undefined, JSON.stringify(first));
+    assert.equal(first.structuredContent.accepted, true);
+    assert.equal(first.structuredContent.replayed, false);
+    assert.equal(first.structuredContent.runStatus, "COMPLETED");
+    assert.equal(first.structuredContent.currentStep, "VOICE_EVIDENCE_READ_BACK_VERIFIED");
+    assert.equal(first.structuredContent.voiceFingerprintState, "QUALIFIED");
+    assert.equal(first.structuredContent.voiceBindingCount, 8);
+    assert.deepEqual(first.structuredContent.activationBlockers, [
+      "critic_qualification_and_real_calibration_evidence",
+    ]);
+    assert.equal(first.structuredContent.providerDispatch, "OFF");
+    assert.equal(first.structuredContent.autoPublish, "OFF");
+
+    const replay = await client.callTool({
+      name: "register_qualified_voice",
+      arguments: {
+        objective,
+        confirm: true,
+        ownerApprovalText: "APPROVE VOICE",
+        ...evidence,
+      },
+    });
+    assert.equal(replay.structuredContent.replayed, true);
+    assert.equal(replay.structuredContent.voiceFingerprintState, "QUALIFIED");
+
+    const fingerprint = await d1.prepare("SELECT * FROM voice_fingerprint_evidence").first();
+    const bindingCount = await d1.prepare("SELECT count(*) AS count FROM voice_fingerprint_binding").first();
+    const identity = await d1.prepare("SELECT version, approval_state FROM channel_identity_contract ORDER BY version DESC LIMIT 1").first();
+    assert.equal(fingerprint.qualification_state, "QUALIFIED");
+    assert.equal(fingerprint.audio_sha256, evidence.audioSha256);
+    assert.equal(bindingCount.count, 8);
+    assert.equal(identity.version, 2);
+    assert.equal(identity.approval_state, "PERSISTED");
+
+    const bucket = await mf.getR2Bucket("BUCKET");
+    assert.ok(await bucket.get(fingerprint.audio_r2_key));
+    assert.ok(await bucket.get(fingerprint.embedding_r2_key));
+    assert.ok(await bucket.get(fingerprint.evidence_r2_key));
   } finally {
     await client.close().catch(() => {});
     await mf.dispose();
@@ -289,6 +432,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "get_factory_state",
       "prepare_approved_channel",
+      "register_qualified_voice",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);

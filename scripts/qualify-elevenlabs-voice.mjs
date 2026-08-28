@@ -10,7 +10,7 @@ import {
   qualificationCharacterCount,
 } from '../packages/provider/dist/index.js'
 
-const CHANNEL_ID = 'ai-era-money-defense'
+const CHANNEL_ID = 'channel_ai_era_money_defense_v1'
 const MODEL_ID = 'eleven_multilingual_v2'
 const OUTPUT_FORMAT = 'mp3_44100_128'
 const MAX_COST_USD = 1.5
@@ -220,3 +220,4 @@ async function main() {
 }
 
 await main()
+

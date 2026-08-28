@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const ownerIdentity = sqliteTable("owner_identity", {
   identity: text("identity").primaryKey(),
@@ -93,6 +93,41 @@ export const operationEvents = sqliteTable("operation_event", {
   payloadJson: text("payload_json").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("operation_event_run_ordinal_unique").on(table.runId, table.ordinal)]);
+
+export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
+  id: text("id").primaryKey(),
+  channelId: text("channel_id").notNull().references(() => channels.id),
+  voiceId: text("voice_id").notNull(),
+  model: text("model").notNull(),
+  settingsHash: text("settings_hash").notNull(),
+  capabilityId: text("capability_id").notNull(),
+  capabilityVersion: text("capability_version").notNull(),
+  audioR2Key: text("audio_r2_key").notNull(),
+  audioSha256: text("audio_sha256").notNull(),
+  audioDurationSec: integer("audio_duration_sec").notNull(),
+  embeddingR2Key: text("embedding_r2_key").notNull(),
+  embeddingSha256: text("embedding_sha256").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+  fingerprintHash: text("fingerprint_hash").notNull(),
+  qualificationState: text("qualification_state", { enum: ["QUALIFIED"] }).notNull(),
+  ownerActorIdentity: text("owner_actor_identity").notNull().references(() => ownerIdentity.identity),
+  ownerApprovalText: text("owner_approval_text").notNull(),
+  ownerApprovedAt: text("owner_approved_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("voice_fingerprint_channel_unique").on(table.channelId)]);
+
+export const voiceFingerprintBindings = sqliteTable("voice_fingerprint_binding", {
+  evidenceId: text("evidence_id").notNull().references(() => voiceFingerprintEvidence.id),
+  archetype: text("archetype").notNull(),
+  qualificationRunId: text("qualification_run_id").notNull(),
+  qualifiedAt: text("qualified_at").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.evidenceId, table.archetype] }),
+  uniqueIndex("voice_fingerprint_run_unique").on(table.qualificationRunId),
+]);
 
 export const oauthAuthorizationRequests = sqliteTable("oauth_authorization_request", {
   nonceHash: text("nonce_hash").primaryKey(),

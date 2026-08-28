@@ -12,10 +12,16 @@ export const VisualArchetypeSchema = z.enum([
   'rights_sensitive', 'mobile_text_intensive',
 ])
 
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
+  z.string(), z.number(), z.boolean(), z.null(),
+  z.array(JsonValueSchema),
+  z.record(z.string(), JsonValueSchema),
+]))
+
 export const VoiceIdentitySchema = z.object({
   voiceId: z.string().min(1),
   model: z.string().min(1),
-  settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  settings: z.record(z.string(), JsonValueSchema),
   settingsHash: z.string().regex(/^[0-9a-f]{64}$/u),
   pronunciationLexiconRef: z.string().min(1),
   fingerprintR2Key: z.string().min(1),
