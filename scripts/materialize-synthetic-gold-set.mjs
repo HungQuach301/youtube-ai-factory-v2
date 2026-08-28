@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve, sep } from 'node:path'
 
 import { canonicalHash, canonicalizeExact } from '../packages/core-hash/dist/index.js'
-import { createSyntheticGoldSamples, GoldSetManager } from '../packages/gold-set/dist/index.js'
+import { createSyntheticGoldSamples, GoldSetManager } from '../packages/gold-set/dist/src/index.js'
 
 const EXPECTED_SAMPLE_COUNT = 16
 const EXPECTED_DEFECT_CLASS_COUNT = 8
