@@ -8,7 +8,7 @@ import {
   createElevenLabsTtsAdapter,
   guardedDispatch,
   qualificationCharacterCount,
-} from '@youtube-ai-factory/provider'
+} from '../packages/provider/dist/index.js'
 
 const CHANNEL_ID = 'ai-era-money-defense'
 const MODEL_ID = 'eleven_multilingual_v2'
