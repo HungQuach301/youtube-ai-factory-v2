@@ -66,10 +66,13 @@ jobs:
       - name: Seal artifact read-back evidence
         shell: bash
         run: |
-          find "$FIRST_OUTPUT_DIR" -type f ! -name artifact-sha256s.txt -print0 \
-            | sort -z \
-            | xargs -0 sha256sum > "$FIRST_OUTPUT_DIR/artifact-sha256s.txt"
-          sha256sum --check "$FIRST_OUTPUT_DIR/artifact-sha256s.txt"
+          (
+            cd "$FIRST_OUTPUT_DIR"
+            find . -type f ! -name artifact-sha256s.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > artifact-sha256s.txt
+            sha256sum --check artifact-sha256s.txt
+          )
 
       - name: Upload qualification-only intake
         uses: actions/upload-artifact@v4
