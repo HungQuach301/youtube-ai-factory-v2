@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "requestId": "g-02c-elevenlabs-2026-08-28-01",
+  "channelId": "ai-era-money-defense",
+  "provider": "elevenlabs",
+  "voiceId": "KXyrWqXTuK63FlJ9XZ33",
+  "model": "eleven_multilingual_v2",
+  "outputFormat": "mp3_44100_128",
+  "maxCostUsd": 1.5,
+  "expectedArchetypes": 8,
+  "evidenceState": "PROVIDER_GENERATED_PENDING_PERCEPTUAL_QA",
+  "productionEligible": false,
+  "requestedAt": "2026-08-28T00:18:30Z"
+}
