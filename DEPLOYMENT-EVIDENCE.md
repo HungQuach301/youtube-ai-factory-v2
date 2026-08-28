@@ -365,3 +365,28 @@ the sole source of truth; deployments are derived, immutable checkpoints.
   human-reader audio samples with transcripts.
 - WP-28 minimum implementation is complete; activation remains fail-closed until
   an explicit real-human allowlist identity is configured.
+
+## 2026-08-28 — G-02D qualified voice Production registration
+
+- Mode: `BUILD`
+- Canonical repository: `HungQuach301/youtube-ai-factory-v2`
+- Source delivery: PR #105, merge commit
+  `bb47e2afa483d4173ab27a244c84912b82795dd7`
+- CI on PR head `456a14879748ed10f18db1d0a68c7d2a9cee3f50`: source-integrity
+  run `33132954246` PASS; build run `33132954250` PASS; Sites control-plane
+  run `33132954285` PASS.
+- Provider qualification source: Actions run `33129874420`, artifact ID
+  `9669841544`, artifact digest
+  `sha256:8b29e539c76d3cddc7f7e1fa69448aae5c3fd96abdadba0c03c7e94f97d0b796`.
+- Production command: first `register_qualified_voice` receipt
+  `accepted=true`, `replayed=false`, `runStatus=COMPLETED`,
+  `currentStep=VOICE_EVIDENCE_READ_BACK_VERIFIED`.
+- Idempotency proof: exact replay returned `accepted=true`, `replayed=true`.
+- Final authenticated read-back: owner authorized; channel `PREPARED`; contract
+  `PERSISTED`; pillar `How Modern Money Traps Work`; 10 episodes; voice
+  `QUALIFIED`; 8 bindings; latest run `COMPLETED`.
+- Remaining activation blocker:
+  `critic_qualification_and_real_calibration_evidence`.
+- Safety posture: provider dispatch `OFF`; auto-publish `OFF`; registration
+  made no provider call and incurred no new spend.
+
