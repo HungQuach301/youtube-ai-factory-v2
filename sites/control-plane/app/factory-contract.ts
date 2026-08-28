@@ -42,3 +42,41 @@ export const activationBlockers = [
   "qualified_voice_fingerprint",
   "critic_qualification_and_real_calibration_evidence",
 ] as const;
+
+export const qualifiedVoice = {
+  voiceId: "KXyrWqXTuK63FlJ9XZ33",
+  model: "eleven_multilingual_v2",
+  settings: {
+    provider: "elevenlabs",
+    capabilityId: "tts-elevenlabs-ai-era-money-defense",
+    version: "elevenlabs-tts-v1",
+    voiceId: "KXyrWqXTuK63FlJ9XZ33",
+    modelId: "eleven_multilingual_v2",
+    voiceSettings: {
+      stability: 0.7,
+      similarityBoost: 0.75,
+      style: 0,
+      useSpeakerBoost: true,
+      speed: 1.02,
+    },
+    outputFormat: "mp3_44100_128",
+    usdPer1000Chars: 0.1,
+  },
+  settingsHash: "5c982c8851e1cba1b23b515a6d1d9f98c78d7ce4eabf6e2a3e13a91cd7e76ed9",
+  capabilityId: "tts-elevenlabs-ai-era-money-defense",
+  capabilityVersion: "elevenlabs-tts-v1",
+  fingerprintDurationSec: 30,
+  fingerprintR2Key: "qual/identity/channel_ai_era_money_defense_v1/voice/KXyrWqXTuK63FlJ9XZ33/5c982c8851e1cba1b23b515a6d1d9f98c78d7ce4eabf6e2a3e13a91cd7e76ed9/voice-fingerprint-30s.flac",
+  pronunciationLexiconRef: "lexicon/ai-era-money-defense/en-US/v1",
+} as const;
+
+export const audioArchetypes = [
+  "high_energy_hook",
+  "number_heavy_narration",
+  "dense_mechanism",
+  "authorization_clearing_settlement",
+  "long_section_continuity",
+  "causal_sfx_ambience",
+  "music_transition",
+  "silence_consequence_payoff",
+] as const;

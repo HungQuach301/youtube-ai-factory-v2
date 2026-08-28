@@ -15,6 +15,7 @@ import {
 import { activationBlockers, approvedChannel } from "./factory-contract";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
+import { voiceQualificationReadBack } from "./voice-qualification";
 
 export type RuntimeReadiness = {
   d1: "PASS" | "BLOCKED";
@@ -69,7 +70,8 @@ export async function getOperatorSnapshot(user: ChatGPTUser) {
   const [channel] = await db.select().from(channels)
     .where(eq(channels.id, approvedChannel.id)).limit(1);
   const [identityContract] = await db.select().from(channelIdentityContracts)
-    .where(eq(channelIdentityContracts.channelId, approvedChannel.id)).limit(1);
+    .where(eq(channelIdentityContracts.channelId, approvedChannel.id))
+    .orderBy(desc(channelIdentityContracts.version)).limit(1);
   const [pillar] = await db.select().from(pillars)
     .where(eq(pillars.channelId, approvedChannel.id)).limit(1);
   const persistedEpisodes = pillar
@@ -85,6 +87,10 @@ export async function getOperatorSnapshot(user: ChatGPTUser) {
       .where(eq(operationEvents.runId, runs[0].id))
       .orderBy(operationEvents.ordinal)
     : [];
+  const voiceFingerprint = await voiceQualificationReadBack();
+  const currentActivationBlockers = voiceFingerprint.qualified
+    ? activationBlockers.filter((blocker) => blocker !== "qualified_voice_fingerprint")
+    : [...activationBlockers];
   return {
     actor: { displayName: user.displayName, email: user.email, role: "OWNER" },
     channel: channel ?? null,
@@ -94,7 +100,9 @@ export async function getOperatorSnapshot(user: ChatGPTUser) {
     episodes: persistedEpisodes,
     runs,
     latestRunEvents: events,
-    activationBlockers,
+    activationBlockers: currentActivationBlockers,
+    voiceFingerprintState: voiceFingerprint.state,
+    voiceBindingCount: voiceFingerprint.bindingCount,
   };
 }
 

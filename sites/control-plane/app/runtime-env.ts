@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export type FactoryRuntimeEnv = {
   ASSETS: Fetcher;
   DB?: D1Database;
+  BUCKET?: R2Bucket;
   FACTORY_OWNER_EMAIL?: string;
   IMAGES?: {
     input(stream: ReadableStream): {

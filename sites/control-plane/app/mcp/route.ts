@@ -13,6 +13,7 @@ import {
   bearerChallenge,
   oauthScopes,
 } from "../oauth-server";
+import { registerQualifiedVoice } from "../voice-qualification";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ const factoryStateSchema = {
   pillar: z.string(),
   episodeCount: z.number().int().nonnegative(),
   activationBlockers: z.array(z.string()),
+  voiceFingerprintState: z.enum(["QUALIFIED", "NOT_QUALIFIED"]),
+  voiceBindingCount: z.number().int().nonnegative(),
   providerDispatch: z.literal("OFF"),
   autoPublish: z.literal("OFF"),
 };
@@ -50,6 +53,8 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
     pillar: snapshot.pillar?.name ?? "NOT_PERSISTED",
     episodeCount: snapshot.episodes.length,
     activationBlockers: [...snapshot.activationBlockers],
+    voiceFingerprintState: snapshot.voiceFingerprintState,
+    voiceBindingCount: snapshot.voiceBindingCount,
     providerDispatch: "OFF" as const,
     autoPublish: "OFF" as const,
   };
@@ -61,7 +66,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     {
       capabilities: { tools: {} },
       instructions:
-        "Read state first. Call prepare_approved_channel only after an explicit owner instruction. PREPARED never means ACTIVE: provider dispatch and auto-publish remain OFF until later production gates pass.",
+        "Read state first. Mutating commands require an explicit owner instruction. PREPARED and a qualified voice never mean ACTIVE: provider dispatch and auto-publish remain OFF until every later Production gate passes.",
     },
   );
 
@@ -153,6 +158,83 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     },
   );
 
+  server.registerTool(
+    "register_qualified_voice",
+    {
+      title: "Register the owner-approved qualified voice",
+      description:
+        "Persist the exact owner-approved ElevenLabs voice fingerprint, deterministic acoustic embedding and eight qualification bindings to immutable R2 evidence plus Production D1. This command does not dispatch a provider, spend money, activate the channel or publish content.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("APPROVE VOICE"),
+        audioBase64: z.string().min(8).max(2_000_000),
+        audioSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        embeddingJson: z.string().min(2).max(100_000),
+        embeddingSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        providerEvidenceJson: z.string().min(2).max(250_000),
+        providerEvidenceSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runStatus: z.string(),
+        currentStep: z.string(),
+        voiceFingerprintState: z.enum(["QUALIFIED", "NOT_QUALIFIED"]),
+        voiceBindingCount: z.number().int().nonnegative(),
+        activationBlockers: z.array(z.string()),
+        providerDispatch: z.literal("OFF"),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText, audioBase64, audioSha256, embeddingJson,
+      embeddingSha256, providerEvidenceJson, providerEvidenceSha256 }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const idempotencyKey = createHash("sha256").update(JSON.stringify({
+        command: "REGISTER_QUALIFIED_VOICE",
+        objective: objective.trim(),
+        ownerApprovalText,
+        audioSha256,
+        embeddingSha256,
+        providerEvidenceSha256,
+      })).digest("hex");
+      const result = await registerQualifiedVoice(user, {
+        objective,
+        ownerApprovalText,
+        audioBase64,
+        audioSha256,
+        embeddingJson,
+        embeddingSha256,
+        providerEvidenceJson,
+        providerEvidenceSha256,
+        idempotencyKey,
+      });
+      const state = publicFactoryState(await getOperatorSnapshot(user));
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runStatus: result.run?.status ?? "UNKNOWN",
+        currentStep: result.run?.currentStep ?? "UNKNOWN",
+        voiceFingerprintState: state.voiceFingerprintState,
+        voiceBindingCount: state.voiceBindingCount,
+        activationBlockers: state.activationBlockers,
+        providerDispatch: "OFF" as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
   return server;
 }
 
@@ -223,6 +305,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
     }
     if (tool.name === "prepare_approved_channel") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "register_qualified_voice") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }

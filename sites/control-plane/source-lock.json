@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "3d1e901738064ef93d8f851669a28ba4af1b3f164fea8c934d69227103997920",
+  "aggregate_sha256": "914eb6a8294477c3adb41f3e35e1eeb20f2d452189b64d9200fabd3f5e62b3fe",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -17,7 +17,7 @@
     },
     {
       "path": ".openai/hosting.json",
-      "sha256": "6f13408ad5215306cebfb3d8fa5f605ee2f8eb2bad2cc8d878ed24e426749102"
+      "sha256": "063ba6cc88921a86f9947c8b294dad855e7ccfd9b8e1b1421b37e80154ed7b92"
     },
     {
       "path": "G01A-PRODUCTION-COMMAND-RUNTIME.md",
@@ -52,8 +52,12 @@
       "sha256": "17a965f8948b21510cdf8ecbd70c5fdf58100e10970463f6a8fd2cc4795f8044"
     },
     {
+      "path": "app/evidence-storage.ts",
+      "sha256": "ff86e44441dcc7cd90bebf32c844899c1f430e2b67a2f82818a455e2c77f08c4"
+    },
+    {
       "path": "app/factory-contract.ts",
-      "sha256": "e9f04d3c1e61e59019b31122a11a3afa8e0e2a60de4d2ab83c24201da317c504"
+      "sha256": "55a1d15441ea2573b4e12683edc69f8bf7f7aac9f432d1e85bc91de5181ca77e"
     },
     {
       "path": "app/globals.css",
@@ -65,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "dc3950ce24d0dc9ccc5911a307c4b53a6638a03d87607c7577c09f73bbbf510a"
+      "sha256": "baba0f41d3d7d31379df2ab99fa277b695720e70b66bc09ba49c1c90bc4b9965"
     },
     {
       "path": "app/oauth-server.ts",
@@ -93,7 +97,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "a27bce4b69a2d9a80e5687af41095abd28c60041b3ee081e3be014457edff648"
+      "sha256": "2b6a0e2005c3cfc16af5a94aeeaee207a1bf4fb1eb2d845ed43014145302876d"
     },
     {
       "path": "app/page.tsx",
@@ -101,7 +105,11 @@
     },
     {
       "path": "app/runtime-env.ts",
-      "sha256": "7af40719db97291b7d0c59dc686dbcaba5f6d782f522ef85603b7cfcf7d4f485"
+      "sha256": "810e3378899275ce80fc62a9f83da55ab31bff0a0448308d219ec7d56550a8e8"
+    },
+    {
+      "path": "app/voice-qualification.ts",
+      "sha256": "7ac5110768d75e88e6a4ab4a1322bf21539ae8aacdbedcc494189ba1e680f81a"
     },
     {
       "path": "build/sites-vite-plugin.ts",
@@ -113,7 +121,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "433f0b988e3f6189894c926207435dc06facaff9f1739a379b280e1a39f53389"
+      "sha256": "4b964789e61183dc08cec0ed251e1bb3e751f90abcdcf3ee1d1c95e038e8bf6f"
     },
     {
       "path": "drizzle.config.ts",
@@ -128,6 +136,10 @@
       "sha256": "2a0ac623021cb7c2a67d53ce84d032832f7532e8555a3bb89c197d4cc30694d8"
     },
     {
+      "path": "drizzle/0002_brainy_magik.sql",
+      "sha256": "6827edb1d0578e7e8797a91a8a05cfdada3d346a273a37c97250c9c87d8e43a0"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -136,8 +148,12 @@
       "sha256": "2e9909e9bef40e51b2968bb3d8e93ba1b4ddf3b756efb8b9ba0c55921b81a5e6"
     },
     {
+      "path": "drizzle/meta/0002_snapshot.json",
+      "sha256": "3f75becfd2d8c89096c68af72d370bac345855da79026bbb1bdccceb8d57fe0d"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "21c160a59333febdca7cb7ae8ee354723a2d8a8c9a45975db9211c08dac86e83"
+      "sha256": "88c3a106e12e2cb644d3d1f9d644804b40f6754022ff81aa0cbf7f98e20e64b1"
     },
     {
       "path": "eslint.config.mjs",
@@ -209,7 +225,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "1610d5d24fa35932bad31fcc8beef6a07973a6e8489eff531f30c6399d825ec1"
+      "sha256": "5bd06dc10cd9e6e7564263a70331cfd6100392a063dffe942e68dea96aef2083"
     },
     {
       "path": "tests/rendered-html.test.mjs",
