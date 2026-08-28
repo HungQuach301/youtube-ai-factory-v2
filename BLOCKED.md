@@ -163,3 +163,13 @@ Trạng thái: `CLOSED 2026-08-28 — G-02D PRODUCTION READ-BACK VERIFIED`
 - Provider dispatch và auto-publish tiếp tục `OFF`. Production command không
   gọi lại provider và không phát sinh spend mới. B-006/B-007 vẫn mở; không được
   suy diễn voice qualification là critic/calibration qualification.
+
+### G-02E evidence delta — B-006/B-007 remain open (2026-08-28)
+
+- Actions run [33187748930](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187748930) materialized and read-back verified 16 qualification-only synthetic MP4 samples (eight defect classes × two variants).
+- Artifact `gold-set-g-02e-33187748930` ZIP SHA-256: `7c562dc8ace9fb029c855f3cb0a62790518c3bd456b525bd79ffcfd9e51d5974`.
+- Idempotent replay PASS: both manifest bytes hash to `49fd4fa8989912318014795cdc977c23fe18cee12bafb0613cf6b078972ac418`.
+- This does **not** satisfy WP-14 readiness: sample count remains 16, rejected-master count remains 0, and no owner judgment was synthesized.
+- B-006 still requires at least 15 owner-labelled rejected masters. B-007 still requires 36 real fail/borderline/pass anchors across 12 assurance dimensions.
+- Critic state remains `NOT_QUALIFIED`; M2 stays fail-closed.
+
