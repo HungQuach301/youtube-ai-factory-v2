@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - voice-qualification-run
+      - voice-qualification-run-*
     paths:
       - qualification-runs/voice.json
 
@@ -66,5 +66,5 @@ jobs:
         with:
           name: voice-qualification-${{ github.run_id }}
           path: voice-qualification-output/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
