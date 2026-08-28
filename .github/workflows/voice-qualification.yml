@@ -4,6 +4,11 @@ run-name: voice qualification · ${{ github.sha }}
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - voice-qualification-run
+    paths:
+      - qualification-runs/voice.json
 
 permissions:
   contents: read
