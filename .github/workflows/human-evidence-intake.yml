@@ -1,0 +1,80 @@
+name: human-evidence-intake
+
+run-name: G-02F human evidence intake · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - g-02f-human-evidence-intake
+    paths:
+      - .github/workflows/human-evidence-intake.yml
+      - qualification-runs/human-evidence-intake.json
+      - scripts/build-human-evidence-intake.mjs
+      - packages/human-evidence/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g-02f-human-evidence-intake-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-intake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FIRST_OUTPUT_DIR: human-evidence-intake-output
+      REPLAY_OUTPUT_DIR: human-evidence-intake-replay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed intake boundaries
+        run: pnpm build
+
+      - name: Test human evidence intake
+        run: pnpm vitest run packages/human-evidence/tests/qualification-intake.test.ts
+
+      - name: Materialize draft-only intake artifact
+        run: node scripts/build-human-evidence-intake.mjs --output "$FIRST_OUTPUT_DIR"
+
+      - name: Replay from the same pinned marker
+        run: node scripts/build-human-evidence-intake.mjs --output "$REPLAY_OUTPUT_DIR"
+
+      - name: Verify byte-for-byte idempotent replay
+        run: node scripts/build-human-evidence-intake.mjs --verify-replay "$FIRST_OUTPUT_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Seal artifact read-back evidence
+        shell: bash
+        run: |
+          find "$FIRST_OUTPUT_DIR" -type f ! -name artifact-sha256s.txt -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > "$FIRST_OUTPUT_DIR/artifact-sha256s.txt"
+          sha256sum --check "$FIRST_OUTPUT_DIR/artifact-sha256s.txt"
+
+      - name: Upload qualification-only intake
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-evidence-intake-g-02f-${{ github.run_id }}
+          path: human-evidence-intake-output/
+          if-no-files-found: error
+          retention-days: 14

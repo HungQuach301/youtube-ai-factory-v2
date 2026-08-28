@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02F",
+  "namespace": "qualification",
+  "createdAt": "2026-08-28T00:00:00.000Z",
+  "state": "DRAFT_ONLY",
+  "productionEligible": false,
+  "providerDispatch": "OFF",
+  "autoPublish": "OFF"
+}
