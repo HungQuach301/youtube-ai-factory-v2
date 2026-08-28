@@ -1145,3 +1145,44 @@ binding. Fixture unit test không phải Production evidence.
 
 Không gọi TTS provider, không tạo audio/embedding giả, không ghi R2/D1, không tạo
 qualification spend và không bật provider/job dispatch hoặc auto-publish.
+
+---
+
+## G-02C · Bounded Live Voice Qualification
+
+## Mode: BUILD
+
+## Acceptance ↔ Evidence
+
+| Acceptance | Production-grade evidence |
+|---|---|
+| Exact approved voice/model/settings | Voice `KXyrWqXTuK63FlJ9XZ33`; model `eleven_multilingual_v2`; settings hash `5c982c8851e1cba1b23b515a6d1d9f98c78d7ce4eabf6e2a3e13a91cd7e76ed9` |
+| Eight required audio archetypes | GitHub Actions run `33129874420`, job `qualify` completed `success` |
+| Immutable provider artifact | Artifact ID `9669841544`; ZIP digest `sha256:8b29e539c76d3cddc7f7e1fa69448aae5c3fd96abdadba0c03c7e94f97d0b796` |
+| Bounded actual cost | Evidence records `actualCostUsd=0.3195` under hard `maxCostUsd=1.5` |
+| Production boundary preserved | Artifact remains qualification evidence; no Production D1/R2 mutation in G-02C |
+
+## G-02D · Production Voice Registration
+
+## Mode: BUILD
+
+## Acceptance ↔ Evidence
+
+| Acceptance | Read-back evidence |
+|---|---|
+| Exact lossless fingerprint | 30-second mono 16 kHz FLAC SHA-256 `be522da58be81470d7e86bfab471677c6c0b56d383b2aafd3cbdc07d7e85cb90` |
+| Deterministic acoustic embedding | `log-goertzel-voiceprint-v1`, 64 dimensions, normalized vector; SHA-256 `08561f7142c92c462694dffe0e6f975c49ae7a50cc24f26bc79d8a622322bf5a` |
+| Provider evidence identity | Artifact `evidence.json` SHA-256 `88d67d277ec62a914d258897877d3e453f215a7117a1aa74cab0b628b091de94` |
+| Immutable Production registration | First `register_qualified_voice`: `accepted=true`, `replayed=false`, `COMPLETED`, `VOICE_EVIDENCE_READ_BACK_VERIFIED` |
+| Idempotent replay | Exact replay: `accepted=true`, `replayed=true`; state and binding count unchanged |
+| Final Production read-back | Channel `PREPARED`; contract `PERSISTED`; voice `QUALIFIED`; 8/8 bindings; 10 episodes |
+| Fail-closed boundary | Only blocker remaining: `critic_qualification_and_real_calibration_evidence`; provider dispatch and auto-publish `OFF` |
+
+## Trạng thái kế tiếp
+
+G-02D hoàn tất. G-02E phải bootstrap calibration/qualification corpus thật trong
+namespace `qualification`: tái sử dụng 16 synthetic defect recipes hiện có,
+tích lũy owner-rejected masters và 36 rubric anchors có evidence. Không critic
+nào được gắn `QUALIFIED`, không bật M2 hard gate và không dispatch provider
+trước khi B-006/B-007 đạt đủ điều kiện.
+
