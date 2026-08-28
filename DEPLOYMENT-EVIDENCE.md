@@ -390,3 +390,31 @@ the sole source of truth; deployments are derived, immutable checkpoints.
 - Safety posture: provider dispatch `OFF`; auto-publish `OFF`; registration
   made no provider call and incurred no new spend.
 
+## G-02E qualification gold-set artifact (2026-08-28)
+
+This entry records non-production qualification evidence only. No Factory Production mutation, provider dispatch, provider credential, reservation, or spend occurred.
+
+| Evidence | Read-back |
+|---|---|
+| Workflow run | [33187748930](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187748930), HEAD `6708eae6b2b6afc5cbe9c66f9d780a2b9209de1f`, conclusion `success` |
+| Artifact | `gold-set-g-02e-33187748930`, ID `9692479988`, 22,926,374 bytes |
+| Artifact ZIP SHA-256 | `7c562dc8ace9fb029c855f3cb0a62790518c3bd456b525bd79ffcfd9e51d5974` |
+| Manifest | 16 MP4, eight defect classes × two, namespace `qualification`, SHA-256 `49fd4fa8989912318014795cdc977c23fe18cee12bafb0613cf6b078972ac418` |
+| Replay | `accepted=true`, `replayed=true`, first/replay manifest SHA equal |
+| Replay receipt | SHA-256 `30095d0554f845e0631249660327249101cae84f511bfa3a4dfb4b1e5116c66b` |
+| Eligibility | `productionEligible=false`, `criticQualificationState=NOT_QUALIFIED` |
+| Readiness | `ready=false`, `sampleCount=16`, `rejectedMasterCount=0` |
+| Build CI | [33187751949](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187751949) success |
+| Source integrity | [33187752098](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187752098) success |
+
+Authenticated Factory read-back after artifact verification:
+
+- `ownerAuthorized=true`
+- `channelStatus=PREPARED`, `contractState=PERSISTED`, `latestRunStatus=COMPLETED`
+- `pillar=How Modern Money Traps Work`, `episodeCount=10`
+- `voiceFingerprintState=QUALIFIED`, `voiceBindingCount=8`
+- sole activation blocker: `critic_qualification_and_real_calibration_evidence`
+- `providerDispatch=OFF`, `autoPublish=OFF`
+
+The unchanged blocker and switches prove the qualification artifact did not activate critic, M2, provider dispatch, or publishing.
+
