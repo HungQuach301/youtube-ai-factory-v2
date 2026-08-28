@@ -1,0 +1,65 @@
+name: voice-qualification
+
+run-name: voice qualification · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voice-qualification-production-candidate
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: KXyrWqXTuK63FlJ9XZ33
+      QUALIFICATION_OUTPUT_DIR: voice-qualification-output
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build provider boundary
+        run: pnpm build
+
+      - name: Verify qualification secret exists
+        shell: bash
+        run: |
+          if [[ -z "$ELEVENLABS_API_KEY" ]]; then
+            echo "ELEVENLABS_API_KEY is unavailable to this workflow." >&2
+            exit 1
+          fi
+
+      - name: Generate bounded qualification evidence
+        run: node scripts/qualify-elevenlabs-voice.mjs
+
+      - name: Upload non-production qualification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-qualification-${{ github.run_id }}
+          path: voice-qualification-output/
+          if-no-files-found: error
+          retention-days: 14

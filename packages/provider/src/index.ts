@@ -12,3 +12,8 @@ export type {
 export { ProviderDispatchError, guardedDispatch } from './framework.js'
 export { estimateTokenCost } from './token-cost.js'
 export type { TokenCostRequest, TokenCounter, TokenPricing } from './token-cost.js'
+export {
+  buildVoiceQualificationPlan,
+  qualificationCharacterCount,
+} from './voice-qualification-plan.js'
+export type { VoiceQualificationSample } from './voice-qualification-plan.js'
