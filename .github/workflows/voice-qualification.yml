@@ -68,6 +68,16 @@ jobs:
       - name: Generate bounded qualification evidence
         run: node scripts/qualify-elevenlabs-voice.mjs
 
+      - name: Build deterministic voice embedding from the lossless fingerprint
+        shell: bash
+        run: |
+          ffmpeg -y -loglevel error \
+            -i voice-qualification-output/voice-fingerprint-30s.wav \
+            -c:a flac voice-qualification-output/voice-fingerprint-30s.flac
+          node scripts/embed-voice-fingerprint.mjs \
+            voice-qualification-output/voice-fingerprint-30s.flac \
+            voice-qualification-output/voice-fingerprint.embedding.json
+
       - name: Upload non-production qualification artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,4 +86,3 @@ jobs:
           path: voice-qualification-output/
           if-no-files-found: warn
           retention-days: 14
-

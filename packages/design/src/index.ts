@@ -1,8 +1,10 @@
 export { DesignError } from './errors.js'
 export type { DesignErrorCode } from './errors.js'
 export { assertInheritedVoice, sealChannelIdentity } from './identity.js'
-export { qualifyVoiceFingerprint } from './voice-fingerprint.js'\nexport { buildVoiceEmbedding, VOICE_EMBEDDING_ALGORITHM } from './voice-embedding.js'
-export type { QualifiedVoiceFingerprint } from './voice-fingerprint.js'\nexport type { VoiceEmbedding } from './voice-embedding.js'
+export { qualifyVoiceFingerprint } from './voice-fingerprint.js'
+export { buildVoiceEmbedding, VOICE_EMBEDDING_ALGORITHM } from './voice-embedding.js'
+export type { QualifiedVoiceFingerprint } from './voice-fingerprint.js'
+export type { VoiceEmbedding } from './voice-embedding.js'
 export type { ChannelIdentityContract } from './identity.js'
 export { planTtsSegments } from './segmentation.js'
 export type { TtsSegment } from './segmentation.js'
@@ -36,4 +38,3 @@ export type {
   VoiceFingerprintEvidence,
 } from './types.js'
 export { assertRouteFrozen, classifyMotion, routeVisual, sealVisualGrammar } from './visual.js'
-

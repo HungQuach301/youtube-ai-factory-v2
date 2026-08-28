@@ -12,7 +12,13 @@ export const VisualArchetypeSchema = z.enum([
   'rights_sensitive', 'mobile_text_intensive',
 ])
 
-const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([\n  z.string(), z.number(), z.boolean(), z.null(),\n  z.array(JsonValueSchema),\n  z.record(z.string(), JsonValueSchema),\n]))\n\nexport const VoiceIdentitySchema = z.object({
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
+  z.string(), z.number(), z.boolean(), z.null(),
+  z.array(JsonValueSchema),
+  z.record(z.string(), JsonValueSchema),
+]))
+
+export const VoiceIdentitySchema = z.object({
   voiceId: z.string().min(1),
   model: z.string().min(1),
   settings: z.record(z.string(), JsonValueSchema),
@@ -122,4 +128,3 @@ export type MusicCue = z.infer<typeof MusicCueSchema>
 export type VisualRoute = z.infer<typeof VisualRouteSchema>
 export type MotionClass = z.infer<typeof MotionClassSchema>
 export type VisualArchetype = z.infer<typeof VisualArchetypeSchema>
-
