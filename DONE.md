@@ -1186,3 +1186,34 @@ tích lũy owner-rejected masters và 36 rubric anchors có evidence. Không cri
 nào được gắn `QUALIFIED`, không bật M2 hard gate và không dispatch provider
 trước khi B-006/B-007 đạt đủ điều kiện.
 
+---
+
+## G-02E · Qualification Gold Sample Materialization
+
+## Mode: BUILD
+
+## Acceptance ↔ Test / Evidence
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Materialize đúng 16 MP4 từ tám defect class, hai variant mỗi class | `packages/gold-set/tests/materialization.test.ts`; Actions run [33187748930](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187748930) |
+| Mọi key bị cô lập dưới `qualification/`; không có đường production | Unit test + runtime `G5_NAMESPACE_ISOLATION` assertion; artifact read-back `qualificationKeys=true` |
+| Mỗi MP4 có audio/video và bytes đọc lại khớp SHA-256 | FFprobe/read-back trong `scripts/materialize-synthetic-gold-set.mjs`; toàn bộ 21 file trong `artifact-sha256s.txt` PASS |
+| Replay cùng pinned input tạo cùng manifest byte-for-byte | `firstManifestSha256 = replayManifestSha256 = 49fd4fa8989912318014795cdc977c23fe18cee12bafb0613cf6b078972ac418` |
+| Receipt idempotent được seal | `accepted=true`, `replayed=true`; receipt SHA-256 `30095d0554f845e0631249660327249101cae84f511bfa3a4dfb4b1e5116c66b` |
+| Không tạo bằng chứng owner giả và không qualify critic | Manifest: `ownerJudgment=null`, `criticQualificationState=NOT_QUALIFIED`, `productionEligible=false` |
+| Readiness vẫn fail-closed | `ready=false`, 16 samples, 0 rejected masters; failures `GOLD_SET_MIN_30`, `REJECTED_MASTER_MIN_15` |
+| Toàn bộ CI repository vẫn xanh | Build run [33187751949](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187751949); source-integrity run [33187752098](https://github.com/HungQuach301/youtube-ai-factory-v2/actions/runs/33187752098) |
+
+## Artifact receipt
+
+- Artifact: `gold-set-g-02e-33187748930` (ID `9692479988`, 22,926,374 bytes, expires 2026-09-11).
+- ZIP SHA-256: `7c562dc8ace9fb029c855f3cb0a62790518c3bd456b525bd79ffcfd9e51d5974`.
+- Manifest canonical hash: `bb63fe7cafa3306fdf623b79bd74aa44245bdd776f26f637b6302e29773748de`.
+- Toolchain: Node `v22.23.2`, pnpm `11.19.0`, FFmpeg/FFprobe `6.1.1-3ubuntu5`.
+- Provider dispatch: `OFF`; provider call/spend: zero.
+
+## Ranh giới còn chặn
+
+G-02E chỉ hoàn tất synthetic half của B-006. Gold set chưa đủ điều kiện cho tới khi có ít nhất 15 rejected masters kèm phán quyết owner; B-007 vẫn thiếu 36 assurance anchors. M2 và publishing không được kích hoạt.
+
