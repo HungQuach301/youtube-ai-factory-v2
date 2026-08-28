@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { streamHash } from '@youtube-ai-factory/core-hash'
 
 export const VOICE_EMBEDDING_ALGORITHM = 'log-goertzel-voiceprint-v1' as const
 
@@ -33,10 +33,10 @@ function l2Normalize(values: readonly number[]): readonly number[] {
   return values.map((value) => Number((value / magnitude).toFixed(8)))
 }
 
-export function buildVoiceEmbedding(
+export async function buildVoiceEmbedding(
   pcm: Int16Array,
   sourceAudioBytes: Uint8Array,
-): VoiceEmbedding {
+): Promise<VoiceEmbedding> {
   if (pcm.length < SAMPLE_RATE * 3) throw new Error('VOICE_EMBEDDING_AUDIO_TOO_SHORT')
   const bandHz = frequencies()
   const sums = new Float64Array(BAND_COUNT)
@@ -59,8 +59,8 @@ export function buildVoiceEmbedding(
       const power = previousTwo * previousTwo + previous * previous
         - coefficient * previous * previousTwo
       const logPower = Math.log1p(Math.max(0, power))
-      sums[band] += logPower
-      sumSquares[band] += logPower * logPower
+      sums[band] = sums[band]! + logPower
+      sumSquares[band] = sumSquares[band]! + logPower * logPower
     }
     frames += 1
   }
@@ -76,7 +76,7 @@ export function buildVoiceEmbedding(
   return {
     schemaVersion: 1,
     algorithm: VOICE_EMBEDDING_ALGORITHM,
-    sourceAudioSha256: createHash('sha256').update(sourceAudioBytes).digest('hex'),
+    sourceAudioSha256: await streamHash([sourceAudioBytes]),
     sampleRateHz: SAMPLE_RATE,
     frameSize: FRAME_SIZE,
     hopSize: HOP_SIZE,

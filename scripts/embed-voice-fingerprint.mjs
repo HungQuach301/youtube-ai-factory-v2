@@ -14,7 +14,7 @@ const decoded = spawnSync('ffmpeg', [
 if (decoded.status !== 0) throw new Error(`VOICE_EMBEDDING_DECODE_FAILED: ${decoded.stderr}`)
 const raw = Buffer.from(decoded.stdout)
 const pcm = new Int16Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength))
-const embedding = buildVoiceEmbedding(pcm, audio)
+const embedding = await buildVoiceEmbedding(pcm, audio)
 await writeFile(outputPath, `${JSON.stringify(embedding, null, 2)}\n`)
 process.stdout.write(`${JSON.stringify({
   algorithm: embedding.algorithm,
