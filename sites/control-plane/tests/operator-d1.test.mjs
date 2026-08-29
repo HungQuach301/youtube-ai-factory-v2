@@ -191,6 +191,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     await client.connect(transport);
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
       "register_qualified_voice",
@@ -431,6 +432,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     await client.connect(transport);
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
       "register_qualified_voice",
@@ -510,6 +512,44 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(replay.structuredContent.replayed, true);
     assert.equal(replay.structuredContent.runId, first.structuredContent.runId);
 
+    const stage00Objective = "Open the Production package, bind the approved brief, freeze Stage 00 and stop at Stage 01 readiness.";
+    const stage00 = await client.callTool({
+      name: "execute_track_g_video_1_stage_00",
+      arguments: {
+        objective: stage00Objective,
+        confirm: true,
+        ownerApprovalText: "START STAGE 00",
+      },
+    });
+    assert.equal(stage00.isError, undefined, JSON.stringify(stage00));
+    assert.equal(stage00.structuredContent.accepted, true);
+    assert.equal(stage00.structuredContent.replayed, false);
+    assert.equal(stage00.structuredContent.runId, first.structuredContent.runId);
+    assert.equal(stage00.structuredContent.currentStep, "STAGE_01_READY");
+    assert.equal(stage00.structuredContent.packageId, "package_track_g_video_1_v1");
+    assert.equal(stage00.structuredContent.stageCode, "00");
+    assert.equal(stage00.structuredContent.stageState, "FROZEN");
+    assert.equal(stage00.structuredContent.artifactState, "SEALED");
+    assert.equal(stage00.structuredContent.artifactEligibility, "ELIGIBLE_FOR_STAGE");
+    assert.equal(stage00.structuredContent.videoCeilingUsd, 30);
+    assert.equal(stage00.structuredContent.trackGCeilingUsd, 350);
+    assert.equal(stage00.structuredContent.stageReservedUsd, 0);
+    assert.equal(stage00.structuredContent.stageActualUsd, 0);
+    assert.equal(stage00.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage00.structuredContent.releaseEligible, false);
+    assert.equal(stage00.structuredContent.autoPublish, "OFF");
+
+    const stage00Replay = await client.callTool({
+      name: "execute_track_g_video_1_stage_00",
+      arguments: {
+        objective: stage00Objective,
+        confirm: true,
+        ownerApprovalText: "START STAGE 00",
+      },
+    });
+    assert.equal(stage00Replay.structuredContent.replayed, true);
+    assert.equal(stage00Replay.structuredContent.briefSha256, stage00.structuredContent.briefSha256);
+
     const contract = await d1.prepare("SELECT * FROM track_g_run_contract").first();
     assert.equal(contract.profile, "REDUCED");
     assert.equal(contract.assurance_mode, "WARNING_ONLY");
@@ -534,7 +574,38 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stagePlan.includes("15"), false);
     assert.equal(stagePlan.includes("16"), false);
 
+    const productionPackage = await d1.prepare("SELECT * FROM production_package").first();
+    const brief = await d1.prepare("SELECT * FROM content_brief").first();
+    const stageInstance = await d1.prepare("SELECT * FROM stage_instance").first();
+    const stageArtifact = await d1.prepare("SELECT * FROM stage_artifact").first();
+    const spendCeilings = await d1.prepare("SELECT * FROM spend_ceiling ORDER BY scope").all();
+    assert.equal(productionPackage.namespace, "production");
+    assert.equal(productionPackage.brief_hash, brief.canonical_hash);
+    assert.equal(productionPackage.request_ceiling, 0);
+    assert.equal(productionPackage.spend_ceiling_usd, 30);
+    assert.equal(productionPackage.auto_dispatch, 0);
+    assert.equal(productionPackage.auto_publish, 0);
+    assert.equal(stageInstance.stage_code, "00");
+    assert.equal(stageInstance.control_state, "FROZEN");
+    assert.equal(stageArtifact.canonical_hash, brief.canonical_hash);
+    assert.equal(stageArtifact.immutability_state, "SEALED");
+    assert.equal(stageArtifact.eligibility_state, "ELIGIBLE_FOR_STAGE");
+    assert.equal(spendCeilings.results.length, 4);
+
     const bucket = await mf.getR2Bucket("BUCKET");
+    const productionEvidence = await bucket.get(stageArtifact.r2_key);
+    assert.ok(productionEvidence);
+    const productionEvidenceBytes = Buffer.from(await productionEvidence.arrayBuffer());
+    assert.equal(createHash("sha256").update(productionEvidenceBytes).digest("hex"), brief.canonical_hash);
+    await assert.rejects(
+      d1.prepare("UPDATE stage_artifact SET eligibility_state = 'INELIGIBLE'").run(),
+      /STAGE_ARTIFACT_APPEND_ONLY/u,
+    );
+    await assert.rejects(
+      d1.prepare("UPDATE production_package SET auto_dispatch = 1").run(),
+      /TRACK_G_PRODUCTION_PACKAGE_FAIL_CLOSED/u,
+    );
+
     const evidence = await bucket.get(contract.bootstrap_evidence_r2_key);
     assert.ok(evidence);
     const evidenceBytes = Buffer.from(await evidence.arrayBuffer());
@@ -542,7 +613,7 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_00_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_01_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [

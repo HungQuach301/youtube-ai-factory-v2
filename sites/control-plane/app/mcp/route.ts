@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { getChatGPTUser, type ChatGPTUser } from "../chatgpt-auth";
+import { approvedChannel } from "../factory-contract";
 import {
   getOperatorSnapshot,
   prepareApprovedChannel,
@@ -14,8 +15,10 @@ import {
   oauthScopes,
 } from "../oauth-server";
 import {
+  executeTrackGVideoOneStage00,
   startTrackGVideoOneQualification,
   trackGVideoOneIdempotencyKey,
+  trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
 import { registerQualifiedVoice } from "../voice-qualification";
 
@@ -259,7 +262,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         replayed: z.boolean(),
         runId: z.string(),
         runStatus: z.literal("RUNNING"),
-        currentStep: z.literal("STAGE_00_READY"),
+        currentStep: z.enum(["STAGE_00_READY", "STAGE_01_READY"]),
         episodeStatus: z.literal("IN_PRODUCTION"),
         profile: z.literal("REDUCED"),
         assuranceMode: z.literal("WARNING_ONLY"),
@@ -290,7 +293,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         replayed: result.replayed,
         runId: result.run.id,
         runStatus: "RUNNING" as const,
-        currentStep: "STAGE_00_READY" as const,
+        currentStep: result.run.currentStep as "STAGE_00_READY" | "STAGE_01_READY",
         episodeStatus: "IN_PRODUCTION" as const,
         profile: "REDUCED" as const,
         assuranceMode: "WARNING_ONLY" as const,
@@ -299,6 +302,79 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         releaseEligible: false as const,
         bootstrapEvidenceSha256: result.contract.bootstrapEvidenceSha256,
         providerDispatch: "OFF" as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
+  server.registerTool(
+    "execute_track_g_video_1_stage_00",
+    {
+      title: "Execute Track G Video #1 Stage 00",
+      description:
+        "Execute the deterministic, zero-provider Stage 00 package-open and brief-bind lifecycle for the active Track G Video #1 run. It seals Production R2 evidence, freezes Stage 00, advances only to STAGE_01_READY, reserves zero Stage 00 spend, and keeps dispatch, release and publishing disabled.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("START STAGE 00"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        runStatus: z.literal("RUNNING"),
+        currentStep: z.literal("STAGE_01_READY"),
+        packageId: z.string(),
+        stageCode: z.literal("00"),
+        stageState: z.literal("FROZEN"),
+        artifactState: z.literal("SEALED"),
+        artifactEligibility: z.literal("ELIGIBLE_FOR_STAGE"),
+        briefSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        videoCeilingUsd: z.number(),
+        trackGCeilingUsd: z.number(),
+        stageReservedUsd: z.literal(0),
+        stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await executeTrackGVideoOneStage00(user, {
+        objective,
+        ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage00IdempotencyKey(),
+      });
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.base.run.id,
+        runStatus: "RUNNING" as const,
+        currentStep: "STAGE_01_READY" as const,
+        packageId: result.productionPackage.id,
+        stageCode: "00" as const,
+        stageState: "FROZEN" as const,
+        artifactState: "SEALED" as const,
+        artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
+        briefSha256: result.brief.canonicalHash,
+        videoCeilingUsd: result.productionPackage.spendCeilingUsd,
+        trackGCeilingUsd: approvedChannel.controls.trackGCeilingUsd,
+        stageReservedUsd: 0 as const,
+        stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
         autoPublish: "OFF" as const,
       };
       return {
@@ -384,6 +460,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "start_track_g_video_1_qualification") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "execute_track_g_video_1_stage_00") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }

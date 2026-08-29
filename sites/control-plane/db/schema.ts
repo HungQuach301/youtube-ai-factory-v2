@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const ownerIdentity = sqliteTable("owner_identity", {
   identity: text("identity").primaryKey(),
@@ -114,6 +114,66 @@ export const trackGRunContracts = sqliteTable("track_g_run_contract", {
   uniqueIndex("track_g_run_operation_unique").on(table.operationRunId),
   uniqueIndex("track_g_run_episode_unique").on(table.episodeId),
 ]);
+
+export const contentBriefs = sqliteTable("content_brief", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id").notNull().references(() => episodes.id),
+  version: integer("version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("content_brief_episode_version_unique").on(table.episodeId, table.version)]);
+
+export const productionPackages = sqliteTable("production_package", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id").notNull().references(() => episodes.id),
+  channelId: text("channel_id").notNull().references(() => channels.id),
+  namespace: text("namespace", { enum: ["production"] }).notNull(),
+  briefHash: text("brief_hash").notNull(),
+  identityContractId: text("identity_contract_id").notNull().references(() => channelIdentityContracts.id),
+  requestCeiling: integer("request_ceiling").notNull(),
+  spendCeilingUsd: real("spend_ceiling_usd").notNull(),
+  autoDispatch: integer("auto_dispatch").notNull().default(0),
+  autoPublish: integer("auto_publish").notNull().default(0),
+  status: text("status", { enum: ["OPEN", "RUNNING", "HELD", "RELEASED", "PUBLISHED", "ABANDONED"] }).notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("production_package_episode_unique").on(table.episodeId)]);
+
+export const stageInstances = sqliteTable("stage_instance", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageCode: text("stage_code").notNull(),
+  controlState: text("control_state", {
+    enum: ["NOT_STARTED", "RUNNING", "PRODUCED", "VERIFIED", "FROZEN", "REOPENED"],
+  }).notNull(),
+  standardVersion: integer("standard_version").notNull(),
+  attemptOrdinal: integer("attempt_ordinal").notNull().default(1),
+  startedAt: text("started_at"),
+  frozenAt: text("frozen_at"),
+}, (table) => [uniqueIndex("stage_instance_package_stage_attempt_unique")
+  .on(table.packageId, table.stageCode, table.attemptOrdinal)]);
+
+export const stageArtifacts = sqliteTable("stage_artifact", {
+  id: text("id").primaryKey(),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  artifactType: text("artifact_type").notNull(),
+  namespace: text("namespace", { enum: ["production"] }).notNull(),
+  r2Key: text("r2_key").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
+  immutabilityState: text("immutability_state", { enum: ["SEALED"] }).notNull(),
+  eligibilityState: text("eligibility_state", { enum: ["ELIGIBLE_FOR_STAGE"] }).notNull(),
+  standardVersion: integer("standard_version").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("stage_artifact_stage_type_unique")
+  .on(table.stageInstanceId, table.artifactType)]);
+
+export const spendCeilings = sqliteTable("spend_ceiling", {
+  scope: text("scope", { enum: ["PORTFOLIO", "CHANNEL", "PACKAGE", "STAGE"] }).notNull(),
+  scopeRef: text("scope_ref").notNull(),
+  ceilingUsd: real("ceiling_usd").notNull(),
+  windowStart: text("window_start"),
+  windowEnd: text("window_end"),
+}, (table) => [primaryKey({ columns: [table.scope, table.scopeRef] })]);
 
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),

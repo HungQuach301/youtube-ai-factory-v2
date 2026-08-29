@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "0507d12596c73929c80fd379c9d7394ef46503ab38b635f3f3320f9c7de4f5a1",
+  "aggregate_sha256": "25b28b039b501d108e3fa772cacd2ee18aaa232b350ff274c85b4460f36963b9",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -53,7 +53,7 @@
     },
     {
       "path": "app/evidence-storage.ts",
-      "sha256": "f5e197f600e4edf7c4444ca23a39f01139d714255d3ea9a30d5da954f7f989f2"
+      "sha256": "44dcc1dff18a056cd5ee04c3e11b22326e624547fff8d9962b98b76bddc311bf"
     },
     {
       "path": "app/factory-contract.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "b24ad94ff584b524e1496e15a4e0362f6833cddd7253245934bbb4408e3f45e3"
+      "sha256": "5b6fe8328e06cc14eb5b480ac9fe4bfc91f5b419392b48878d46dbb61989afd0"
     },
     {
       "path": "app/oauth-server.ts",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "121ecffe81e753c3d6c257a6c18860273bc563b733f3a50cdab9477d27695517"
+      "sha256": "b732a89f44903a049e349a886c0a82e90af519fe89ad5b58c4a5fc35883b3461"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +125,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "bf5c71c549bc473e079b99fbb866590b02fa4165c191157f8415cde18d077721"
+      "sha256": "7466ad5bc6dca99ff8c4dd26b52954d3c240585d620690fb91d1162a26893a97"
     },
     {
       "path": "drizzle.config.ts",
@@ -148,6 +148,10 @@
       "sha256": "abba9b3d16b1b83c893f0cf905fc2028f3a2817ee28e1e3b34e9a6dc7c575815"
     },
     {
+      "path": "drizzle/0004_amusing_cable.sql",
+      "sha256": "a5edea44a8ad56dac1d56aa89f3428e24fac219dc1937f1e748704c5732aa0da"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -164,8 +168,12 @@
       "sha256": "95f9fa2d9cd32b4417b19891105e922e06d35216aa8ac61afea86ebc8229e677"
     },
     {
+      "path": "drizzle/meta/0004_snapshot.json",
+      "sha256": "5bc0e2f2b78e4f1ad04b7631385374a1165d011cdefa4d7af58d0b7eebacf414"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "5309884949d34355f3c4f19fa29bcd879cdcceb4111de6856f346b50cacf866a"
+      "sha256": "d658bd290e12c54b4d34655f2edf7a09b8dd9545da89825cff92e216137b58ee"
     },
     {
       "path": "eslint.config.mjs",
@@ -237,7 +245,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "f7cecf896e41389ef652387af43a6b1d03ebf43f56d21eb57da0f0da74aa0285"
+      "sha256": "d8b0aa64e52c186950e05a2a74458f5f84769b47ec3183382e430327fb783068"
     },
     {
       "path": "tests/rendered-html.test.mjs",

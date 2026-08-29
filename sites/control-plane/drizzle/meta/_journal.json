@@ -29,6 +29,13 @@
       "when": 1787999814370,
       "tag": "0003_ancient_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788007744220,
+      "tag": "0004_amusing_cable",
+      "breakpoints": true
     }
   ]
 }
