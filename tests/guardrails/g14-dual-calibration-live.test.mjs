@@ -16,6 +16,7 @@ describe('G-02G-B bounded live dual calibration', () => {
       allowSpeakerReidentification: false,
       targetSamples: 12,
     })
+    expect(config.ownerTermsAcceptance).toBe('RECORDED')
     expect(runtime).toContain('commonVoiceAudioRetained')
     expect(runtime).toContain('TemporaryDirectory')
   })
