@@ -17,25 +17,45 @@ export async function putImmutableEvidence(
   contentType: string,
   expectedSha256: string,
 ): Promise<void> {
-  if (!key.startsWith("qual/") || key.includes("..") || key.includes("\\")) {
-    throw new Error("QUALIFICATION_EVIDENCE_R2_KEY_INVALID");
+  return putImmutableObject("qualification", "qual/", key, bytes, contentType, expectedSha256);
+}
+
+export async function putImmutableProductionEvidence(
+  key: string,
+  bytes: Uint8Array,
+  contentType: string,
+  expectedSha256: string,
+): Promise<void> {
+  return putImmutableObject("production", "prod/", key, bytes, contentType, expectedSha256);
+}
+
+async function putImmutableObject(
+  namespace: "qualification" | "production",
+  prefix: "qual/" | "prod/",
+  key: string,
+  bytes: Uint8Array,
+  contentType: string,
+  expectedSha256: string,
+): Promise<void> {
+  if (!key.startsWith(prefix) || key.includes("..") || key.includes("\\")) {
+    throw new Error(`${namespace.toUpperCase()}_EVIDENCE_R2_KEY_INVALID`);
   }
-  if (sha256(bytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_HASH_MISMATCH");
+  if (sha256(bytes) !== expectedSha256) throw new Error(`${namespace.toUpperCase()}_EVIDENCE_HASH_MISMATCH`);
   const store = bucket();
   const existing = await store.get(key);
   if (existing) {
     const existingBytes = new Uint8Array(await existing.arrayBuffer());
-    if (sha256(existingBytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_IMMUTABILITY_CONFLICT");
+    if (sha256(existingBytes) !== expectedSha256) throw new Error(`${namespace.toUpperCase()}_EVIDENCE_IMMUTABILITY_CONFLICT`);
     return;
   }
   await store.put(key, bytes, {
     httpMetadata: { contentType },
-    customMetadata: { sha256: expectedSha256, namespace: "qualification" },
+    customMetadata: { sha256: expectedSha256, namespace },
   });
   const readBack = await store.get(key);
-  if (!readBack) throw new Error("QUALIFICATION_EVIDENCE_R2_READ_BACK_MISSING");
+  if (!readBack) throw new Error(`${namespace.toUpperCase()}_EVIDENCE_R2_READ_BACK_MISSING`);
   const readBackBytes = new Uint8Array(await readBack.arrayBuffer());
-  if (sha256(readBackBytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_R2_READ_BACK_MISMATCH");
+  if (sha256(readBackBytes) !== expectedSha256) throw new Error(`${namespace.toUpperCase()}_EVIDENCE_R2_READ_BACK_MISMATCH`);
 }
 
 export async function verifyImmutableEvidence(key: string, expectedSha256: string): Promise<boolean> {
