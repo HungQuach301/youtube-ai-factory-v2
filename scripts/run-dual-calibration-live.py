@@ -122,14 +122,23 @@ def select_candidates(rows: list[dict[str, str]], config: dict[str, Any]) -> lis
 
 def extract_candidate_audio(archive: Path, candidates: list[dict[str, str]], target: Path) -> dict[str, Path]:
     wanted = {row["path"]: row for row in candidates}
+    by_basename: dict[str, str] = {}
+    for source_path in wanted:
+        basename = PurePosixPath(source_path).name
+        existing = by_basename.get(basename)
+        if existing is not None and existing != source_path:
+            raise RuntimeError("MDC_CANDIDATE_BASENAME_COLLISION")
+        by_basename[basename] = source_path
+
     extracted: dict[str, Path] = {}
     target.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as bundle:
         for member in bundle:
             if not member.isfile():
                 continue
-            matched = next((path for path in wanted if member.name.endswith(f"/clips/{path}") or member.name == path), None)
-            if matched is None:
+            member_path = PurePosixPath(member.name)
+            matched = member.name if member.name in wanted else by_basename.get(member_path.name)
+            if matched is None or matched not in wanted or matched in extracted:
                 continue
             source = bundle.extractfile(member)
             if source is None:
@@ -142,7 +151,6 @@ def extract_candidate_audio(archive: Path, candidates: list[dict[str, str]], tar
             if len(extracted) == len(wanted):
                 break
     return extracted
-
 
 def duration_seconds(path: Path) -> float:
     result = subprocess.run(
@@ -354,7 +362,7 @@ def live(config: dict[str, Any], output: Path) -> None:
             if len(human_items) == dataset["targetSamples"]:
                 break
         if len(human_items) != dataset["targetSamples"]:
-            raise RuntimeError("MDC_QUALITY_FILTER_INSUFFICIENT_SAMPLES")
+            raise RuntimeError(f"MDC_QUALITY_FILTER_INSUFFICIENT_SAMPLES:{len(extracted)}:{len(human_items)}")
 
         observed_human = run_observer(human_items, root / "human-observed.json", config["observer"]["model"])
         human_result = calibration(observed_human)
