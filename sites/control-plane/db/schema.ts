@@ -167,6 +167,49 @@ export const stageArtifacts = sqliteTable("stage_artifact", {
 }, (table) => [uniqueIndex("stage_artifact_stage_type_unique")
   .on(table.stageInstanceId, table.artifactType)]);
 
+export const truthSources = sqliteTable("truth_source", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  publisher: text("publisher").notNull(),
+  url: text("url").notNull(),
+  tier: integer("tier").notNull(),
+  fetchedAt: text("fetched_at").notNull(),
+  snapshotR2Key: text("snapshot_r2_key").notNull(),
+  contentHash: text("content_hash").notNull(),
+}, (table) => [uniqueIndex("truth_source_package_url_unique").on(table.packageId, table.url)]);
+
+export const truthClaims = sqliteTable("truth_claim", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  claimType: text("claim_type", {
+    enum: ["FACT", "ESTIMATE", "MECHANISM", "INTERPRETATION", "PREDICTION"],
+  }).notNull(),
+  text: text("text").notNull(),
+  criticality: text("criticality", {
+    enum: ["CRITICAL", "NORMAL", "SUPPORTING"],
+  }).notNull(),
+  numericJson: text("numeric_json"),
+  asOfDate: text("as_of_date"),
+  jurisdiction: text("jurisdiction"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const truthClaimSources = sqliteTable("truth_claim_source", {
+  claimId: text("claim_id").notNull().references(() => truthClaims.id),
+  sourceId: text("source_id").notNull().references(() => truthSources.id),
+  role: text("role", { enum: ["PRIMARY", "SUPPORTING", "LOCATING"] }).notNull(),
+}, (table) => [primaryKey({ columns: [table.claimId, table.sourceId] })]);
+
+export const truthTerminology = sqliteTable("truth_terminology", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  term: text("term").notNull(),
+  plainMeaning: text("plain_meaning").notNull(),
+  institutionalRole: text("institutional_role").notNull(),
+  ipa: text("ipa").notNull(),
+  arpabet: text("arpabet").notNull(),
+}, (table) => [uniqueIndex("truth_terminology_package_term_unique").on(table.packageId, table.term)]);
+
 export const spendCeilings = sqliteTable("spend_ceiling", {
   scope: text("scope", { enum: ["PORTFOLIO", "CHANNEL", "PACKAGE", "STAGE"] }).notNull(),
   scopeRef: text("scope_ref").notNull(),

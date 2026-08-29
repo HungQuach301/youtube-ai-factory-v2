@@ -14,6 +14,10 @@ import {
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
+  truthClaims,
+  truthClaimSources,
+  truthSources,
+  truthTerminology,
 } from "../db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { approvedChannel, trackGVideoOneContract } from "./factory-contract";
@@ -45,6 +49,11 @@ const STAGE_02_STANDARD_VERSION = 1;
 const STAGE_02_INSTANCE_ID = "stage_track_g_video_1_02_attempt_1";
 const STAGE_02_ARTIFACT_ID = "artifact_track_g_video_1_stage_02_reference_anti_copy_v1";
 const STAGE_02_ARTIFACT_TYPE = "REFERENCE_ANTI_COPY";
+const STAGE_03_CODE = "03";
+const STAGE_03_STANDARD_VERSION = 1;
+const STAGE_03_INSTANCE_ID = "stage_track_g_video_1_03_attempt_1";
+const STAGE_03_ARTIFACT_ID = "artifact_track_g_video_1_stage_03_truth_graph_v1";
+const STAGE_03_ARTIFACT_TYPE = "TRUTH_CLAIM_GRAPH_TERMINOLOGY";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -421,6 +430,296 @@ function stage02Measurements() {
   };
 }
 
+const STAGE_03_PROHIBITED_ADVICE_PATTERNS = [
+  /\byou should (?:buy|sell|invest|borrow|refinance|transfer|withdraw)\b/iu,
+  /\bif you want (?:profit|returns?|wealth),? (?:buy|invest|move|transfer)\b/iu,
+  /\bguaranteed (?:return|profit|income)\b/iu,
+  /\b(?:best|right) (?:stock|fund|crypto|loan|account) for you\b/iu,
+  /\bmove (?:all|your) money (?:to|into)\b/iu,
+  /\btransfer (?:your|the) money to (?:this|the|our|a) account\b/iu,
+  /\bsend (?:cash|crypto|money) (?:now|today|immediately)\b/iu,
+  /\bshare (?:(?:your|the) )?(?:password|pin|verification code)\b/iu,
+  /\bwithdraw (?:cash|your savings?) and (?:deliver|send|hand)\b/iu,
+  /\b(?:double|triple) your money\b/iu,
+] as const;
+
+const STAGE_03_ADVERSARIAL_ADVICE_FIXTURES = [
+  "You should buy this stock before the announcement.",
+  "You should sell your fund today.",
+  "You should invest in this token.",
+  "You should borrow against your home.",
+  "You should refinance immediately.",
+  "You should transfer the balance now.",
+  "You should withdraw your savings.",
+  "If you want profit, buy this asset.",
+  "If you want returns, invest in the scheme.",
+  "If you want wealth, move the funds.",
+  "Guaranteed return with no downside.",
+  "Guaranteed profit by Friday.",
+  "Guaranteed income from this strategy.",
+  "The best stock for you is this one.",
+  "The right fund for you is our fund.",
+  "The best crypto for you is this coin.",
+  "The right loan for you is this offer.",
+  "The best account for you is this account.",
+  "Move all money to the safe account.",
+  "Move your money into our account.",
+  "Transfer your money to this account.",
+  "Transfer the money to our account.",
+  "Send cash now.",
+  "Send crypto today.",
+  "Send money immediately.",
+  "Share your password with the agent.",
+  "Share the verification code.",
+  "Withdraw cash and deliver it to a courier.",
+  "Withdraw your savings and hand them over.",
+  "Double your money with this method.",
+  "Triple your money in one month.",
+] as const;
+
+function prohibitedAdviceMatches(value: string): string[] {
+  return STAGE_03_PROHIBITED_ADVICE_PATTERNS
+    .filter((pattern) => pattern.test(value))
+    .map((pattern) => pattern.source);
+}
+
+function stage03SourceSnapshots() {
+  return [
+    {
+      id: "truth_source_ftc_imposter_losses_2025_v1",
+      publisher: "U.S. Federal Trade Commission",
+      url: "https://www.ftc.gov/news-events/news/press-releases/2026/06/ftc-data-show-people-reported-losing-3-point-5-billion-imposter-scams-2025",
+      tier: 1,
+      fetchedAt: "2026-08-29",
+      jurisdiction: "US",
+      snapshot: {
+        title: "FTC data on 2025 imposter scam losses",
+        publishedOn: "2026-06-15",
+        verifiedOn: "2026-08-29",
+        summary: [
+          "FTC data reports $3.5 billion in 2025 imposter-scam losses.",
+          "The agency describes costly schemes that begin with fake bank security alerts and pressure people to move money.",
+        ],
+      },
+    },
+    {
+      id: "truth_source_ftc_bank_fraud_call_2024_v1",
+      publisher: "U.S. Federal Trade Commission",
+      url: "https://consumer.ftc.gov/consumer-alerts/2024/06/got-call-about-fraud-activity-your-bank-account-it-could-be-scammer",
+      tier: 1,
+      fetchedAt: "2026-08-29",
+      jurisdiction: "US",
+      snapshot: {
+        title: "FTC consumer alert on bank-fraud impersonation calls",
+        publishedOn: "2024-07-08",
+        verifiedOn: "2026-08-29",
+        summary: [
+          "A caller claiming that money must be moved for protection is presenting a scam indicator.",
+          "Urgency does not make the contact channel trustworthy.",
+        ],
+      },
+    },
+    {
+      id: "truth_source_cfpb_fraud_warning_signs_2026_v1",
+      publisher: "U.S. Consumer Financial Protection Bureau",
+      url: "https://www.consumerfinance.gov/ask-cfpb/what-are-some-classic-warning-signs-of-possible-fraud-and-scams-en-2094/",
+      tier: 1,
+      fetchedAt: "2026-08-29",
+      jurisdiction: "US",
+      snapshot: {
+        title: "CFPB warning signs of fraud and scams",
+        publishedOn: "2026-08-03",
+        verifiedOn: "2026-08-29",
+        summary: [
+          "CFPB advises confirming a suspected problem through the institution's official phone number or website.",
+          "Links and contact details in an untrusted message should not be treated as independent verification.",
+        ],
+      },
+    },
+  ] as const;
+}
+
+function stage03TruthModel() {
+  const sources = stage03SourceSnapshots();
+  const claims = [
+    {
+      id: "truth_claim_video_1_001",
+      claimType: "FACT",
+      text: "Consumers reported $3.5 billion in losses to imposter scams during 2025.",
+      criticality: "NORMAL",
+      numeric: {
+        amount: 3.5,
+        scale: "BILLION",
+        currency: "USD",
+        observationPeriod: "2025",
+        display: "$3.5 billion",
+        sourceId: sources[0].id,
+      },
+      asOfDate: "2025-12-31",
+      jurisdiction: "US",
+    },
+    {
+      id: "truth_claim_video_1_002",
+      claimType: "MECHANISM",
+      text: "A high-loss impersonation scam can begin with a fake bank security alert and then redirect the target toward attacker-controlled money movement.",
+      criticality: "CRITICAL",
+      numeric: null,
+      asOfDate: "2026-06-15",
+      jurisdiction: "US",
+    },
+    {
+      id: "truth_claim_video_1_003",
+      claimType: "INTERPRETATION",
+      text: "The false alert functions as a trust-redirection device: the channel raising the alarm also tries to become the channel that resolves it.",
+      criticality: "NORMAL",
+      numeric: null,
+      asOfDate: "2026-08-29",
+      jurisdiction: "US",
+    },
+    {
+      id: "truth_claim_video_1_004",
+      claimType: "FACT",
+      text: "A demand that a person move money to protect it is a recognized scam indicator in FTC consumer guidance.",
+      criticality: "CRITICAL",
+      numeric: null,
+      asOfDate: "2024-07-08",
+      jurisdiction: "US",
+    },
+    {
+      id: "truth_claim_video_1_005",
+      claimType: "MECHANISM",
+      text: "Independent verification through an official phone number, website, or app breaks reliance on contact details controlled by the original alert.",
+      criticality: "CRITICAL",
+      numeric: null,
+      asOfDate: "2026-08-03",
+      jurisdiction: "US",
+    },
+    {
+      id: "truth_claim_video_1_006",
+      claimType: "INTERPRETATION",
+      text: "The episode teaches a general verification habit and does not provide personalized financial, investment, legal, or account-specific advice.",
+      criticality: "SUPPORTING",
+      numeric: null,
+      asOfDate: "2026-08-29",
+      jurisdiction: "US",
+    },
+  ] as const;
+  const claimSources = [
+    { claimId: claims[0].id, sourceId: sources[0].id, role: "PRIMARY" },
+    { claimId: claims[1].id, sourceId: sources[0].id, role: "PRIMARY" },
+    { claimId: claims[1].id, sourceId: sources[1].id, role: "SUPPORTING" },
+    { claimId: claims[2].id, sourceId: sources[0].id, role: "SUPPORTING" },
+    { claimId: claims[3].id, sourceId: sources[1].id, role: "PRIMARY" },
+    { claimId: claims[4].id, sourceId: sources[2].id, role: "PRIMARY" },
+    { claimId: claims[5].id, sourceId: sources[2].id, role: "SUPPORTING" },
+  ] as const;
+  const terminology = [
+    {
+      id: "truth_term_video_1_impersonation_scam",
+      term: "impersonation scam",
+      plainMeaning: "A scam in which the attacker pretends to be a trusted person or institution.",
+      institutionalRole: "Primary mechanism label",
+      ipa: "/ɪmˌpɝː.səˈneɪ.ʃən skæm/",
+      arpabet: "IH M P ER S AH N EY SH AH N S K AE M",
+    },
+    {
+      id: "truth_term_video_1_security_alert",
+      term: "security alert",
+      plainMeaning: "A warning about possible unauthorized activity; its delivery channel is not proof that it is genuine.",
+      institutionalRole: "Episode pretext",
+      ipa: "/sɪˈkjʊr.ə.t̬i əˈlɝːt/",
+      arpabet: "S IH K Y UH R AH T IY AH L ER T",
+    },
+    {
+      id: "truth_term_video_1_independent_verification",
+      term: "independent verification",
+      plainMeaning: "Confirming a claim through a known official channel that did not originate in the suspicious contact.",
+      institutionalRole: "Viewer protection model",
+      ipa: "/ˌɪn.dɪˈpen.dənt ˌver.ə.fəˈkeɪ.ʃən/",
+      arpabet: "IH N D IH P EH N D AH N T V EH R AH F AH K EY SH AH N",
+    },
+    {
+      id: "truth_term_video_1_ftc",
+      term: "Federal Trade Commission",
+      plainMeaning: "The U.S. federal consumer-protection agency cited for scam guidance and reported-loss data.",
+      institutionalRole: "Tier 1 source authority",
+      ipa: "/ˈfed.ɚ.əl treɪd kəˈmɪʃ.ən/",
+      arpabet: "F EH D ER AH L T R EY D K AH M IH SH AH N",
+    },
+  ] as const;
+  const graphEdges = [
+    { fromClaimId: claims[0].id, toClaimId: claims[1].id, relation: "CONTEXTUALIZES" },
+    { fromClaimId: claims[1].id, toClaimId: claims[2].id, relation: "EXPLAINS" },
+    { fromClaimId: claims[3].id, toClaimId: claims[4].id, relation: "SUPPORTS" },
+    { fromClaimId: claims[4].id, toClaimId: claims[5].id, relation: "BOUNDS" },
+  ] as const;
+
+  const productionViolations = claims.flatMap((claim) =>
+    prohibitedAdviceMatches(claim.text).map((pattern) => ({ claimId: claim.id, pattern })));
+  const detectedAdversarial = STAGE_03_ADVERSARIAL_ADVICE_FIXTURES.filter((fixture) =>
+    prohibitedAdviceMatches(fixture).length > 0);
+  if (productionViolations.length > 0
+    || detectedAdversarial.length !== STAGE_03_ADVERSARIAL_ADVICE_FIXTURES.length) {
+    throw new Error("TRACK_G_STAGE_03_M0_ADVICE_LINT_FAILED");
+  }
+
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const criticalClaims = claims.filter((claim) => claim.criticality === "CRITICAL");
+  const criticalTierPass = criticalClaims.every((claim) => claimSources.some((binding) => {
+    const source = sourceById.get(binding.sourceId);
+    return binding.claimId === claim.id && binding.role === "PRIMARY" && source && source.tier <= 2;
+  }));
+  if (!criticalTierPass) throw new Error("TRACK_G_STAGE_03_M0_CRITICAL_CLAIM_TIER_FAILED");
+
+  const numericClaims = claims.filter((claim) => /[$0-9]/u.test(claim.text));
+  const numericPass = numericClaims.every((claim) => claim.numeric
+    && claim.numeric.amount > 0
+    && claim.numeric.currency === "USD"
+    && claim.numeric.observationPeriod.length === 4
+    && claim.numeric.display.length > 0
+    && sourceById.has(claim.numeric.sourceId));
+  if (!numericPass) throw new Error("TRACK_G_STAGE_03_M1_NUMERIC_SCHEMA_FAILED");
+
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_ADVICE_LINT",
+      state: "PASS",
+      evidence: `${claims.length} Production claims are free of personalized financial directives; ${detectedAdversarial.length}/${STAGE_03_ADVERSARIAL_ADVICE_FIXTURES.length} adversarial advice fixtures were blocked deterministically.`,
+    },
+    {
+      gate: "M0_CRITICAL_CLAIM_TIER",
+      state: "PASS",
+      evidence: `${criticalClaims.length}/${criticalClaims.length} critical claims have a PRIMARY tier-1 U.S. federal source; no M0 waiver is present.`,
+    },
+    {
+      gate: "M1_NUMERIC_SCHEMA",
+      state: "PASS",
+      evidence: `${numericClaims.length}/${numericClaims.length} numeric claims carry normalized amount, scale, currency, observation period, display form, as-of date and source binding.`,
+    },
+  ];
+  return {
+    sources,
+    claims,
+    claimSources,
+    terminology,
+    graphEdges,
+    contradictions: [] as const,
+    adviceLint: {
+      classifierVersion: "deterministic-advice-lint-v1",
+      productionClaimCount: claims.length,
+      productionViolationCount: productionViolations.length,
+      adversarialFixtureCount: STAGE_03_ADVERSARIAL_ADVICE_FIXTURES.length,
+      adversarialDetectedCount: detectedAdversarial.length,
+    },
+    numericSchema: {
+      parserVersion: "deterministic-numeric-schema-v1",
+      numericClaimCount: numericClaims.length,
+      validNumericClaimCount: numericClaims.length,
+    },
+    gateResults,
+  };
+}
+
 function stage01Envelope(
   operationRunId: string,
   briefHash: string,
@@ -601,6 +900,145 @@ async function readBackStage02(operationRunId: string) {
     stage02Artifact: artifact,
     stageArtifact: artifact,
     gateResults: stage02Measurements().gateResults,
+  };
+}
+
+type Stage03SealedSource = {
+  id: string;
+  publisher: string;
+  url: string;
+  tier: number;
+  fetchedAt: string;
+  jurisdiction: string;
+  snapshotR2Key: string;
+  snapshotSha256: string;
+};
+
+function stage03Envelope(
+  operationRunId: string,
+  stage02ArtifactSha256: string,
+  sealedSources: Stage03SealedSource[],
+) {
+  const truth = stage03TruthModel();
+  if (sealedSources.length !== truth.sources.length
+    || sealedSources.some((source, index) => source.id !== truth.sources[index].id)) {
+    throw new Error("TRACK_G_STAGE_03_SOURCE_SNAPSHOT_SET_MISMATCH");
+  }
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-03-truth-graph-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_03_CODE,
+    artifactType: STAGE_03_ARTIFACT_TYPE,
+    researchMode: "BUILD_VERIFIED_FEDERAL_PRIMARY_SOURCES",
+    sourceTierPolicy: {
+      criticalClaimMaximumTier: 2,
+      m0WaiverAllowed: false,
+      sourceCount: sealedSources.length,
+    },
+    sources: sealedSources,
+    claimGraph: {
+      claims: truth.claims,
+      bindings: truth.claimSources,
+      edges: truth.graphEdges,
+      contradictions: truth.contradictions,
+    },
+    terminology: truth.terminology,
+    adviceLint: truth.adviceLint,
+    numericSchema: truth.numericSchema,
+    provenance: [
+      {
+        sourceType: "SEALED_STAGE_ARTIFACT",
+        sourceId: STAGE_02_ARTIFACT_ID,
+        canonicalHash: stage02ArtifactSha256,
+        authority: "PRODUCTION_STAGE_02",
+      },
+    ],
+    gateResults: truth.gateResults,
+    limitations: [
+      "The Stage 03 executor uses only build-verified U.S. federal primary sources sealed into Production R2.",
+      "No personalized financial, investment, legal or account-specific advice is authorized.",
+      "No claim about a specific bank's internal procedure is asserted.",
+    ],
+    budget: { reservedUsd: 0, actualUsd: 0 },
+    controls: {
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+      nextHumanGate: "STAGE_04_CHAMPION_SELECTION",
+    },
+  };
+}
+
+async function readBackStage03(operationRunId: string) {
+  const stage02 = await readBackStage02(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_03_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_03_ARTIFACT_ID)).limit(1);
+  const sources = await db.select().from(truthSources)
+    .where(eq(truthSources.packageId, STAGE_00_PACKAGE_ID));
+  const claims = await db.select().from(truthClaims)
+    .where(eq(truthClaims.packageId, STAGE_00_PACKAGE_ID));
+  const terminology = await db.select().from(truthTerminology)
+    .where(eq(truthTerminology.packageId, STAGE_00_PACKAGE_ID));
+  const allClaimSources = await db.select().from(truthClaimSources);
+  const claimIds = new Set(claims.map((claim) => claim.id));
+  const claimSources = allClaimSources.filter((binding) => claimIds.has(binding.claimId));
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) =>
+    value.scope === "STAGE" && value.scopeRef === STAGE_03_INSTANCE_ID)?.ceilingUsd;
+  const truth = stage03TruthModel();
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const criticalClaims = claims.filter((claim) => claim.criticality === "CRITICAL");
+  const criticalTierPass = criticalClaims.every((claim) => claimSources.some((binding) => {
+    const source = sourceById.get(binding.sourceId);
+    return binding.claimId === claim.id && binding.role === "PRIMARY" && source && source.tier <= 2;
+  }));
+  const sourceEvidencePass = (await Promise.all(sources.map((source) =>
+    verifyImmutableEvidence(source.snapshotR2Key, source.contentHash)))).every(Boolean);
+  const numericSchemaPass = claims.filter((claim) => /[$0-9]/u.test(claim.text)).every((claim) => {
+    if (!claim.numericJson) return false;
+    const numeric = JSON.parse(claim.numericJson) as Record<string, unknown>;
+    return typeof numeric.amount === "number"
+      && numeric.currency === "USD"
+      && typeof numeric.observationPeriod === "string"
+      && typeof numeric.sourceId === "string"
+      && sourceById.has(numeric.sourceId);
+  });
+  if (!stage || !artifact
+    || stage.packageId !== STAGE_00_PACKAGE_ID
+    || stage.stageCode !== STAGE_03_CODE
+    || stage.controlState !== "FROZEN"
+    || stage.standardVersion !== STAGE_03_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id
+    || artifact.artifactType !== STAGE_03_ARTIFACT_TYPE
+    || artifact.namespace !== "production"
+    || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_03_STANDARD_VERSION
+    || stageCeiling !== 0
+    || sources.length !== truth.sources.length
+    || claims.length !== truth.claims.length
+    || claimSources.length !== truth.claimSources.length
+    || terminology.length !== truth.terminology.length
+    || !criticalTierPass
+    || !sourceEvidencePass
+    || !numericSchemaPass
+    || !isAtOrAfterReadyStep(stage02.base.run.currentStep, "STAGE_04_READY")
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_03_READ_BACK_FAILED");
+  }
+  return {
+    ...stage02,
+    stage03: stage,
+    stage03Artifact: artifact,
+    stageArtifact: artifact,
+    gateResults: truth.gateResults,
   };
 }
 
@@ -868,6 +1306,9 @@ export async function advanceTrackGVideoOneStage(
   if (input.stageCode === STAGE_02_CODE) {
     return advanceTrackGVideoOneStage02(user, input, objective);
   }
+  if (input.stageCode === STAGE_03_CODE) {
+    return advanceTrackGVideoOneStage03(user, input, objective);
+  }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
   }
@@ -1091,6 +1532,177 @@ async function advanceTrackGVideoOneStage02(
   return { ...(await readBackStage02(bootstrap.run.id)), replayed: false };
 }
 
+async function advanceTrackGVideoOneStage03(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+  objective: string,
+) {
+  const bootstrap = await readBackForStage00();
+  const stage02 = await readBackStage02(bootstrap.run.id);
+  const expectedIdempotencyKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    STAGE_03_CODE,
+    stage02.stage02Artifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedIdempotencyKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage03(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_03_READY") throw new Error("TRACK_G_STAGE_03_NOT_READY");
+  if (!await verifyImmutableEvidence(
+    stage02.stage02Artifact.r2Key,
+    stage02.stage02Artifact.canonicalHash,
+  )) {
+    throw new Error("TRACK_G_STAGE_03_PREDECESSOR_PROVENANCE_FAILED");
+  }
+
+  const sealedSources: Stage03SealedSource[] = [];
+  for (const source of stage03SourceSnapshots()) {
+    const snapshotJson = canonicalize({
+      schemaVersion: 1,
+      sourceId: source.id,
+      publisher: source.publisher,
+      url: source.url,
+      tier: source.tier,
+      fetchedAt: source.fetchedAt,
+      jurisdiction: source.jurisdiction,
+      snapshot: source.snapshot,
+    });
+    const snapshotBytes = new TextEncoder().encode(`${snapshotJson}\n`);
+    const snapshotSha256 = sha256(snapshotBytes);
+    const snapshotR2Key = [
+      "prod",
+      approvedChannel.id,
+      trackGVideoOneContract.episodeId,
+      STAGE_03_CODE,
+      "truth-source",
+      source.id,
+      `${snapshotSha256}.json`,
+    ].join("/");
+    await putImmutableProductionEvidence(
+      snapshotR2Key,
+      snapshotBytes,
+      "application/json",
+      snapshotSha256,
+    );
+    sealedSources.push({
+      id: source.id,
+      publisher: source.publisher,
+      url: source.url,
+      tier: source.tier,
+      fetchedAt: source.fetchedAt,
+      jurisdiction: source.jurisdiction,
+      snapshotR2Key,
+      snapshotSha256,
+    });
+  }
+
+  const truth = stage03TruthModel();
+  const envelope = stage03Envelope(
+    bootstrap.run.id,
+    stage02.stage02Artifact.canonicalHash,
+    sealedSources,
+  );
+  const artifactJson = canonicalize(envelope);
+  const artifactBytes = new TextEncoder().encode(`${artifactJson}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = [
+    "prod",
+    approvedChannel.id,
+    trackGVideoOneContract.episodeId,
+    STAGE_03_CODE,
+    "truth-claim-graph-terminology",
+    `${artifactSha256}.json`,
+  ].join("/");
+  await putImmutableProductionEvidence(
+    artifactR2Key,
+    artifactBytes,
+    "application/json",
+    artifactSha256,
+  );
+
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id))
+    .orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_03_READY',
+          'TRACK_G_VIDEO_1_STAGE_04_READY', ?, ?)`)
+        .bind(commandId, canonicalize({
+          objective,
+          operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID,
+          stageCode: STAGE_03_CODE,
+          executorVersion: envelope.executorVersion,
+          artifactSha256,
+        }), input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '03', 'FROZEN', ?, 1, ?, ?)`)
+        .bind(STAGE_03_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_03_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`)
+        .bind(STAGE_03_ARTIFACT_ID, STAGE_03_INSTANCE_ID, STAGE_03_ARTIFACT_TYPE,
+          artifactR2Key, artifactSha256, STAGE_03_STANDARD_VERSION, now),
+      ...sealedSources.map((source) => d1.prepare(`INSERT INTO truth_source
+        (id, package_id, publisher, url, tier, fetched_at, snapshot_r2_key, content_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(source.id, STAGE_00_PACKAGE_ID, source.publisher, source.url, source.tier,
+          source.fetchedAt, source.snapshotR2Key, source.snapshotSha256)),
+      ...truth.claims.map((claim) => d1.prepare(`INSERT INTO truth_claim
+        (id, package_id, claim_type, text, criticality, numeric_json, as_of_date, jurisdiction, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(claim.id, STAGE_00_PACKAGE_ID, claim.claimType, claim.text, claim.criticality,
+          claim.numeric ? canonicalize(claim.numeric) : null, claim.asOfDate, claim.jurisdiction, now)),
+      ...truth.claimSources.map((binding) => d1.prepare(`INSERT INTO truth_claim_source
+        (claim_id, source_id, role) VALUES (?, ?, ?)`)
+        .bind(binding.claimId, binding.sourceId, binding.role)),
+      ...truth.terminology.map((term) => d1.prepare(`INSERT INTO truth_terminology
+        (id, package_id, term, plain_meaning, institutional_role, ipa, arpabet)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .bind(term.id, STAGE_00_PACKAGE_ID, term.term, term.plainMeaning,
+          term.institutionalRole, term.ipa, term.arpabet)),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`)
+        .bind(STAGE_03_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_04_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_03_READY'`)
+        .bind(now, bootstrap.run.id),
+      ...[
+        ["STAGE_03_DOR_PASSED", { predecessor: STAGE_02_ARTIFACT_ID, predecessorSha256: stage02.stage02Artifact.canonicalHash }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_03_CODE, traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_03_PRIMARY_SOURCES_SEALED", { sourceCount: sealedSources.length, sourceIds: sealedSources.map((source) => source.id) }],
+        ["STAGE_03_M0_ADVICE_LINT_PASSED", { adviceLint: truth.adviceLint }],
+        ["STAGE_03_M0_CRITICAL_CLAIM_TIER_PASSED", { criticalClaimCount: truth.claims.filter((claim) => claim.criticality === "CRITICAL").length, maximumTier: 2 }],
+        ["STAGE_03_M1_NUMERIC_SCHEMA_PASSED", { numericSchema: truth.numericSchema }],
+        ["STAGE_03_ARTIFACT_SEALED", { artifactId: STAGE_03_ARTIFACT_ID, artifactR2Key, artifactSha256 }],
+        ["STAGE_03_FROZEN", { nextStep: "STAGE_04_READY", reservedUsd: 0, actualUsd: 0, providerDispatch: "OFF", nextHumanGate: "STAGE_04_CHAMPION_SELECTION" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+        .bind(crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+          canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage03(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage03(bootstrap.run.id)), replayed: false };
+}
+
 async function readBackForStage00() {
   const db = getDb();
   const [contract] = await db.select({ operationRunId: trackGRunContracts.operationRunId })
@@ -1151,6 +1763,10 @@ export async function trackGVideoOneStageIdempotencyKey(
   if (stageCode === STAGE_02_CODE) {
     const stage01 = await readBackStage01(bootstrap.run.id);
     return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage01.stage01Artifact.canonicalHash);
+  }
+  if (stageCode === STAGE_03_CODE) {
+    const stage02 = await readBackStage02(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage02.stage02Artifact.canonicalHash);
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "9b8885ca20ce6fe06c407099d8cf72b5cc0a0a58f434dcff34f84cb18d4e729d",
+  "aggregate_sha256": "21d512f5c9a7d57699322c44ae3c97ab2ed0636c51ff37b86453a82a32c069b8",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "9af726742a0609e6eb825d6a5a8b28220d22d34041e5409e743432c4d7eec135"
+      "sha256": "374d09f27bc58230492f09fa9781cb512bf0e08d6d97de9c74e34d1c95aa0914"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +125,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "7466ad5bc6dca99ff8c4dd26b52954d3c240585d620690fb91d1162a26893a97"
+      "sha256": "95db62c31a5e84aefd4f09bbf5d0675b09a4e94c1512c034d17352a61b4b3aeb"
     },
     {
       "path": "drizzle.config.ts",
@@ -156,6 +156,10 @@
       "sha256": "aec357844b2ac741ccddcfdc5593bc32d0c6c7c77e8f0862a9b06aff9695a9de"
     },
     {
+      "path": "drizzle/0006_truth_layer.sql",
+      "sha256": "c87dc53ba3b0373a7006fb776d11277de756c8ceb6ce5107939f8ffc3b20adfa"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -176,8 +180,12 @@
       "sha256": "5bc0e2f2b78e4f1ad04b7631385374a1165d011cdefa4d7af58d0b7eebacf414"
     },
     {
+      "path": "drizzle/meta/0006_snapshot.json",
+      "sha256": "33817d54a2f9a5cb5b882ac65cb8b44a20711eb018d1c3b6b40f074c948f626b"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "d658bd290e12c54b4d34655f2edf7a09b8dd9545da89825cff92e216137b58ee"
+      "sha256": "2cb1009c0364a1cb05fa7961d877c677fd0843c627b240ed2a9674abd9a4c535"
     },
     {
       "path": "eslint.config.mjs",
@@ -249,7 +257,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "afee4197869c9589214c0126ba201852d3337e303eb084255937ba24aa167184"
+      "sha256": "d98f0f2da1629aaad0fdc65a6e37030094888d5fe27b960dea0061988b89d324"
     },
     {
       "path": "tests/rendered-html.test.mjs",
