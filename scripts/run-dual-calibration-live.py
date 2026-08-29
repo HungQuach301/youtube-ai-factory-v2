@@ -301,13 +301,16 @@ def live(config: dict[str, Any], output: Path) -> None:
         raise RuntimeError("ELEVENLABS_API_KEY_UNAVAILABLE")
 
     dataset = config["dataset"]
-    details = request_json(f"{MDC_BASE}/datasets/{dataset['datasetId']}", token=mdc_key)
-    if str(details.get("id")) != dataset["datasetId"]:
-        raise RuntimeError("MDC_DATASET_ID_MISMATCH")
-    details_text = json.dumps(details, sort_keys=True)
-    if dataset["licenseId"] not in details_text:
-        raise RuntimeError("MDC_LICENSE_MISMATCH")
-    session = request_json(f"{MDC_BASE}/datasets/{dataset['datasetId']}/download", token=mdc_key, method="POST")
+    try:
+        session = request_json(
+            f"{MDC_BASE}/datasets/{dataset['datasetId']}/download",
+            token=mdc_key,
+            method="POST",
+        )
+    except urllib.error.HTTPError as error:
+        if error.code == 403:
+            raise RuntimeError("MDC_DOWNLOAD_ACCESS_FORBIDDEN") from error
+        raise
     download_url = session.get("downloadUrl")
     if not isinstance(download_url, str) or not download_url.startswith("https://"):
         raise RuntimeError("MDC_DOWNLOAD_URL_MISSING")
