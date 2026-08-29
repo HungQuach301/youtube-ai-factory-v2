@@ -15,9 +15,12 @@ import {
   oauthScopes,
 } from "../oauth-server";
 import {
+  advanceTrackGVideoOneStage,
   executeTrackGVideoOneStage00,
   startTrackGVideoOneQualification,
+  trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
+  trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
 import { registerQualifiedVoice } from "../voice-qualification";
@@ -384,6 +387,87 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     },
   );
 
+  server.registerTool(
+    "advance_track_g_video_1_stage",
+    {
+      title: "Advance Track G Video #1 through a qualified stage",
+      description:
+        "Run one sequential Stage 01-14 executor through a stable, owner-authorized contract. The runner is idempotent and fail-closed: it verifies the frozen predecessor, immutable Production evidence, stage gates and zero-or-bounded spend before advancing exactly one stage. Stage 15 release remains a separate P10 action. An unimplemented stage executor is rejected without mutation.",
+      inputSchema: {
+        stageCode: z.enum(trackGAdvanceStageCodes),
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("ADVANCE TRACK G VIDEO 1"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        runStatus: z.literal("RUNNING"),
+        currentStep: z.string(),
+        packageId: z.string(),
+        stageCode: z.enum(trackGAdvanceStageCodes),
+        stageState: z.literal("FROZEN"),
+        artifactType: z.string(),
+        artifactState: z.literal("SEALED"),
+        artifactEligibility: z.literal("ELIGIBLE_FOR_STAGE"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        gateResults: z.array(z.object({
+          gate: z.string(),
+          state: z.literal("PASS"),
+          evidence: z.string(),
+        })),
+        stageReservedUsd: z.number().nonnegative(),
+        stageActualUsd: z.number().nonnegative(),
+        humanGate: z.string(),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ stageCode, objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await advanceTrackGVideoOneStage(user, {
+        stageCode,
+        objective,
+        ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStageIdempotencyKey(stageCode),
+      });
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.base.run.id,
+        runStatus: "RUNNING" as const,
+        currentStep: result.base.run.currentStep,
+        packageId: result.productionPackage.id,
+        stageCode,
+        stageState: "FROZEN" as const,
+        artifactType: result.stage01Artifact.artifactType,
+        artifactState: "SEALED" as const,
+        artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
+        artifactSha256: result.stage01Artifact.canonicalHash,
+        gateResults: result.gateResults,
+        stageReservedUsd: 0,
+        stageActualUsd: 0,
+        humanGate: "NOT_REQUIRED",
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
   return server;
 }
 
@@ -463,6 +547,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "execute_track_g_video_1_stage_00") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "advance_track_g_video_1_stage") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }

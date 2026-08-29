@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "25b28b039b501d108e3fa772cacd2ee18aaa232b350ff274c85b4460f36963b9",
+  "aggregate_sha256": "3b589abf06c60ac9eb51faf71d575b1213182788816428251681e04d85c318d4",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "5b6fe8328e06cc14eb5b480ac9fe4bfc91f5b419392b48878d46dbb61989afd0"
+      "sha256": "56ed73e61b6a96a6750f6e5c8a3405a10e6f97a60c1bf5acbc13a20ea37b5150"
     },
     {
       "path": "app/oauth-server.ts",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "b732a89f44903a049e349a886c0a82e90af519fe89ad5b58c4a5fc35883b3461"
+      "sha256": "f3795fdb75c957a8ba60255a8d931d67b5cd243029452bc683ee8abac29ea808"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -150,6 +150,10 @@
     {
       "path": "drizzle/0004_amusing_cable.sql",
       "sha256": "a5edea44a8ad56dac1d56aa89f3428e24fac219dc1937f1e748704c5732aa0da"
+    },
+    {
+      "path": "drizzle/0005_stage_runner.sql",
+      "sha256": "aec357844b2ac741ccddcfdc5593bc32d0c6c7c77e8f0862a9b06aff9695a9de"
     },
     {
       "path": "drizzle/meta/0000_snapshot.json",
@@ -245,7 +249,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "d8b0aa64e52c186950e05a2a74458f5f84769b47ec3183382e430327fb783068"
+      "sha256": "d55a292c7aecb2b851017a431e2699b1934b592446cdf8d6831701b2271db2b0"
     },
     {
       "path": "tests/rendered-html.test.mjs",
