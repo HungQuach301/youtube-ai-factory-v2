@@ -68,6 +68,50 @@ jobs:
           [[ -n "$MDC_API_KEY" ]] || { echo "MDC_API_KEY is unavailable." >&2; exit 1; }
           [[ -n "$ELEVENLABS_API_KEY" ]] || { echo "ELEVENLABS_API_KEY is unavailable." >&2; exit 1; }
 
+      - name: Probe Mozilla dataset authorization
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          with open("qualification-runs/dual-calibration-live.json", encoding="utf-8") as handle:
+              dataset_id = json.load(handle)["dataset"]["datasetId"]
+
+          request = urllib.request.Request(
+              f"https://mozilladatacollective.com/api/datasets/{dataset_id}",
+              method="GET",
+          )
+          request.add_header("Authorization", f"Bearer {os.environ['MDC_API_KEY']}")
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  print(json.dumps({
+                      "accepted": True,
+                      "datasetId": dataset_id,
+                      "status": response.status,
+                  }, sort_keys=True))
+          except urllib.error.HTTPError as error:
+              raw = error.read(2048).decode("utf-8", errors="replace")
+              try:
+                  payload = json.loads(raw)
+              except json.JSONDecodeError:
+                  payload = {"message": raw[:256]}
+              safe = {
+                  key: payload[key]
+                  for key in ("error", "message", "type", "code")
+                  if isinstance(payload, dict) and key in payload
+              }
+              print(json.dumps({
+                  "accepted": False,
+                  "datasetId": dataset_id,
+                  "response": safe,
+                  "status": error.code,
+              }, sort_keys=True))
+              raise SystemExit(1)
+          PY
+
       - name: Install pinned audio observation tooling
         shell: bash
         run: |
