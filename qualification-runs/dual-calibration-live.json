@@ -3,6 +3,7 @@
   "workPackage": "G-02G-B",
   "mode": "QUALIFICATION_ONLY",
   "state": "READY_FOR_BOUNDED_EXECUTION",
+  "ownerTermsAcceptance": "RECORDED",
   "productionEligible": false,
   "productionProviderDispatch": "OFF",
   "autoPublish": "OFF",
