@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02H-B",
+  "mode": "BOUNDED_QUALIFICATION_REMEDIATION",
+  "sourceG02GB": {
+    "runId": 33230810559,
+    "artifactId": 9708481045,
+    "artifactName": "dual-calibration-live-g-02g-b-33230810559",
+    "canonicalBundleSha256": "0ffaf572bbed5031a4ee81c82efc55d3076a29fb7d1e327cb469870617fec8fe",
+    "checksumEntryCount": 20
+  },
+  "sourceG02HA": {
+    "runId": 33238636625,
+    "artifactId": 9710685287,
+    "artifactName": "g02h-semantic-normalization-replay-33238636625",
+    "artifactZipSha256": "02177af49b58a0e5f8247cba6d952c01ee556c9f19869201349ce00b16e7a2ff",
+    "canonicalBundleSha256": "d2463b81e51f194d010c887e7643d566e5af8d3ce003e7cbe3f73427268aa552",
+    "checksumEntryCount": 6,
+    "requiredResidualSampleIds": ["finance-11"]
+  },
+  "replacement": {
+    "id": "finance-11-r1",
+    "replacesSampleId": "finance-11",
+    "text": "Using dollar cost averaging can reduce timing risk, but it does not guarantee a positive investment return.",
+    "domainTags": ["CURRENCY", "FINANCIAL_TERM"],
+    "voiceId": "KXyrWqXTuK63FlJ9XZ33",
+    "modelId": "eleven_multilingual_v2",
+    "outputFormat": "mp3_44100_128",
+    "maxProviderCalls": 1,
+    "maxTotalCharacters": 200,
+    "voiceSettings": {
+      "stability": 0.55,
+      "similarity_boost": 0.8,
+      "style": 0,
+      "use_speaker_boost": true,
+      "speed": 1
+    }
+  },
+  "observer": {
+    "engine": "whisperx",
+    "version": "3.4.2",
+    "model": "small.en"
+  },
+  "productionEligible": false,
+  "productionProviderDispatch": "OFF",
+  "autoPublish": "OFF"
+}
