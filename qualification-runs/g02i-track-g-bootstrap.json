@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02I-1B",
+  "namespace": "qualification",
+  "createdAt": "2026-08-29T00:00:00.000Z",
+  "state": "TRACK_G_BOOTSTRAP_ONLY",
+  "profile": "REDUCED",
+  "assuranceMode": "WARNING_ONLY",
+  "productionEligible": false,
+  "providerDispatch": "OFF",
+  "autoPublish": "OFF",
+  "source": {
+    "workPackage": "G-02I-1A",
+    "anchorCandidates": 9,
+    "ownerJudgments": 0,
+    "realRejectedMasterCandidates": 0,
+    "checksumEntryCount": 16
+  }
+}
