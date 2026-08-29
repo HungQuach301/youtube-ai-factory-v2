@@ -21,6 +21,7 @@ from typing import Any
 
 MDC_BASE = "https://mozilladatacollective.com/api"
 ELEVENLABS_BASE = "https://api.elevenlabs.io/v1"
+HTTP_USER_AGENT = "youtube-ai-factory-v2-g02gb/1 (+https://github.com/HungQuach301/youtube-ai-factory-v2)"
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -48,6 +49,7 @@ def request_json(url: str, *, token: str, method: str = "GET", payload: Any | No
     data = None if payload is None else canonical_bytes(payload)
     request = urllib.request.Request(url, data=data, method=method)
     request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("User-Agent", HTTP_USER_AGENT)
     request.add_header("Accept", "application/json")
     if data is not None:
         request.add_header("Content-Type", "application/json")
@@ -56,7 +58,7 @@ def request_json(url: str, *, token: str, method: str = "GET", payload: Any | No
 
 
 def download_file(url: str, target: Path, max_bytes: int) -> int:
-    request = urllib.request.Request(url, headers={"User-Agent": "youtube-ai-factory-v2-g02gb/1"})
+    request = urllib.request.Request(url, headers={"User-Agent": HTTP_USER_AGENT})
     total = 0
     with urllib.request.urlopen(request, timeout=120) as response, target.open("wb") as output:
         while True:
