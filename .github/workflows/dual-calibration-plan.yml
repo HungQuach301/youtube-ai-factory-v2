@@ -4,6 +4,15 @@ run-name: G-02G dual calibration plan · ${{ github.sha }}
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dual-calibration-plan.yml
+      - qualification-runs/dual-calibration-plan.json
+      - scripts/build-dual-calibration-plan.mjs
+      - packages/aligner-calibration/**
+      - packages/human-evidence/**
   push:
     branches:
       - g-02g-dual-calibration
