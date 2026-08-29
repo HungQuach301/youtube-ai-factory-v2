@@ -19,6 +19,8 @@ describe('G-02G-B bounded live dual calibration', () => {
     expect(config.ownerTermsAcceptance).toBe('RECORDED')
     expect(runtime).toContain('commonVoiceAudioRetained')
     expect(runtime).toContain('TemporaryDirectory')
+    expect(runtime).toContain('MDC_DOWNLOAD_ACCESS_FORBIDDEN')
+    expect(runtime).not.toContain('details = request_json')
   })
 
   it('bounds paid qualification calls and prevents TTS self-calibration', () => {
