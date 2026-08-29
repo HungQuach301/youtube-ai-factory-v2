@@ -8,6 +8,7 @@ import {
   contentBriefs,
   episodes,
   operationRuns,
+  operationEvents,
   productionPackages,
   spendCeilings,
   stageArtifacts,
@@ -27,12 +28,23 @@ import { voiceQualificationReadBack } from "./voice-qualification";
 const HEX64 = /^[0-9a-f]{64}$/u;
 const OWNER_APPROVAL_TEXT = "START VIDEO 1 QUALIFICATION";
 const STAGE_00_OWNER_APPROVAL_TEXT = "START STAGE 00";
+const ADVANCE_STAGE_OWNER_APPROVAL_TEXT = "ADVANCE TRACK G VIDEO 1";
 const STAGE_00_CODE = "00";
 const STAGE_00_STANDARD_VERSION = 1;
 const STAGE_00_PACKAGE_ID = "package_track_g_video_1_v1";
 const STAGE_00_BRIEF_ID = "brief_track_g_video_1_v1";
 const STAGE_00_INSTANCE_ID = "stage_track_g_video_1_00_attempt_1";
 const STAGE_00_ARTIFACT_ID = "artifact_track_g_video_1_stage_00_brief_v1";
+const STAGE_01_CODE = "01";
+const STAGE_01_STANDARD_VERSION = 1;
+const STAGE_01_INSTANCE_ID = "stage_track_g_video_1_01_attempt_1";
+const STAGE_01_ARTIFACT_ID = "artifact_track_g_video_1_stage_01_market_audience_v1";
+const STAGE_01_ARTIFACT_TYPE = "MARKET_AUDIENCE_INTELLIGENCE";
+export const trackGAdvanceStageCodes = [
+  "01", "02", "03", "04", "05", "06", "07A", "07B",
+  "08", "09", "10", "11", "12", "13", "14",
+] as const;
+export type TrackGAdvanceStageCode = typeof trackGAdvanceStageCodes[number];
 const RUN_BLOCKERS = [
   "HP02_EDITORIAL_IMPRINT_REQUIRED",
   "HP03_RELEASE_AUTHORIZATION_REQUIRED",
@@ -51,6 +63,34 @@ export type ExecuteTrackGVideoOneStage00Input = {
   ownerApprovalText: typeof STAGE_00_OWNER_APPROVAL_TEXT;
   idempotencyKey: string;
 };
+
+export type AdvanceTrackGVideoOneStageInput = {
+  stageCode: TrackGAdvanceStageCode;
+  objective: string;
+  ownerApprovalText: typeof ADVANCE_STAGE_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type StageGateResult = {
+  gate: string;
+  state: "PASS";
+  evidence: string;
+};
+
+const READY_STEPS = [
+  ...trackGVideoOneContract.stageCodes.map((stageCode) => `STAGE_${stageCode}_READY`),
+  "STAGE_15_READY",
+];
+
+function readyStepRank(step: string): number {
+  return READY_STEPS.indexOf(step);
+}
+
+function isAtOrAfterReadyStep(actual: string, expected: string): boolean {
+  const actualRank = readyStepRank(actual);
+  const expectedRank = readyStepRank(expected);
+  return actualRank >= 0 && expectedRank >= 0 && actualRank >= expectedRank;
+}
 
 function canonicalize(value: unknown): string {
   if (value === null) return "null";
@@ -113,7 +153,7 @@ async function readBack(operationRunId: string) {
     || contract.providerDispatch !== 0
     || contract.autoPublish !== 0
     || run.status !== "RUNNING"
-    || !["STAGE_00_READY", "STAGE_01_READY"].includes(run.currentStep)
+    || readyStepRank(run.currentStep) < 0
     || episode.status !== "IN_PRODUCTION"
     || !await verifyImmutableEvidence(contract.bootstrapEvidenceR2Key, contract.bootstrapEvidenceSha256)) {
     throw new Error("TRACK_G_RUN_READ_BACK_FAILED");
@@ -208,7 +248,7 @@ async function readBackStage00(operationRunId: string) {
     || artifact.immutabilityState !== "SEALED"
     || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
     || artifact.standardVersion !== STAGE_00_STANDARD_VERSION
-    || base.run.currentStep !== "STAGE_01_READY"
+    || !isAtOrAfterReadyStep(base.run.currentStep, "STAGE_01_READY")
     || ceiling("PORTFOLIO", "track-g") !== approvedChannel.controls.trackGCeilingUsd
     || ceiling("CHANNEL", approvedChannel.id) !== approvedChannel.controls.trackGCeilingUsd
     || ceiling("PACKAGE", productionPackage.id) !== approvedChannel.controls.videoCeilingUsd
@@ -217,6 +257,129 @@ async function readBackStage00(operationRunId: string) {
     throw new Error("TRACK_G_STAGE_00_READ_BACK_FAILED");
   }
   return { base, productionPackage, brief, stage, artifact };
+}
+
+function stage01AudienceJob(): string {
+  return "Help me verify a bank fraud alert before I call, click, or move money, so I can protect household funds without trusting the contact channel that raised the alarm.";
+}
+
+function audienceJobLint(job: string): StageGateResult {
+  const normalized = job.trim();
+  const passes = normalized.startsWith("Help me ")
+    && normalized.includes(" before ")
+    && normalized.includes(" so I can ")
+    && !normalized.toLowerCase().includes(approvedChannel.name.toLowerCase())
+    && normalized.length >= 80
+    && normalized.length <= 280;
+  if (!passes) throw new Error("TRACK_G_STAGE_01_M1_AUDIENCE_JOB_LINT_FAILED");
+  return {
+    gate: "M1_AUDIENCE_JOB_LINT",
+    state: "PASS",
+    evidence: "Job statement is action-, decision-, and outcome-shaped and does not substitute the channel or topic name for an audience job.",
+  };
+}
+
+function stage01Envelope(
+  operationRunId: string,
+  briefHash: string,
+  identityContractId: string,
+  identityContractHash: string,
+) {
+  const audienceJob = stage01AudienceJob();
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_SOURCE_PROVENANCE",
+      state: "PASS",
+      evidence: "Every conclusion is bound to the sealed Stage 00 brief and owner-approved channel identity contract; no external market claim is asserted.",
+    },
+    audienceJobLint(audienceJob),
+  ];
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-01-market-audience-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_01_CODE,
+    artifactType: STAGE_01_ARTIFACT_TYPE,
+    researchMode: "SEALED_INTERNAL_PROVENANCE_ONLY",
+    market: {
+      country: approvedChannel.market,
+      locale: approvedChannel.locale,
+      externalClaims: [],
+      limitation: "No external trend, volume, competitor, or demand claim was used because provider dispatch remains disabled.",
+    },
+    audience: {
+      approvedSegment: approvedChannel.audience,
+      job: audienceJob,
+      decisionMoment: "Before responding to an inbound bank-fraud alert or moving money.",
+      desiredOutcome: "Interrupt the scam path by independently verifying the alert and destination.",
+    },
+    episode: {
+      id: trackGVideoOneContract.episodeId,
+      title: approvedChannel.episodes[0],
+      workingPromise: "Reveal how the alert redirects trust, then give the viewer a channel-independent verification habit.",
+    },
+    provenance: [
+      {
+        sourceType: "SEALED_STAGE_ARTIFACT",
+        sourceId: STAGE_00_ARTIFACT_ID,
+        canonicalHash: briefHash,
+        authority: "OWNER_APPROVED_PRODUCTION_BRIEF",
+      },
+      {
+        sourceType: "CHANNEL_IDENTITY_CONTRACT",
+        sourceId: identityContractId,
+        canonicalHash: identityContractHash,
+        authority: "OWNER_APPROVED_PRIMARY",
+      },
+    ],
+    gateResults,
+    budget: { reservedUsd: 0, actualUsd: 0 },
+    controls: {
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+    },
+  };
+}
+
+async function readBackStage01(operationRunId: string) {
+  const stage00 = await readBackStage00(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_01_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_01_ARTIFACT_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) =>
+    value.scope === "STAGE" && value.scopeRef === STAGE_01_INSTANCE_ID)?.ceilingUsd;
+  if (!stage || !artifact
+    || stage.packageId !== STAGE_00_PACKAGE_ID
+    || stage.stageCode !== STAGE_01_CODE
+    || stage.controlState !== "FROZEN"
+    || stage.standardVersion !== STAGE_01_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id
+    || artifact.artifactType !== STAGE_01_ARTIFACT_TYPE
+    || artifact.namespace !== "production"
+    || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_01_STANDARD_VERSION
+    || stageCeiling !== 0
+    || !isAtOrAfterReadyStep(stage00.base.run.currentStep, "STAGE_02_READY")
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_01_READ_BACK_FAILED");
+  }
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_SOURCE_PROVENANCE",
+      state: "PASS",
+      evidence: "Sealed Stage 00 brief and owner-approved identity contract verified.",
+    },
+    audienceJobLint(stage01AudienceJob()),
+  ];
+  return { ...stage00, stage01: stage, stage01Artifact: artifact, gateResults };
 }
 
 export async function startTrackGVideoOneQualification(
@@ -470,6 +633,133 @@ export async function executeTrackGVideoOneStage00(
   return { ...(await readBackStage00(bootstrap.run.id)), replayed: false };
 }
 
+export async function advanceTrackGVideoOneStage(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== ADVANCE_STAGE_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_ADVANCE_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.stageCode !== STAGE_01_CODE) {
+    throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
+  }
+
+  const bootstrap = await readBackForStage00();
+  const stage00 = await readBackStage00(bootstrap.run.id);
+  const expectedIdempotencyKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    input.stageCode,
+    stage00.artifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedIdempotencyKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage01(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_01_READY") throw new Error("TRACK_G_STAGE_01_NOT_READY");
+
+  const [identityContract] = await db.select().from(channelIdentityContracts)
+    .where(eq(channelIdentityContracts.id, stage00.productionPackage.identityContractId)).limit(1);
+  if (!identityContract || identityContract.approvalState !== "PERSISTED") {
+    throw new Error("TRACK_G_STAGE_01_IDENTITY_NOT_PERSISTED");
+  }
+  const identityBytes = new TextEncoder().encode(identityContract.payloadJson);
+  if (sha256(identityBytes) !== identityContract.canonicalHash) {
+    throw new Error("TRACK_G_STAGE_01_M0_IDENTITY_PROVENANCE_FAILED");
+  }
+  if (!await verifyImmutableEvidence(stage00.artifact.r2Key, stage00.artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_01_M0_BRIEF_PROVENANCE_FAILED");
+  }
+
+  const envelope = stage01Envelope(
+    bootstrap.run.id,
+    stage00.artifact.canonicalHash,
+    identityContract.id,
+    identityContract.canonicalHash,
+  );
+  const artifactJson = canonicalize(envelope);
+  const artifactBytes = new TextEncoder().encode(`${artifactJson}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = [
+    "prod",
+    approvedChannel.id,
+    trackGVideoOneContract.episodeId,
+    STAGE_01_CODE,
+    "market-audience-intelligence",
+    `${artifactSha256}.json`,
+  ].join("/");
+  await putImmutableProductionEvidence(
+    artifactR2Key,
+    artifactBytes,
+    "application/json",
+    artifactSha256,
+  );
+
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id))
+    .orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_01_READY',
+          'TRACK_G_VIDEO_1_STAGE_02_READY', ?, ?)`)
+        .bind(commandId, canonicalize({
+          objective,
+          operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID,
+          stageCode: STAGE_01_CODE,
+          executorVersion: envelope.executorVersion,
+          artifactSha256,
+        }), input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '01', 'FROZEN', ?, 1, ?, ?)`)
+        .bind(STAGE_01_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_01_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`)
+        .bind(STAGE_01_ARTIFACT_ID, STAGE_01_INSTANCE_ID, STAGE_01_ARTIFACT_TYPE,
+          artifactR2Key, artifactSha256, STAGE_01_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`)
+        .bind(STAGE_01_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_02_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_01_READY'`)
+        .bind(now, bootstrap.run.id),
+      ...[
+        ["STAGE_01_DOR_PASSED", { predecessor: STAGE_00_ARTIFACT_ID, predecessorSha256: stage00.artifact.canonicalHash }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_01_CODE, traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_01_M0_SOURCE_PROVENANCE_PASSED", { sources: envelope.provenance }],
+        ["STAGE_01_M1_AUDIENCE_JOB_LINT_PASSED", { audienceJob: envelope.audience.job }],
+        ["STAGE_01_ARTIFACT_SEALED", { artifactId: STAGE_01_ARTIFACT_ID, artifactR2Key, artifactSha256 }],
+        ["STAGE_01_FROZEN", { nextStep: "STAGE_02_READY", reservedUsd: 0, actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+        .bind(crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+          canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage01(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage01(bootstrap.run.id)), replayed: false };
+}
+
 async function readBackForStage00() {
   const db = getDb();
   const [contract] = await db.select({ operationRunId: trackGRunContracts.operationRunId })
@@ -503,4 +793,29 @@ function stage00IdempotencyKey(
 export async function trackGVideoOneStage00IdempotencyKey(): Promise<string> {
   const bootstrap = await readBackForStage00();
   return stage00IdempotencyKey(bootstrap.run.id, bootstrap.contract.bootstrapEvidenceSha256);
+}
+
+function stageAdvanceIdempotencyKey(
+  operationRunId: string,
+  stageCode: TrackGAdvanceStageCode,
+  predecessorSha256: string,
+): string {
+  return createHash("sha256").update([
+    "ADVANCE_TRACK_G_VIDEO_1_STAGE",
+    operationRunId,
+    stageCode,
+    predecessorSha256,
+    "runner-contract-v1",
+  ].join("\0")).digest("hex");
+}
+
+export async function trackGVideoOneStageIdempotencyKey(
+  stageCode: TrackGAdvanceStageCode,
+): Promise<string> {
+  if (stageCode !== STAGE_01_CODE) {
+    throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
+  }
+  const bootstrap = await readBackForStage00();
+  const stage00 = await readBackStage00(bootstrap.run.id);
+  return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage00.artifact.canonicalHash);
 }
