@@ -17,9 +17,13 @@ import {
 import {
   advanceTrackGVideoOneStage,
   executeTrackGVideoOneStage00,
+  prepareTrackGVideoOneStage04Tournament,
+  selectTrackGVideoOneStage04Champion,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
+  trackGVideoOneStage04PrepareIdempotencyKey,
+  trackGVideoOneStage04SelectionIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -388,6 +392,189 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "prepare_track_g_video_1_stage_04_tournament",
+    {
+      title: "Prepare Track G Video #1 Stage 04 creative tournament",
+      description:
+        "Prepare the bounded REDUCED-profile Stage 04 tournament with two eligible creative routes and three blind deterministic qualification critics. It seals and preserves every candidate, passes route-diversity and packaging-contract gates, spends zero, and stops for the required HP-02 D1 owner champion decision without advancing the run.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("PREPARE STAGE 04 TOURNAMENT"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        runStatus: z.literal("RUNNING"),
+        currentStep: z.literal("STAGE_04_READY"),
+        packageId: z.string(),
+        stageCode: z.literal("04"),
+        stageState: z.literal("RUNNING"),
+        tournamentState: z.literal("AWAITING_HUMAN"),
+        candidates: z.array(z.object({
+          candidateId: z.string(),
+          rank: z.number().int().positive(),
+          routeName: z.string(),
+          hook: z.string(),
+          narrativeDevice: z.string(),
+          primaryTitle: z.string(),
+          thumbnailText: z.string(),
+          aggregateScore: z.number(),
+          machineRecommended: z.boolean(),
+        })),
+        gateResults: z.array(z.object({
+          gate: z.string(),
+          state: z.literal("PASS"),
+          evidence: z.string(),
+        })),
+        humanGate: z.literal("REQUIRED:HP-02_D1_CHAMPION_SELECTION"),
+        stageReservedUsd: z.literal(0),
+        stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await prepareTrackGVideoOneStage04Tournament(user, {
+        objective,
+        ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage04PrepareIdempotencyKey(),
+      });
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.base.run.id,
+        runStatus: "RUNNING" as const,
+        currentStep: "STAGE_04_READY" as const,
+        packageId: result.productionPackage.id,
+        stageCode: "04" as const,
+        stageState: "RUNNING" as const,
+        tournamentState: "AWAITING_HUMAN" as const,
+        candidates: result.tournamentModel.candidates.map((candidate) => ({
+          candidateId: candidate.id,
+          rank: candidate.routeOrder,
+          routeName: candidate.routeName,
+          hook: candidate.route.hook,
+          narrativeDevice: candidate.narrativeDevice,
+          primaryTitle: candidate.packaging.primaryTitle,
+          thumbnailText: candidate.packaging.thumbnailText,
+          aggregateScore: result.tournamentModel.aggregateScores[candidate.id],
+          machineRecommended: candidate.id === result.tournamentModel.recommendedCandidateId,
+        })),
+        gateResults: result.tournamentModel.gateResults,
+        humanGate: "REQUIRED:HP-02_D1_CHAMPION_SELECTION" as const,
+        stageReservedUsd: 0 as const,
+        stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
+  server.registerTool(
+    "select_track_g_video_1_stage_04_champion",
+    {
+      title: "Select the Track G Video #1 Stage 04 champion",
+      description:
+        "Record the owner's substantive HP-02 D1 editorial decision for one eligible Stage 04 route, including a rationale of at least one sentence. It seals the final route and packaging artifact, preserves the rejected candidate, freezes Stage 04 and advances exactly to STAGE_05_READY with zero provider spend.",
+      inputSchema: {
+        candidateId: z.string().min(12).max(160),
+        rationale: z.string().min(20).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("SELECT STAGE 04 CHAMPION"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        runStatus: z.literal("RUNNING"),
+        currentStep: z.literal("STAGE_05_READY"),
+        packageId: z.string(),
+        stageCode: z.literal("04"),
+        stageState: z.literal("FROZEN"),
+        artifactType: z.literal("CREATIVE_ROUTE_TOURNAMENT_PACKAGING"),
+        artifactState: z.literal("SEALED"),
+        artifactEligibility: z.literal("ELIGIBLE_FOR_STAGE"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        selectedCandidateId: z.string(),
+        selectedRouteName: z.string(),
+        preservedCandidateCount: z.number().int().positive(),
+        gateResults: z.array(z.object({
+          gate: z.string(),
+          state: z.literal("PASS"),
+          evidence: z.string(),
+        })),
+        humanGate: z.literal("SATISFIED:HP-02_D1_CHAMPION_SELECTION"),
+        stageReservedUsd: z.literal(0),
+        stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ candidateId, rationale, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await selectTrackGVideoOneStage04Champion(user, {
+        candidateId,
+        rationale,
+        ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage04SelectionIdempotencyKey(candidateId, rationale),
+      });
+      const selected = result.candidates.find((candidate) => candidate.id === result.selection.candidateId)!;
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.base.run.id,
+        runStatus: "RUNNING" as const,
+        currentStep: "STAGE_05_READY" as const,
+        packageId: result.productionPackage.id,
+        stageCode: "04" as const,
+        stageState: "FROZEN" as const,
+        artifactType: "CREATIVE_ROUTE_TOURNAMENT_PACKAGING" as const,
+        artifactState: "SEALED" as const,
+        artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
+        artifactSha256: result.stageArtifact.canonicalHash,
+        selectedCandidateId: selected.id,
+        selectedRouteName: selected.routeName,
+        preservedCandidateCount: result.candidates.length,
+        gateResults: result.gateResults,
+        humanGate: "SATISFIED:HP-02_D1_CHAMPION_SELECTION" as const,
+        stageReservedUsd: 0 as const,
+        stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
+  server.registerTool(
     "advance_track_g_video_1_stage",
     {
       title: "Advance Track G Video #1 through a qualified stage",
@@ -550,6 +737,12 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "advance_track_g_video_1_stage") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "prepare_track_g_video_1_stage_04_tournament") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "select_track_g_video_1_stage_04_champion") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }

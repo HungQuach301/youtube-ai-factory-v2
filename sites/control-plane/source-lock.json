@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "21d512f5c9a7d57699322c44ae3c97ab2ed0636c51ff37b86453a82a32c069b8",
+  "aggregate_sha256": "b7cd8baa02bb0d78b3bb78df1f54afff044d3a14ffefb83d6b14d1e9546afdee",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "33503cc37748f33eb8502627ee8fd1c444943b5c80bef652f0c12d2d4ac4e66a"
+      "sha256": "87656b7666d9e0e0ad674fd024f0a75bbe0cb903fd4eea6f12b2dd021dc714db"
     },
     {
       "path": "app/oauth-server.ts",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "374d09f27bc58230492f09fa9781cb512bf0e08d6d97de9c74e34d1c95aa0914"
+      "sha256": "5148f70fde726c9c0cd0b3e8ad93d3806f71bf181bf62f4fa1e4b58fd507fa13"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +125,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "95db62c31a5e84aefd4f09bbf5d0675b09a4e94c1512c034d17352a61b4b3aeb"
+      "sha256": "1f8e7d6645bb242fd18e91c2af63c7330efb65bd73e84c0614b3fa36fe0cbd6c"
     },
     {
       "path": "drizzle.config.ts",
@@ -160,6 +160,10 @@
       "sha256": "c87dc53ba3b0373a7006fb776d11277de756c8ceb6ce5107939f8ffc3b20adfa"
     },
     {
+      "path": "drizzle/0007_creative_tournament.sql",
+      "sha256": "ef7870e57a7abbaf8d752096de6d3675aef50bbe1cb6653f47d79c28906bf07d"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -184,8 +188,12 @@
       "sha256": "33817d54a2f9a5cb5b882ac65cb8b44a20711eb018d1c3b6b40f074c948f626b"
     },
     {
+      "path": "drizzle/meta/0007_snapshot.json",
+      "sha256": "1d2c6be177f082bd9dae77cbc52532c332248167fa655e4874cb81b905a484bd"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "2cb1009c0364a1cb05fa7961d877c677fd0843c627b240ed2a9674abd9a4c535"
+      "sha256": "ccbb457d067d788d618684638a80220a8c8c37f1166f3880394e3ab085e7fc43"
     },
     {
       "path": "eslint.config.mjs",
@@ -257,7 +265,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "d98f0f2da1629aaad0fdc65a6e37030094888d5fe27b960dea0061988b89d324"
+      "sha256": "c8c7ebad6d99eca88020148aa76d188c424443639963064a35d11be172fd9e34"
     },
     {
       "path": "tests/rendered-html.test.mjs",
