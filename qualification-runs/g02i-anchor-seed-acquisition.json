@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02I-1A",
+  "namespace": "qualification",
+  "createdAt": "2026-08-29T00:00:00.000Z",
+  "state": "SEED_ACQUISITION_ONLY",
+  "productionEligible": false,
+  "providerDispatch": "OFF",
+  "autoPublish": "OFF",
+  "sources": {
+    "g02e": {
+      "runId": 33187748930,
+      "artifactId": 9692479988,
+      "artifactName": "gold-set-g-02e-33187748930",
+      "artifactZipSha256": "7c562dc8ace9fb029c855f3cb0a62790518c3bd456b525bd79ffcfd9e51d5974",
+      "manifestSha256": "49fd4fa8989912318014795cdc977c23fe18cee12bafb0613cf6b078972ac418",
+      "checksumEntryCount": 20
+    },
+    "g02h": {
+      "runId": 33239075196,
+      "artifactId": 9710824802,
+      "artifactName": "g02h-targeted-voice-remediation-33239075196",
+      "artifactZipSha256": "51e8d62fa1ea029c8bfb109581fceb50329b1c602dbb0121c22512c786d1ae73",
+      "canonicalBundleSha256": "05ad1486bc78f2e9f7e897c6dd9dce9ec4dfbacb16a9c843cf039d43d03da0d9",
+      "checksumEntryCount": 8
+    },
+    "g02i0": {
+      "runId": 33242103389,
+      "artifactId": 9711665711,
+      "artifactName": "g02i-evidence-closure-33242103389",
+      "artifactZipSha256": "78c9d4bf1b336ad3732fdc981dd4f2a72d032338ba7fdac6f830cf2c41e62467",
+      "manifestSha256": "9c1f7d1bbc8786e0b8c7bc8fb3113e195a720912460629d361ab3ec7b774e092",
+      "canonicalOutputHash": "5ffe35ce28eaa90bf4f96b7afdfa7a7d528197c2f2b8d63c0feca7aa8040e0d7",
+      "checksumEntryCount": 7
+    }
+  },
+  "nominations": [
+    {"dimension":"VOICE_INTELLIGIBILITY","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/clipping/2.mp4","basis":"CLIPPING"},
+    {"dimension":"VISUAL_DIRECTION","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/black_frame/2.mp4","basis":"BLACK_FRAME"},
+    {"dimension":"MUSIC_SOUND_DESIGN","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/silence/2.mp4","basis":"SILENCE"},
+    {"dimension":"RETENTION","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/freeze_frame/2.mp4","basis":"FREEZE_FRAME"},
+    {"dimension":"MOBILE_LEGIBILITY","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/mobile_legibility/2.mp4","basis":"MOBILE_LEGIBILITY"},
+    {"dimension":"PACKAGING_CTR","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/safe_zone/2.mp4","basis":"SAFE_ZONE"},
+    {"dimension":"COMPETITIVE_EDITOR","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/drop_frame/2.mp4","basis":"DROP_FRAME"},
+    {"dimension":"OVERALL","requiredVerdict":"FAIL","source":"g02e","path":"qualification/gold/synthetic/timeline/2.mp4","basis":"TIMELINE"},
+    {"dimension":"VOICE_INTELLIGIBILITY","requiredVerdict":"PASS","source":"g02h","path":"replacement-audio/finance-11-r1.mp3","basis":"MEASURED_PER_ZERO"}
+  ]
+}
