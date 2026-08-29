@@ -20,6 +20,8 @@ describe('G-02G-B bounded live dual calibration', () => {
     expect(runtime).toContain('commonVoiceAudioRetained')
     expect(runtime).toContain('TemporaryDirectory')
     expect(runtime).toContain('MDC_DOWNLOAD_ACCESS_FORBIDDEN')
+    expect(runtime).toContain('MDC_CANDIDATE_BASENAME_COLLISION')
+    expect(runtime).toContain('by_basename.get(member_path.name)')
     expect(runtime).toContain('request.add_header("User-Agent", HTTP_USER_AGENT)')
     expect(workflow).toContain('youtube-ai-factory-v2-g02gb/1')
     expect(runtime).not.toContain('details = request_json')
