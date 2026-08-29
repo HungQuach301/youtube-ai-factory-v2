@@ -79,7 +79,7 @@ export const RejectedMasterEvidenceSchema = z.object({
   }
 })
 
-export const AlignerEvidenceSchema = z.object({
+const HumanReaderAlignerEvidenceSchema = z.object({
   id: z.string().min(1),
   provenance: z.literal('human_reader'),
   asset: QualificationEvidenceAssetSchema,
@@ -98,6 +98,45 @@ export const AlignerEvidenceSchema = z.object({
     context.addIssue({ code: 'custom', message: 'Phoneme arrays must be supplied together' })
   }
 })
+
+const LicensedHumanCorpusAlignerEvidenceSchema = z.object({
+  id: z.string().min(1),
+  provenance: z.literal('licensed_human_corpus'),
+  asset: QualificationEvidenceAssetSchema,
+  corpus: z.object({
+    provider: z.literal('MOZILLA_DATA_COLLECTIVE'),
+    datasetId: z.string().min(1),
+    datasetName: z.string().min(1),
+    datasetVersion: z.string().min(1),
+    licenseId: z.literal('CC0-1.0'),
+    sourceClipId: z.string().min(1),
+    locale: z.literal('en-US'),
+    speakerPseudonym: z.string().regex(/^speaker-[0-9a-f]{16}$/u),
+    sourceAudioSha256: Hex64Schema,
+    retainedSourceAudio: z.literal(false),
+  }).strict(),
+  speakerId: z.string().min(1),
+  transcript: z.string().min(1),
+  durationSec: z.number().positive().finite(),
+  ingestedAt: isoTimestamp,
+  referencePhonemes: z.array(phoneme).min(1).nullable(),
+  observedPhonemes: z.array(phoneme).nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.asset.mediaType !== 'JSON') {
+    context.addIssue({ code: 'custom', message: 'Licensed corpus evidence must seal a JSON measurement record, not rehost source audio' })
+  }
+  if (value.speakerId !== value.corpus.speakerPseudonym) {
+    context.addIssue({ code: 'custom', message: 'Licensed corpus speakerId must use the non-identifying pseudonym' })
+  }
+  if ((value.referencePhonemes === null) !== (value.observedPhonemes === null)) {
+    context.addIssue({ code: 'custom', message: 'Phoneme arrays must be supplied together' })
+  }
+})
+
+export const AlignerEvidenceSchema = z.union([
+  HumanReaderAlignerEvidenceSchema,
+  LicensedHumanCorpusAlignerEvidenceSchema,
+])
 
 export const RubricAnchorEvidenceSchema = z.object({
   id: z.string().min(1),
