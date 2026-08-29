@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02G",
+  "namespace": "qualification",
+  "createdAt": "2026-08-29T00:00:00.000Z",
+  "state": "OWNER_ACTION_REQUIRED",
+  "productionEligible": false,
+  "providerDispatch": "OFF",
+  "autoPublish": "OFF"
+}

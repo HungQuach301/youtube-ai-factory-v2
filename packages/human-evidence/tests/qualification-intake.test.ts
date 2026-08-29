@@ -6,6 +6,7 @@ import {
   QUALIFICATION_ANCHOR_VERDICTS,
   QUALIFICATION_ASSURANCE_DIMENSIONS,
   QUALIFICATION_DEFECT_CLASSES,
+  AlignerEvidenceSchema,
   QualificationEvidenceAssetSchema,
   type QualificationIntakePacket,
 } from '../src/qualification-intake.js'
@@ -125,5 +126,58 @@ describe('G-02F human evidence intake', () => {
     })
     expect(result.intakeComplete).toBe(false)
     expect(result.blockers).toContain(`EVIDENCE_READBACK_MISMATCH:${first.r2Key}`)
+  })
+
+  test('accepts licensed human corpus evidence without retaining or identifying source audio', () => {
+    expect(AlignerEvidenceSchema.parse({
+      id: 'corpus-01',
+      provenance: 'licensed_human_corpus',
+      asset: asset(400, 'JSON'),
+      corpus: {
+        provider: 'MOZILLA_DATA_COLLECTIVE',
+        datasetId: 'cmrt70j4z001qmm07nvfsmgmr',
+        datasetName: 'Common Voice Scripted Speech 26.0 - American English (Female)',
+        datasetVersion: 'cv-corpus-26.0-2026-06-12',
+        licenseId: 'CC0-1.0',
+        sourceClipId: 'clip-01.mp3',
+        locale: 'en-US',
+        speakerPseudonym: 'speaker-0123456789abcdef',
+        sourceAudioSha256: hash(401),
+        retainedSourceAudio: false,
+      },
+      speakerId: 'speaker-0123456789abcdef',
+      transcript: 'A validated American English sentence.',
+      durationSec: 4.2,
+      ingestedAt: createdAt,
+      referencePhonemes: null,
+      observedPhonemes: null,
+    })).toMatchObject({ provenance: 'licensed_human_corpus' })
+  })
+
+  test('rejects rehosting corpus audio and direct corpus speaker identity', () => {
+    const candidate = {
+      id: 'corpus-02',
+      provenance: 'licensed_human_corpus',
+      asset: asset(410, 'AUDIO'),
+      corpus: {
+        provider: 'MOZILLA_DATA_COLLECTIVE',
+        datasetId: 'cmrt70j4z001qmm07nvfsmgmr',
+        datasetName: 'Common Voice Scripted Speech 26.0 - American English (Female)',
+        datasetVersion: 'cv-corpus-26.0-2026-06-12',
+        licenseId: 'CC0-1.0',
+        sourceClipId: 'clip-02.mp3',
+        locale: 'en-US',
+        speakerPseudonym: 'speaker-0123456789abcdef',
+        sourceAudioSha256: hash(411),
+        retainedSourceAudio: false,
+      },
+      speakerId: 'common-voice-client-id',
+      transcript: 'Another validated sentence.',
+      durationSec: 3.8,
+      ingestedAt: createdAt,
+      referencePhonemes: null,
+      observedPhonemes: null,
+    }
+    expect(() => AlignerEvidenceSchema.parse(candidate)).toThrow(/not rehost source audio|non-identifying pseudonym/iu)
   })
 })
