@@ -670,21 +670,80 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stage01EvidenceJson.controls.providerDispatch, "OFF");
     assert.equal(stage01EvidenceJson.budget.actualUsd, 0);
 
-    const unsupported = await client.callTool({
+    const stage02Objective = "Seal the owner-approved reference set, run deterministic anti-copy measurements, and stop at Stage 03 readiness.";
+    const stage02 = await client.callTool({
       name: "advance_track_g_video_1_stage",
       arguments: {
         stageCode: "02",
+        objective: stage02Objective,
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(stage02.isError, undefined, JSON.stringify(stage02));
+    assert.equal(stage02.structuredContent.accepted, true);
+    assert.equal(stage02.structuredContent.replayed, false);
+    assert.equal(stage02.structuredContent.currentStep, "STAGE_03_READY");
+    assert.equal(stage02.structuredContent.stageCode, "02");
+    assert.equal(stage02.structuredContent.stageState, "FROZEN");
+    assert.equal(stage02.structuredContent.artifactType, "REFERENCE_ANTI_COPY");
+    assert.equal(stage02.structuredContent.artifactState, "SEALED");
+    assert.equal(stage02.structuredContent.artifactEligibility, "ELIGIBLE_FOR_STAGE");
+    assert.deepEqual(stage02.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_ANTI_COPY", "PASS"],
+      ["M1_DIFFERENTIATION", "PASS"],
+    ]);
+    assert.equal(stage02.structuredContent.stageReservedUsd, 0);
+    assert.equal(stage02.structuredContent.stageActualUsd, 0);
+    assert.equal(stage02.structuredContent.humanGate, "NOT_REQUIRED");
+    assert.equal(stage02.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage02.structuredContent.releaseEligible, false);
+    assert.equal(stage02.structuredContent.autoPublish, "OFF");
+
+    const stage02Replay = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "02",
+        objective: stage02Objective,
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(stage02Replay.structuredContent.replayed, true);
+    assert.equal(stage02Replay.structuredContent.artifactSha256, stage02.structuredContent.artifactSha256);
+
+    const stage02Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '02'").first();
+    const stage02Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage02Instance.id).first();
+    assert.equal(stage02Instance.control_state, "FROZEN");
+    assert.equal(stage02Artifact.artifact_type, "REFERENCE_ANTI_COPY");
+    assert.equal(stage02Artifact.canonical_hash, stage02.structuredContent.artifactSha256);
+    const stage02Evidence = await bucket.get(stage02Artifact.r2_key);
+    assert.ok(stage02Evidence);
+    const stage02EvidenceJson = JSON.parse(Buffer.from(await stage02Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage02EvidenceJson.referenceMode, "SEALED_OWNER_APPROVED_QUEUE_ONLY");
+    assert.equal(stage02EvidenceJson.referenceSet.count, 9);
+    assert.equal(stage02EvidenceJson.fourDimensionAntiCopy.lexicalSevenGram.maxSharedSevenGrams, 0);
+    assert.equal(stage02EvidenceJson.fourDimensionAntiCopy.visualPHash.state, "DEFERRED_TO_STAGE_09");
+    assert.equal(stage02EvidenceJson.fourDimensionAntiCopy.calibrationState, "WARNING_ONLY_UNCALIBRATED");
+    assert.equal(stage02EvidenceJson.controls.providerDispatch, "OFF");
+    assert.equal(stage02EvidenceJson.budget.actualUsd, 0);
+
+    const unsupported = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "03",
         objective: "Verify that a stage without an implemented executor fails closed without advancing Production.",
         confirm: true,
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
       },
     });
     assert.equal(unsupported.isError, true);
-    assert.match(unsupported.content[0].text, /TRACK_G_STAGE_02_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.match(unsupported.content[0].text, /TRACK_G_STAGE_03_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_02_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_03_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [
