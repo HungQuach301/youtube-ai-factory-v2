@@ -729,21 +729,111 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stage02EvidenceJson.controls.providerDispatch, "OFF");
     assert.equal(stage02EvidenceJson.budget.actualUsd, 0);
 
-    const unsupported = await client.callTool({
+    const stage03Objective = "Seal the federal source snapshots, build the claim graph and terminology ledger, pass advice and numeric gates, and stop at Stage 04 readiness.";
+    const stage03 = await client.callTool({
       name: "advance_track_g_video_1_stage",
       arguments: {
         stageCode: "03",
-        objective: "Verify that a stage without an implemented executor fails closed without advancing Production.",
+        objective: stage03Objective,
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(stage03.isError, undefined, JSON.stringify(stage03));
+    assert.equal(stage03.structuredContent.accepted, true);
+    assert.equal(stage03.structuredContent.replayed, false);
+    assert.equal(stage03.structuredContent.currentStep, "STAGE_04_READY");
+    assert.equal(stage03.structuredContent.stageCode, "03");
+    assert.equal(stage03.structuredContent.stageState, "FROZEN");
+    assert.equal(stage03.structuredContent.artifactType, "TRUTH_CLAIM_GRAPH_TERMINOLOGY");
+    assert.equal(stage03.structuredContent.artifactState, "SEALED");
+    assert.equal(stage03.structuredContent.artifactEligibility, "ELIGIBLE_FOR_STAGE");
+    assert.deepEqual(stage03.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M0_ADVICE_LINT", "PASS"],
+      ["M0_CRITICAL_CLAIM_TIER", "PASS"],
+      ["M1_NUMERIC_SCHEMA", "PASS"],
+    ]);
+    assert.equal(stage03.structuredContent.stageReservedUsd, 0);
+    assert.equal(stage03.structuredContent.stageActualUsd, 0);
+    assert.equal(stage03.structuredContent.humanGate, "NOT_REQUIRED");
+    assert.equal(stage03.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage03.structuredContent.releaseEligible, false);
+    assert.equal(stage03.structuredContent.autoPublish, "OFF");
+
+    const stage03Replay = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "03",
+        objective: stage03Objective,
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(stage03Replay.structuredContent.replayed, true);
+    assert.equal(stage03Replay.structuredContent.artifactSha256, stage03.structuredContent.artifactSha256);
+
+    const stage03Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '03'").first();
+    const stage03Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage03Instance.id).first();
+    const truthSources = await d1.prepare("SELECT * FROM truth_source ORDER BY id").all();
+    const truthClaims = await d1.prepare("SELECT * FROM truth_claim ORDER BY id").all();
+    const truthClaimSources = await d1.prepare("SELECT * FROM truth_claim_source ORDER BY claim_id, source_id").all();
+    const truthTerminology = await d1.prepare("SELECT * FROM truth_terminology ORDER BY id").all();
+    assert.equal(stage03Instance.control_state, "FROZEN");
+    assert.equal(stage03Artifact.artifact_type, "TRUTH_CLAIM_GRAPH_TERMINOLOGY");
+    assert.equal(stage03Artifact.canonical_hash, stage03.structuredContent.artifactSha256);
+    assert.equal(truthSources.results.length, 3);
+    assert.equal(truthClaims.results.length, 6);
+    assert.equal(truthClaimSources.results.length, 7);
+    assert.equal(truthTerminology.results.length, 4);
+    assert.ok(truthSources.results.every((source) => source.tier === 1));
+    assert.ok(truthSources.results.every((source) => /^[0-9a-f]{64}$/u.test(source.content_hash)));
+    const numericClaim = truthClaims.results.find((claim) => claim.id === "truth_claim_video_1_001");
+    assert.deepEqual(JSON.parse(numericClaim.numeric_json), {
+      amount: 3.5,
+      currency: "USD",
+      display: "$3.5 billion",
+      observationPeriod: "2025",
+      scale: "BILLION",
+      sourceId: "truth_source_ftc_imposter_losses_2025_v1",
+    });
+    const stage03Evidence = await bucket.get(stage03Artifact.r2_key);
+    assert.ok(stage03Evidence);
+    const stage03EvidenceJson = JSON.parse(Buffer.from(await stage03Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage03EvidenceJson.researchMode, "BUILD_VERIFIED_FEDERAL_PRIMARY_SOURCES");
+    assert.equal(stage03EvidenceJson.sources.length, 3);
+    assert.equal(stage03EvidenceJson.claimGraph.claims.length, 6);
+    assert.equal(stage03EvidenceJson.claimGraph.contradictions.length, 0);
+    assert.equal(stage03EvidenceJson.adviceLint.adversarialFixtureCount, 31);
+    assert.equal(stage03EvidenceJson.adviceLint.adversarialDetectedCount, 31);
+    assert.equal(stage03EvidenceJson.numericSchema.numericClaimCount, 1);
+    assert.equal(stage03EvidenceJson.controls.nextHumanGate, "STAGE_04_CHAMPION_SELECTION");
+    for (const source of truthSources.results) {
+      const sourceEvidence = await bucket.get(source.snapshot_r2_key);
+      assert.ok(sourceEvidence);
+      const sourceBytes = Buffer.from(await sourceEvidence.arrayBuffer());
+      assert.equal(createHash("sha256").update(sourceBytes).digest("hex"), source.content_hash);
+    }
+    await assert.rejects(
+      d1.prepare("UPDATE truth_claim SET text = 'mutated'").run(),
+      /TRUTH_CLAIM_APPEND_ONLY/u,
+    );
+
+    const unsupported = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "04",
+        objective: "Verify that Stage 04 remains fail-closed until its creative tournament and owner champion gate are implemented.",
         confirm: true,
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
       },
     });
     assert.equal(unsupported.isError, true);
-    assert.match(unsupported.content[0].text, /TRACK_G_STAGE_03_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.match(unsupported.content[0].text, /TRACK_G_STAGE_04_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_03_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_04_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [
