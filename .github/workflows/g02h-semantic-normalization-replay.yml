@@ -1,0 +1,114 @@
+name: g02h-semantic-normalization-replay
+
+run-name: G-02H-A zero-provider semantic replay · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/g02h-semantic-normalization-replay.yml
+      - qualification-runs/g02h-semantic-normalization-replay.json
+      - scripts/replay-semantic-normalization.py
+      - tests/guardrails/g15-semantic-normalization-replay.test.mjs
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: g-02h-a-semantic-normalization-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_DIR: source-artifact
+      FIRST_OUTPUT_DIR: g02h-semantic-replay-output
+      SECOND_OUTPUT_DIR: g02h-semantic-replay-repeat
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed boundaries
+        run: pnpm build
+
+      - name: Test semantic replay guardrail
+        run: pnpm vitest run tests/guardrails/g15-semantic-normalization-replay.test.mjs
+
+      - name: Download sealed G-02G-B evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: dual-calibration-live-g-02g-b-33230810559
+          path: source-artifact
+          github-token: ${{ github.token }}
+          repository: HungQuach301/youtube-ai-factory-v2
+          run-id: 33230810559
+
+      - name: Install pinned phonemizer only
+        run: |
+          python -m pip install g2p-en==2.1.0 nltk==3.9.1 inflect==7.5.0
+          python -m nltk.downloader -q averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict
+
+      - name: Replay semantic normalization
+        run: >-
+          python scripts/replay-semantic-normalization.py
+          --config qualification-runs/g02h-semantic-normalization-replay.json
+          --source "$SOURCE_DIR"
+          --output "$FIRST_OUTPUT_DIR"
+
+      - name: Repeat replay byte-for-byte
+        run: >-
+          python scripts/replay-semantic-normalization.py
+          --config qualification-runs/g02h-semantic-normalization-replay.json
+          --source "$SOURCE_DIR"
+          --output "$SECOND_OUTPUT_DIR"
+
+      - name: Verify idempotent replay
+        run: >-
+          python scripts/replay-semantic-normalization.py
+          --verify "$FIRST_OUTPUT_DIR" "$SECOND_OUTPUT_DIR"
+
+      - name: Seal portable artifact checksums
+        shell: bash
+        run: |
+          (
+            cd "$FIRST_OUTPUT_DIR"
+            find . -type f ! -name artifact-sha256s.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > artifact-sha256s.txt
+            sha256sum --check artifact-sha256s.txt
+          )
+
+      - name: Upload zero-provider replay evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g02h-semantic-normalization-replay-${{ github.run_id }}
+          path: g02h-semantic-replay-output/
+          if-no-files-found: error
+          retention-days: 14
