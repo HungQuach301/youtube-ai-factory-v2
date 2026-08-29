@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02I-0",
+  "namespace": "qualification",
+  "createdAt": "2026-08-29T00:00:00.000Z",
+  "state": "AWAITING_REAL_CANDIDATES",
+  "productionEligible": false,
+  "providerDispatch": "OFF",
+  "autoPublish": "OFF",
+  "sourceCalibration": {
+    "workPackage": "G-02H-B",
+    "runId": 33239075196,
+    "artifactId": 9710824802,
+    "artifactName": "g02h-targeted-voice-remediation-33239075196",
+    "artifactZipSha256": "51e8d62fa1ea029c8bfb109581fceb50329b1c602dbb0121c22512c786d1ae73",
+    "canonicalBundleSha256": "05ad1486bc78f2e9f7e897c6dd9dce9ec4dfbacb16a9c843cf039d43d03da0d9",
+    "humanErrorFloor": 0.0038095238095238095,
+    "threshold": 0.01,
+    "aggregatePhonemeErrorRate": 0,
+    "sampleCount": 12,
+    "residualSampleIds": [],
+    "passed": true
+  },
+  "targets": {
+    "rejectedMasters": 15,
+    "rubricDimensions": 12,
+    "anchorVerdictsPerDimension": 3,
+    "rubricAnchors": 36,
+    "ownerJudgments": 51,
+    "ownerRationaleMinChars": 20
+  }
+}
