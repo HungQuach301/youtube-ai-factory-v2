@@ -1,0 +1,111 @@
+name: g02i-anchor-seed-acquisition
+
+run-name: G-02I-1A sealed anchor seed acquisition · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/g02i-anchor-seed-acquisition.yml
+      - qualification-runs/g02i-anchor-seed-acquisition.json
+      - scripts/build-g02i-anchor-seed-acquisition.mjs
+      - tests/guardrails/g18-anchor-seed-acquisition.test.mjs
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: g-02i-1a-anchor-seed-acquisition
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      G02E_SOURCE_DIR: source-g02e
+      G02H_SOURCE_DIR: source-g02h
+      G02I0_SOURCE_DIR: source-g02i0
+      FIRST_OUTPUT_DIR: g02i-anchor-seed-output
+      REPLAY_OUTPUT_DIR: g02i-anchor-seed-replay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed boundaries
+        run: pnpm build
+
+      - name: Test seed acquisition guardrail
+        run: pnpm vitest run tests/guardrails/g18-anchor-seed-acquisition.test.mjs
+
+      - name: Download sealed G-02E gold fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: gold-set-g-02e-33187748930
+          path: source-g02e
+          github-token: ${{ github.token }}
+          repository: HungQuach301/youtube-ai-factory-v2
+          run-id: 33187748930
+
+      - name: Download sealed G-02H production voice evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: g02h-targeted-voice-remediation-33239075196
+          path: source-g02h
+          github-token: ${{ github.token }}
+          repository: HungQuach301/youtube-ai-factory-v2
+          run-id: 33239075196
+
+      - name: Download G-02I-0 closure workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: g02i-evidence-closure-33242103389
+          path: source-g02i0
+          github-token: ${{ github.token }}
+          repository: HungQuach301/youtube-ai-factory-v2
+          run-id: 33242103389
+
+      - name: Materialize seeded candidate pool
+        run: node scripts/build-g02i-anchor-seed-acquisition.mjs --materialize "$G02E_SOURCE_DIR" "$G02H_SOURCE_DIR" "$G02I0_SOURCE_DIR" "$FIRST_OUTPUT_DIR"
+
+      - name: Materialize deterministic replay
+        run: node scripts/build-g02i-anchor-seed-acquisition.mjs --materialize "$G02E_SOURCE_DIR" "$G02H_SOURCE_DIR" "$G02I0_SOURCE_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Verify idempotent replay
+        run: node scripts/build-g02i-anchor-seed-acquisition.mjs --verify-replay "$FIRST_OUTPUT_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Seal portable artifact checksums
+        shell: bash
+        run: |
+          cd "$FIRST_OUTPUT_DIR"
+          find . -type f ! -name artifact-sha256s.txt -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > artifact-sha256s.txt
+          sha256sum --check artifact-sha256s.txt
+
+      - name: Upload seeded qualification workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: g02i-anchor-seed-acquisition-${{ github.run_id }}
+          path: g02i-anchor-seed-output/
+          if-no-files-found: error
+          retention-days: 14
