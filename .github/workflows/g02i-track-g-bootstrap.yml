@@ -1,0 +1,94 @@
+name: g02i-track-g-bootstrap
+
+run-name: G-02I-1B Track G assurance bootstrap · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/g02i-track-g-bootstrap.yml
+      - qualification-runs/g02i-track-g-bootstrap.json
+      - scripts/build-g02i-track-g-bootstrap.mjs
+      - packages/assurance/src/bootstrap.ts
+      - packages/assurance/src/index.ts
+      - packages/assurance/tests/bootstrap.test.ts
+      - tests/guardrails/g19-track-g-bootstrap.test.mjs
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: g-02i-1b-track-g-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SOURCE_DIR: source-g02i1a
+      FIRST_OUTPUT_DIR: g02i-track-g-bootstrap-output
+      REPLAY_OUTPUT_DIR: g02i-track-g-bootstrap-replay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed boundaries
+        run: pnpm build
+
+      - name: Test assurance bootstrap semantics
+        run: pnpm vitest run packages/assurance/tests/bootstrap.test.ts tests/guardrails/g19-track-g-bootstrap.test.mjs
+
+      - name: Download sealed G-02I-1A candidate pool
+        uses: actions/download-artifact@v4
+        with:
+          name: g02i-anchor-seed-acquisition-33243532157
+          path: source-g02i1a
+          github-token: ${{ github.token }}
+          repository: HungQuach301/youtube-ai-factory-v2
+          run-id: 33243532157
+
+      - name: Materialize warning-only bootstrap resolution
+        run: node scripts/build-g02i-track-g-bootstrap.mjs --materialize "$SOURCE_DIR" "$FIRST_OUTPUT_DIR"
+
+      - name: Materialize deterministic replay
+        run: node scripts/build-g02i-track-g-bootstrap.mjs --materialize "$SOURCE_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Verify idempotent replay
+        run: node scripts/build-g02i-track-g-bootstrap.mjs --verify-replay "$FIRST_OUTPUT_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Seal portable checksums
+        shell: bash
+        run: |
+          cd "$FIRST_OUTPUT_DIR"
+          find . -type f ! -name artifact-sha256s.txt -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > artifact-sha256s.txt
+          sha256sum --check artifact-sha256s.txt
+
+      - name: Upload Track G bootstrap evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: g02i-track-g-bootstrap-${{ github.run_id }}
+          path: g02i-track-g-bootstrap-output/
+          if-no-files-found: error
+          retention-days: 14
