@@ -1,0 +1,80 @@
+name: g02i-evidence-closure
+
+run-name: G-02I-0 evidence closure workspace · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/g02i-evidence-closure.yml
+      - qualification-runs/g02i-evidence-closure.json
+      - scripts/build-g02i-evidence-closure.mjs
+      - tests/guardrails/g17-evidence-closure.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g-02i-0-evidence-closure
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FIRST_OUTPUT_DIR: g02i-evidence-closure-output
+      REPLAY_OUTPUT_DIR: g02i-evidence-closure-replay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed boundaries
+        run: pnpm build
+
+      - name: Test evidence-closure guardrail
+        run: pnpm vitest run tests/guardrails/g17-evidence-closure.test.mjs
+
+      - name: Materialize fail-closed workspace
+        run: node scripts/build-g02i-evidence-closure.mjs --output "$FIRST_OUTPUT_DIR"
+
+      - name: Materialize deterministic replay
+        run: node scripts/build-g02i-evidence-closure.mjs --output "$REPLAY_OUTPUT_DIR"
+
+      - name: Verify idempotent replay
+        run: node scripts/build-g02i-evidence-closure.mjs --verify-replay "$FIRST_OUTPUT_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Seal portable artifact checksums
+        shell: bash
+        run: |
+          cd "$FIRST_OUTPUT_DIR"
+          find . -type f ! -name artifact-sha256s.txt -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > artifact-sha256s.txt
+          sha256sum --check artifact-sha256s.txt
+
+      - name: Upload qualification-only workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: g02i-evidence-closure-${{ github.run_id }}
+          path: g02i-evidence-closure-output/
+          if-no-files-found: error
+          retention-days: 14
