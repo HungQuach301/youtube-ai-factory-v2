@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02G-B",
+  "mode": "QUALIFICATION_ONLY",
+  "state": "READY_FOR_BOUNDED_EXECUTION",
+  "ownerTermsAcceptance": "RECORDED",
+  "productionEligible": false,
+  "productionProviderDispatch": "OFF",
+  "autoPublish": "OFF",
+  "dataset": {
+    "provider": "MOZILLA_DATA_COLLECTIVE",
+    "datasetId": "cmrt70j4z001qmm07nvfsmgmr",
+    "datasetName": "Common Voice Scripted Speech 26.0 - American English (Female)",
+    "datasetVersion": "cv-corpus-26.0-2026-06-12",
+    "licenseId": "CC0-1.0",
+    "locale": "en-US",
+    "selectionSeed": "youtube-ai-factory-v2:g-02g-b:cv26-en-us:v1",
+    "candidatePoolSize": 36,
+    "targetSamples": 12,
+    "maxArchiveBytes": 6442450944,
+    "retainSourceAudio": false,
+    "allowSpeakerReidentification": false
+  },
+  "observer": {
+    "engine": "whisperx",
+    "version": "3.4.2",
+    "model": "small.en",
+    "device": "cpu",
+    "computeType": "int8",
+    "phonemizer": "g2p-en@2.1.0"
+  },
+  "productionVoice": {
+    "provider": "ELEVENLABS",
+    "voiceId": "KXyrWqXTuK63FlJ9XZ33",
+    "modelId": "eleven_multilingual_v2",
+    "outputFormat": "mp3_44100_128",
+    "targetSamples": 12,
+    "maxProviderCalls": 12,
+    "maxTotalCharacters": 3000,
+    "maySetErrorFloor": false,
+    "voiceSettings": {
+      "stability": 0.55,
+      "similarity_boost": 0.8,
+      "style": 0,
+      "use_speaker_boost": true,
+      "speed": 1
+    },
+    "scripts": [
+      {"id":"finance-01","text":"A six point five percent interest rate can turn a thirty-year mortgage into a much larger obligation.","domainTags":["PERCENTAGE","FINANCIAL_TERM"]},
+      {"id":"finance-02","text":"The Federal Reserve held its target range steady while bond yields moved in the opposite direction.","domainTags":["PROPER_NOUN","FINANCIAL_TERM"]},
+      {"id":"finance-03","text":"A one thousand dollar emergency fund loses purchasing power when inflation compounds year after year.","domainTags":["CURRENCY","FINANCIAL_TERM"]},
+      {"id":"finance-04","text":"An annual percentage rate is not the same thing as the simple interest rate shown in an advertisement.","domainTags":["ACRONYM","FINANCIAL_TERM"]},
+      {"id":"finance-05","text":"The S and P five hundred can rise even while many households feel financially insecure.","domainTags":["TICKER","FINANCIAL_TERM"]},
+      {"id":"finance-06","text":"A credit utilization ratio above thirty percent may weaken a borrower's risk profile.","domainTags":["PERCENTAGE","FINANCIAL_TERM"]},
+      {"id":"finance-07","text":"Treasury inflation protected securities adjust their principal when the consumer price index changes.","domainTags":["ACRONYM","FINANCIAL_TERM"]},
+      {"id":"finance-08","text":"A two hundred basis point increase means the rate moved upward by two percentage points.","domainTags":["PERCENTAGE","FINANCIAL_TERM"]},
+      {"id":"finance-09","text":"Apple trades under the ticker A A P L, but its share price is not the same as its enterprise value.","domainTags":["TICKER","ACRONYM"]},
+      {"id":"finance-10","text":"In twenty twenty-six, a diversified portfolio can still experience a sharp temporary drawdown.","domainTags":["FINANCIAL_TERM","PROPER_NOUN"]},
+      {"id":"finance-11","text":"Dollar cost averaging reduces timing risk, but it does not guarantee a positive investment return.","domainTags":["CURRENCY","FINANCIAL_TERM"]},
+      {"id":"finance-12","text":"An exchange traded fund may track an index while charging an annual expense ratio of zero point two percent.","domainTags":["ACRONYM","PERCENTAGE"]}
+    ]
+  }
+}

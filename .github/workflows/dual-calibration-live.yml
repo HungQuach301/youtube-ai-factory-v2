@@ -1,0 +1,116 @@
+name: dual-calibration-live
+
+run-name: G-02G-B bounded dual calibration · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dual-calibration-live.yml
+      - qualification-runs/dual-calibration-live.json
+      - scripts/run-dual-calibration-live.py
+      - scripts/whisperx-phoneme-observer.py
+      - tests/guardrails/g14-dual-calibration-live.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g-02g-b-live-calibration
+  cancel-in-progress: false
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      MDC_API_KEY: ${{ secrets.MDC_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      FIRST_OUTPUT_DIR: dual-calibration-live-output
+      REPLAY_OUTPUT_DIR: dual-calibration-live-replay
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Repository identity
+        run: pnpm verify:repo
+
+      - name: Install locked repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Source integrity
+        run: pnpm verify:source
+
+      - name: Build typed calibration boundaries
+        run: pnpm build
+
+      - name: Test live calibration contract
+        run: pnpm vitest run tests/guardrails/g14-dual-calibration-live.test.mjs packages/aligner-calibration/tests/dual-calibration.test.ts
+
+      - name: Verify bounded qualification credentials exist
+        shell: bash
+        run: |
+          [[ -n "$MDC_API_KEY" ]] || { echo "MDC_API_KEY is unavailable." >&2; exit 1; }
+          [[ -n "$ELEVENLABS_API_KEY" ]] || { echo "ELEVENLABS_API_KEY is unavailable." >&2; exit 1; }
+
+      - name: Install pinned audio observation tooling
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes ffmpeg
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0
+          python -m pip install whisperx==3.4.2 g2p-en==2.1.0
+          python -m nltk.downloader -q averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict
+
+      - name: Acquire and measure independent human calibration evidence
+        run: >-
+          python scripts/run-dual-calibration-live.py
+          --config qualification-runs/dual-calibration-live.json
+          --output "$FIRST_OUTPUT_DIR"
+
+      - name: Replay without provider calls
+        run: >-
+          python scripts/run-dual-calibration-live.py
+          --replay-from "$FIRST_OUTPUT_DIR"
+          --output "$REPLAY_OUTPUT_DIR"
+
+      - name: Verify idempotent replay
+        run: python scripts/run-dual-calibration-live.py --verify "$FIRST_OUTPUT_DIR" "$REPLAY_OUTPUT_DIR"
+
+      - name: Seal portable artifact checksums
+        if: always()
+        shell: bash
+        run: |
+          if [[ -d "$FIRST_OUTPUT_DIR" ]]; then
+            (
+              cd "$FIRST_OUTPUT_DIR"
+              find . -type f ! -name artifact-sha256s.txt -print0 \
+                | sort -z \
+                | xargs -0 sha256sum > artifact-sha256s.txt
+              sha256sum --check artifact-sha256s.txt
+            )
+          fi
+
+      - name: Upload qualification-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dual-calibration-live-g-02g-b-${{ github.run_id }}
+          path: dual-calibration-live-output/
+          if-no-files-found: warn
+          retention-days: 14
