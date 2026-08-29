@@ -1217,3 +1217,18 @@ trước khi B-006/B-007 đạt đủ điều kiện.
 
 G-02E chỉ hoàn tất synthetic half của B-006. Gold set chưa đủ điều kiện cho tới khi có ít nhất 15 rejected masters kèm phán quyết owner; B-007 vẫn thiếu 36 assurance anchors. M2 và publishing không được kích hoạt.
 
+
+
+## G-02I-1C — Track G Video #1 bounded runner
+
+MODE: BUILD. This work package adds the Production control-plane command surface only; it performs zero provider dispatch and no Production mutation during CI.
+
+| Acceptance | Proof |
+|---|---|
+| Open only episode #1 with PROFILE=REDUCED and WARNING_ONLY | `tests/operator-d1.test.mjs` — bounded Track G run |
+| Seal exact Stage 00→14 plan and stop before Stage 15 | D1 `track_g_run_contract_insert_guard` + end-to-end test |
+| Preserve rejected candidates; never release or publish | Immutable contract flags + insert trigger |
+| Require PREPARED channel and 8/8 qualified voice bindings | Fail-closed precondition test |
+| Seal/read back bootstrap receipt in qualification R2 | Miniflare D1/R2 end-to-end test |
+| Replay command idempotently | MCP replay assertion |
+| Keep contract append-only | D1 update/delete trigger assertions |

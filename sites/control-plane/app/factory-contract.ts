@@ -80,3 +80,31 @@ export const audioArchetypes = [
   "music_transition",
   "silence_consequence_payoff",
 ] as const;
+
+export const trackGVideoOneContract = {
+  commandType: "START_TRACK_G_VIDEO_1_QUALIFICATION",
+  episodeId: "episode_ai_money_defense_01",
+  episodeSequence: 1,
+  profile: "REDUCED",
+  assuranceMode: "WARNING_ONLY",
+  executionNamespace: "production",
+  stageCodes: [
+    "00", "01", "02", "03", "04", "05", "06", "07A",
+    "07B", "08", "09", "10", "11", "12", "13", "14",
+  ],
+  stopBeforeStage: "15",
+  preserveRejectedCandidates: true,
+  releaseEligible: false,
+  providerDispatch: "OFF",
+  autoPublish: "OFF",
+  bootstrapEvidence: {
+    namespace: "qualification",
+    lineageParent: false,
+    sourceCommit: "55b18a68e9ab8e9be195a023689144c2a1a70d75",
+    workflowRunId: "33247193715",
+    artifactId: "9713214663",
+    artifactZipSha256: "ab1a2e538d0fa8a23bee1f871a1ff6783df92e56f659493369d9fccfbd96df8c",
+    canonicalOutputHash: "8107b48bf2ffd9e0f10bc38f5be4d2c069a4e5b36a26e1097251dad4eee5f52e",
+    resolution: "TRACK_G_BOOTSTRAP_ELIGIBLE",
+  },
+} as const;

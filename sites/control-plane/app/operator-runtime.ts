@@ -15,6 +15,7 @@ import {
 import { activationBlockers, approvedChannel } from "./factory-contract";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
+import { trackGVideoOneState } from "./track-g-video-one";
 import { voiceQualificationReadBack } from "./voice-qualification";
 
 export type RuntimeReadiness = {
@@ -88,6 +89,7 @@ export async function getOperatorSnapshot(user: ChatGPTUser) {
       .orderBy(operationEvents.ordinal)
     : [];
   const voiceFingerprint = await voiceQualificationReadBack();
+  const trackGVideo1 = await trackGVideoOneState();
   const currentActivationBlockers = voiceFingerprint.qualified
     ? activationBlockers.filter((blocker) => blocker !== "qualified_voice_fingerprint")
     : [...activationBlockers];
@@ -103,6 +105,7 @@ export async function getOperatorSnapshot(user: ChatGPTUser) {
     activationBlockers: currentActivationBlockers,
     voiceFingerprintState: voiceFingerprint.state,
     voiceBindingCount: voiceFingerprint.bindingCount,
+    trackGVideo1,
   };
 }
 

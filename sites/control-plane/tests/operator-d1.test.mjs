@@ -194,6 +194,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "get_factory_state",
       "prepare_approved_channel",
       "register_qualified_voice",
+      "start_track_g_video_1_qualification",
     ]);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -433,12 +434,154 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "get_factory_state",
       "prepare_approved_channel",
       "register_qualified_voice",
+      "start_track_g_video_1_qualification",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     await client.close();
   } finally {
+    await mf.dispose();
+  }
+});
+
+test("opens Video #1 in the bounded Track G qualification lane and replays idempotently", async () => {
+  const { mf, d1 } = await createFactoryFixture("g02i1c-track-g-video-one-test");
+  const transport = new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-track-g-video-one-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await client.callTool({
+      name: "prepare_approved_channel",
+      arguments: {
+        objective: "Prepare the approved channel before opening the first bounded Track G run.",
+        confirm: true,
+      },
+    });
+    const voiceEvidence = qualificationFixture();
+    await client.callTool({
+      name: "register_qualified_voice",
+      arguments: {
+        objective: "Register the approved voice before opening the first bounded Track G run.",
+        confirm: true,
+        ownerApprovalText: "APPROVE VOICE",
+        ...voiceEvidence,
+      },
+    });
+
+    const objective = "Open Video #1 in the bounded Track G qualification lane and stop before release or publish.";
+    const first = await client.callTool({
+      name: "start_track_g_video_1_qualification",
+      arguments: {
+        objective,
+        confirm: true,
+        ownerApprovalText: "START VIDEO 1 QUALIFICATION",
+      },
+    });
+    assert.equal(first.isError, undefined, JSON.stringify(first));
+    assert.equal(first.structuredContent.accepted, true);
+    assert.equal(first.structuredContent.replayed, false);
+    assert.equal(first.structuredContent.runStatus, "RUNNING");
+    assert.equal(first.structuredContent.currentStep, "STAGE_00_READY");
+    assert.equal(first.structuredContent.episodeStatus, "IN_PRODUCTION");
+    assert.equal(first.structuredContent.profile, "REDUCED");
+    assert.equal(first.structuredContent.assuranceMode, "WARNING_ONLY");
+    assert.deepEqual(first.structuredContent.stageCodes, [
+      "00", "01", "02", "03", "04", "05", "06", "07A",
+      "07B", "08", "09", "10", "11", "12", "13", "14",
+    ]);
+    assert.equal(first.structuredContent.stopBeforeStage, "15");
+    assert.equal(first.structuredContent.releaseEligible, false);
+    assert.equal(first.structuredContent.providerDispatch, "OFF");
+    assert.equal(first.structuredContent.autoPublish, "OFF");
+    assert.match(first.structuredContent.bootstrapEvidenceSha256, /^[0-9a-f]{64}$/u);
+
+    const replay = await client.callTool({
+      name: "start_track_g_video_1_qualification",
+      arguments: {
+        objective,
+        confirm: true,
+        ownerApprovalText: "START VIDEO 1 QUALIFICATION",
+      },
+    });
+    assert.equal(replay.structuredContent.replayed, true);
+    assert.equal(replay.structuredContent.runId, first.structuredContent.runId);
+
+    const contract = await d1.prepare("SELECT * FROM track_g_run_contract").first();
+    assert.equal(contract.profile, "REDUCED");
+    assert.equal(contract.assurance_mode, "WARNING_ONLY");
+    assert.equal(contract.execution_namespace, "production");
+    assert.equal(contract.release_eligible, 0);
+    assert.equal(contract.provider_dispatch, 0);
+    assert.equal(contract.auto_publish, 0);
+    assert.equal(contract.stop_before_stage, "15");
+    assert.equal(contract.preserve_rejected_candidates, 1);
+    await assert.rejects(
+      d1.prepare("UPDATE track_g_run_contract SET release_eligible = 1").run(),
+      /TRACK_G_RUN_CONTRACT_APPEND_ONLY/u,
+    );
+    await assert.rejects(
+      d1.prepare("DELETE FROM track_g_run_contract").run(),
+      /TRACK_G_RUN_CONTRACT_APPEND_ONLY/u,
+    );
+
+    const episode = await d1.prepare("SELECT status FROM episode WHERE sequence = 1").first();
+    assert.equal(episode.status, "IN_PRODUCTION");
+    const stagePlan = JSON.parse(contract.stage_plan_json);
+    assert.equal(stagePlan.includes("15"), false);
+    assert.equal(stagePlan.includes("16"), false);
+
+    const bucket = await mf.getR2Bucket("BUCKET");
+    const evidence = await bucket.get(contract.bootstrap_evidence_r2_key);
+    assert.ok(evidence);
+    const evidenceBytes = Buffer.from(await evidence.arrayBuffer());
+    assert.equal(createHash("sha256").update(evidenceBytes).digest("hex"), contract.bootstrap_evidence_sha256);
+
+    const state = await client.callTool({ name: "get_factory_state", arguments: {} });
+    assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_00_READY");
+    assert.equal(state.structuredContent.providerDispatch, "OFF");
+    assert.equal(state.structuredContent.autoPublish, "OFF");
+    assert.deepEqual(state.structuredContent.activationBlockers, [
+      "critic_qualification_and_real_calibration_evidence",
+    ]);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("fails closed when Video #1 is opened without a qualified voice", async () => {
+  const { mf } = await createFactoryFixture("g02i1c-track-g-precondition-test");
+  const transport = new StreamableHTTPClientTransport(new URL("http://localhost/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-track-g-precondition-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await client.callTool({
+      name: "prepare_approved_channel",
+      arguments: {
+        objective: "Prepare the approved channel before verifying the Video #1 precondition gate.",
+        confirm: true,
+      },
+    });
+    const blocked = await client.callTool({
+      name: "start_track_g_video_1_qualification",
+      arguments: {
+        objective: "Attempt to open Video #1 without the required qualified voice evidence.",
+        confirm: true,
+        ownerApprovalText: "START VIDEO 1 QUALIFICATION",
+      },
+    });
+    assert.equal(blocked.isError, true);
+    assert.match(blocked.content[0].text, /TRACK_G_VOICE_NOT_QUALIFIED/u);
+  } finally {
+    await client.close().catch(() => {});
     await mf.dispose();
   }
 });
