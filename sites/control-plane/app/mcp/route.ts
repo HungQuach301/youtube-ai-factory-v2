@@ -13,6 +13,10 @@ import {
   bearerChallenge,
   oauthScopes,
 } from "../oauth-server";
+import {
+  startTrackGVideoOneQualification,
+  trackGVideoOneIdempotencyKey,
+} from "../track-g-video-one";
 import { registerQualifiedVoice } from "../voice-qualification";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +44,8 @@ const factoryStateSchema = {
   activationBlockers: z.array(z.string()),
   voiceFingerprintState: z.enum(["QUALIFIED", "NOT_QUALIFIED"]),
   voiceBindingCount: z.number().int().nonnegative(),
+  trackGVideo1Status: z.string(),
+  trackGVideo1CurrentStep: z.string(),
   providerDispatch: z.literal("OFF"),
   autoPublish: z.literal("OFF"),
 };
@@ -55,6 +61,8 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
     activationBlockers: [...snapshot.activationBlockers],
     voiceFingerprintState: snapshot.voiceFingerprintState,
     voiceBindingCount: snapshot.voiceBindingCount,
+    trackGVideo1Status: snapshot.trackGVideo1.status,
+    trackGVideo1CurrentStep: snapshot.trackGVideo1.currentStep,
     providerDispatch: "OFF" as const,
     autoPublish: "OFF" as const,
   };
@@ -235,6 +243,71 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     },
   );
 
+  server.registerTool(
+    "start_track_g_video_1_qualification",
+    {
+      title: "Start bounded Track G Video #1 qualification",
+      description:
+        "Persist the first Track G episode as a REDUCED, WARNING_ONLY run with an immutable Stage 00-14 plan. The command stops before Stage 15, preserves rejected candidates, cannot authorize release or publish, and does not dispatch a provider.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("START VIDEO 1 QUALIFICATION"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        runStatus: z.literal("RUNNING"),
+        currentStep: z.literal("STAGE_00_READY"),
+        episodeStatus: z.literal("IN_PRODUCTION"),
+        profile: z.literal("REDUCED"),
+        assuranceMode: z.literal("WARNING_ONLY"),
+        stageCodes: z.array(z.string()),
+        stopBeforeStage: z.literal("15"),
+        releaseEligible: z.literal(false),
+        bootstrapEvidenceSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        providerDispatch: z.literal("OFF"),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await startTrackGVideoOneQualification(user, {
+        objective,
+        ownerApprovalText,
+        idempotencyKey: trackGVideoOneIdempotencyKey(),
+      });
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.run.id,
+        runStatus: "RUNNING" as const,
+        currentStep: "STAGE_00_READY" as const,
+        episodeStatus: "IN_PRODUCTION" as const,
+        profile: "REDUCED" as const,
+        assuranceMode: "WARNING_ONLY" as const,
+        stageCodes: result.stageCodes,
+        stopBeforeStage: "15" as const,
+        releaseEligible: false as const,
+        bootstrapEvidenceSha256: result.contract.bootstrapEvidenceSha256,
+        providerDispatch: "OFF" as const,
+        autoPublish: "OFF" as const,
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+
   return server;
 }
 
@@ -308,6 +381,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "register_qualified_voice") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "start_track_g_video_1_qualification") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }

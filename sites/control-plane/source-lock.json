@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "35de52f57b030187c8a0299f686072f4ec4716a133ae4b4a228d934b4846bbdb",
+  "aggregate_sha256": "0507d12596c73929c80fd379c9d7394ef46503ab38b635f3f3320f9c7de4f5a1",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -53,11 +53,11 @@
     },
     {
       "path": "app/evidence-storage.ts",
-      "sha256": "ff86e44441dcc7cd90bebf32c844899c1f430e2b67a2f82818a455e2c77f08c4"
+      "sha256": "f5e197f600e4edf7c4444ca23a39f01139d714255d3ea9a30d5da954f7f989f2"
     },
     {
       "path": "app/factory-contract.ts",
-      "sha256": "55a1d15441ea2573b4e12683edc69f8bf7f7aac9f432d1e85bc91de5181ca77e"
+      "sha256": "ae5fa4bde431b933bbad2223d1589321d99d8bb0d5e9787be76391896202ae7f"
     },
     {
       "path": "app/globals.css",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "561b5d82c44e4e97734af0a3532b96ce9f6da8e900fc1d74baa5139caa1310b9"
+      "sha256": "b24ad94ff584b524e1496e15a4e0362f6833cddd7253245934bbb4408e3f45e3"
     },
     {
       "path": "app/oauth-server.ts",
@@ -97,7 +97,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "2b6a0e2005c3cfc16af5a94aeeaee207a1bf4fb1eb2d845ed43014145302876d"
+      "sha256": "bbbb6674d04295fb0b1c3bcdef6d4f1607afa250c948b293f2a9606d7061e6dc"
     },
     {
       "path": "app/page.tsx",
@@ -106,6 +106,10 @@
     {
       "path": "app/runtime-env.ts",
       "sha256": "810e3378899275ce80fc62a9f83da55ab31bff0a0448308d219ec7d56550a8e8"
+    },
+    {
+      "path": "app/track-g-video-one.ts",
+      "sha256": "121ecffe81e753c3d6c257a6c18860273bc563b733f3a50cdab9477d27695517"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -121,7 +125,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "4b964789e61183dc08cec0ed251e1bb3e751f90abcdcf3ee1d1c95e038e8bf6f"
+      "sha256": "bf5c71c549bc473e079b99fbb866590b02fa4165c191157f8415cde18d077721"
     },
     {
       "path": "drizzle.config.ts",
@@ -140,6 +144,10 @@
       "sha256": "6827edb1d0578e7e8797a91a8a05cfdada3d346a273a37c97250c9c87d8e43a0"
     },
     {
+      "path": "drizzle/0003_ancient_black_widow.sql",
+      "sha256": "abba9b3d16b1b83c893f0cf905fc2028f3a2817ee28e1e3b34e9a6dc7c575815"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -152,8 +160,12 @@
       "sha256": "3f75becfd2d8c89096c68af72d370bac345855da79026bbb1bdccceb8d57fe0d"
     },
     {
+      "path": "drizzle/meta/0003_snapshot.json",
+      "sha256": "95f9fa2d9cd32b4417b19891105e922e06d35216aa8ac61afea86ebc8229e677"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "88c3a106e12e2cb644d3d1f9d644804b40f6754022ff81aa0cbf7f98e20e64b1"
+      "sha256": "5309884949d34355f3c4f19fa29bcd879cdcceb4111de6856f346b50cacf866a"
     },
     {
       "path": "eslint.config.mjs",
@@ -225,7 +237,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "5bd06dc10cd9e6e7564263a70331cfd6100392a063dffe942e68dea96aef2083"
+      "sha256": "f7cecf896e41389ef652387af43a6b1d03ebf43f56d21eb57da0f0da74aa0285"
     },
     {
       "path": "tests/rendered-html.test.mjs",

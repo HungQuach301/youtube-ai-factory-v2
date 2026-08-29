@@ -94,6 +94,27 @@ export const operationEvents = sqliteTable("operation_event", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("operation_event_run_ordinal_unique").on(table.runId, table.ordinal)]);
 
+export const trackGRunContracts = sqliteTable("track_g_run_contract", {
+  id: text("id").primaryKey(),
+  operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
+  episodeId: text("episode_id").notNull().references(() => episodes.id),
+  profile: text("profile", { enum: ["REDUCED"] }).notNull(),
+  assuranceMode: text("assurance_mode", { enum: ["WARNING_ONLY"] }).notNull(),
+  executionNamespace: text("execution_namespace", { enum: ["production"] }).notNull(),
+  stagePlanJson: text("stage_plan_json").notNull(),
+  stopBeforeStage: text("stop_before_stage", { enum: ["15"] }).notNull(),
+  preserveRejectedCandidates: integer("preserve_rejected_candidates").notNull(),
+  releaseEligible: integer("release_eligible").notNull(),
+  providerDispatch: integer("provider_dispatch").notNull(),
+  autoPublish: integer("auto_publish").notNull(),
+  bootstrapEvidenceR2Key: text("bootstrap_evidence_r2_key").notNull(),
+  bootstrapEvidenceSha256: text("bootstrap_evidence_sha256").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("track_g_run_operation_unique").on(table.operationRunId),
+  uniqueIndex("track_g_run_episode_unique").on(table.episodeId),
+]);
+
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),
   channelId: text("channel_id").notNull().references(() => channels.id),

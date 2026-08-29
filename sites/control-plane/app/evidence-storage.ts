@@ -18,14 +18,14 @@ export async function putImmutableEvidence(
   expectedSha256: string,
 ): Promise<void> {
   if (!key.startsWith("qual/") || key.includes("..") || key.includes("\\")) {
-    throw new Error("VOICE_EVIDENCE_R2_KEY_INVALID");
+    throw new Error("QUALIFICATION_EVIDENCE_R2_KEY_INVALID");
   }
-  if (sha256(bytes) !== expectedSha256) throw new Error("VOICE_EVIDENCE_HASH_MISMATCH");
+  if (sha256(bytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_HASH_MISMATCH");
   const store = bucket();
   const existing = await store.get(key);
   if (existing) {
     const existingBytes = new Uint8Array(await existing.arrayBuffer());
-    if (sha256(existingBytes) !== expectedSha256) throw new Error("VOICE_EVIDENCE_IMMUTABILITY_CONFLICT");
+    if (sha256(existingBytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_IMMUTABILITY_CONFLICT");
     return;
   }
   await store.put(key, bytes, {
@@ -33,9 +33,9 @@ export async function putImmutableEvidence(
     customMetadata: { sha256: expectedSha256, namespace: "qualification" },
   });
   const readBack = await store.get(key);
-  if (!readBack) throw new Error("VOICE_EVIDENCE_R2_READ_BACK_MISSING");
+  if (!readBack) throw new Error("QUALIFICATION_EVIDENCE_R2_READ_BACK_MISSING");
   const readBackBytes = new Uint8Array(await readBack.arrayBuffer());
-  if (sha256(readBackBytes) !== expectedSha256) throw new Error("VOICE_EVIDENCE_R2_READ_BACK_MISMATCH");
+  if (sha256(readBackBytes) !== expectedSha256) throw new Error("QUALIFICATION_EVIDENCE_R2_READ_BACK_MISMATCH");
 }
 
 export async function verifyImmutableEvidence(key: string, expectedSha256: string): Promise<boolean> {
