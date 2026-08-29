@@ -85,6 +85,8 @@ jobs:
               method="GET",
           )
           request.add_header("Authorization", f"Bearer {os.environ['MDC_API_KEY']}")
+          request.add_header("User-Agent", "youtube-ai-factory-v2-g02gb/1 (+https://github.com/HungQuach301/youtube-ai-factory-v2)")
+          request.add_header("Accept", "application/json")
           try:
               with urllib.request.urlopen(request, timeout=30) as response:
                   print(json.dumps({
