@@ -11,7 +11,7 @@ on:
       - qualification-runs/dual-calibration-live.json
       - scripts/run-dual-calibration-live.py
       - scripts/whisperx-phoneme-observer.py
-      - tests/dual-calibration-live-contract.test.mjs
+      - tests/guardrails/g14-dual-calibration-live.test.mjs
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
         run: pnpm build
 
       - name: Test live calibration contract
-        run: pnpm vitest run tests/dual-calibration-live-contract.test.mjs packages/aligner-calibration/tests/dual-calibration.test.ts
+        run: pnpm vitest run tests/guardrails/g14-dual-calibration-live.test.mjs packages/aligner-calibration/tests/dual-calibration.test.ts
 
       - name: Verify bounded qualification credentials exist
         shell: bash
