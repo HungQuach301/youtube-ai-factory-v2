@@ -1,3 +1,14 @@
 export { calibrateAligner, phonemeEditDistance } from './calibrator.js'
-export { ALIGNER_PINS, CalibrationSampleSchema } from './types.js'
-export type { CalibrationResult, CalibrationSample, SampleError } from './types.js'
+export { validateProductionVoice } from './production-validation.js'
+export {
+  ALIGNER_PINS,
+  CalibrationSampleSchema,
+  ProductionVoiceValidationSampleSchema,
+} from './types.js'
+export type {
+  CalibrationResult,
+  CalibrationSample,
+  ProductionVoiceValidationResult,
+  ProductionVoiceValidationSample,
+  SampleError,
+} from './types.js'
