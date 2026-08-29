@@ -195,7 +195,9 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
+      "prepare_track_g_video_1_stage_04_tournament",
       "register_qualified_voice",
+      "select_track_g_video_1_stage_04_champion",
       "start_track_g_video_1_qualification",
     ]);
 
@@ -437,7 +439,9 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
+      "prepare_track_g_video_1_stage_04_tournament",
       "register_qualified_voice",
+      "select_track_g_video_1_stage_04_champion",
       "start_track_g_video_1_qualification",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -819,21 +823,154 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
       /TRUTH_CLAIM_APPEND_ONLY/u,
     );
 
-    const unsupported = await client.callTool({
+    const directAdvanceBlocked = await client.callTool({
       name: "advance_track_g_video_1_stage",
       arguments: {
         stageCode: "04",
-        objective: "Verify that Stage 04 remains fail-closed until its creative tournament and owner champion gate are implemented.",
+        objective: "Verify that the stable runner cannot bypass the required Stage 04 owner champion decision.",
         confirm: true,
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
       },
     });
-    assert.equal(unsupported.isError, true);
-    assert.match(unsupported.content[0].text, /TRACK_G_STAGE_04_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(directAdvanceBlocked.isError, true);
+    assert.match(directAdvanceBlocked.content[0].text, /TRACK_G_STAGE_04_HUMAN_GATE_COMMAND_REQUIRED/u);
+
+    const stage04Objective = "Prepare two diverse Stage 04 creative routes, run three blind qualification critics, preserve both candidates and stop for the owner champion decision.";
+    const stage04Prepared = await client.callTool({
+      name: "prepare_track_g_video_1_stage_04_tournament",
+      arguments: {
+        objective: stage04Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 04 TOURNAMENT",
+      },
+    });
+    assert.equal(stage04Prepared.isError, undefined, JSON.stringify(stage04Prepared));
+    assert.equal(stage04Prepared.structuredContent.accepted, true);
+    assert.equal(stage04Prepared.structuredContent.replayed, false);
+    assert.equal(stage04Prepared.structuredContent.currentStep, "STAGE_04_READY");
+    assert.equal(stage04Prepared.structuredContent.stageState, "RUNNING");
+    assert.equal(stage04Prepared.structuredContent.tournamentState, "AWAITING_HUMAN");
+    assert.equal(stage04Prepared.structuredContent.candidates.length, 2);
+    assert.equal(stage04Prepared.structuredContent.candidates.filter((candidate) => candidate.machineRecommended).length, 1);
+    assert.ok(stage04Prepared.structuredContent.candidates.every((candidate) => candidate.aggregateScore >= 92));
+    assert.deepEqual(stage04Prepared.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_ROUTE_DIVERSITY", "PASS"],
+      ["M1_PACKAGING_CONTRACT", "PASS"],
+    ]);
+    assert.equal(stage04Prepared.structuredContent.humanGate, "REQUIRED:HP-02_D1_CHAMPION_SELECTION");
+    assert.equal(stage04Prepared.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage04Prepared.structuredContent.stageActualUsd, 0);
+
+    const stage04PrepareReplay = await client.callTool({
+      name: "prepare_track_g_video_1_stage_04_tournament",
+      arguments: {
+        objective: stage04Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 04 TOURNAMENT",
+      },
+    });
+    assert.equal(stage04PrepareReplay.structuredContent.replayed, true);
+
+    const stage04InstanceRunning = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '04'").first();
+    const tournament = await d1.prepare("SELECT * FROM creative_tournament").first();
+    const creativeCandidates = await d1.prepare("SELECT * FROM creative_route_candidate ORDER BY route_order").all();
+    const creativeJudgments = await d1.prepare("SELECT * FROM creative_tournament_judgment ORDER BY critic_id, candidate_id").all();
+    assert.equal(stage04InstanceRunning.control_state, "RUNNING");
+    assert.equal(tournament.route_count, 2);
+    assert.equal(tournament.critic_count, 3);
+    assert.equal(creativeCandidates.results.length, 2);
+    assert.equal(creativeJudgments.results.length, 6);
+    assert.equal(new Set(creativeJudgments.results.map((judgment) => judgment.critic_id)).size, 3);
+    assert.ok(creativeJudgments.results.every((judgment) => /^[0-9a-f]{64}$/u.test(judgment.blind_input_hash)));
+    const candidateSetEvidence = await bucket.get(tournament.candidate_set_r2_key);
+    assert.ok(candidateSetEvidence);
+    const candidateSetJson = JSON.parse(Buffer.from(await candidateSetEvidence.arrayBuffer()).toString("utf8"));
+    assert.equal(candidateSetJson.generation.providerCalls, 0);
+    assert.equal(candidateSetJson.controls.preserveRejectedCandidates, true);
+    assert.equal(candidateSetJson.blindJudgePayloads.length, 2);
+    assert.ok(candidateSetJson.blindJudgePayloads.every((payload) => !("id" in payload) && !("routeName" in payload)));
+    assert.ok(candidateSetJson.blindJudgePayloads.every((payload) => !JSON.stringify(payload).includes("provider")));
+    await assert.rejects(
+      d1.prepare("UPDATE creative_route_candidate SET route_name = 'mutated'").run(),
+      /CREATIVE_CANDIDATE_APPEND_ONLY/u,
+    );
+
+    const selectedCandidate = stage04Prepared.structuredContent.candidates
+      .find((candidate) => candidate.candidateId === "creative_route_video_1_safe_account_conveyor_v1");
+    assert.ok(selectedCandidate);
+    const rationale = "Choose the decision-tree route because it makes the irreversible money-movement pivot easier to understand and visualize for a household audience.";
+    const stage04Selected = await client.callTool({
+      name: "select_track_g_video_1_stage_04_champion",
+      arguments: {
+        candidateId: selectedCandidate.candidateId,
+        rationale,
+        confirm: true,
+        ownerApprovalText: "SELECT STAGE 04 CHAMPION",
+      },
+    });
+    assert.equal(stage04Selected.isError, undefined, JSON.stringify(stage04Selected));
+    assert.equal(stage04Selected.structuredContent.accepted, true);
+    assert.equal(stage04Selected.structuredContent.replayed, false);
+    assert.equal(stage04Selected.structuredContent.currentStep, "STAGE_05_READY");
+    assert.equal(stage04Selected.structuredContent.stageState, "FROZEN");
+    assert.equal(stage04Selected.structuredContent.artifactType, "CREATIVE_ROUTE_TOURNAMENT_PACKAGING");
+    assert.equal(stage04Selected.structuredContent.selectedCandidateId, selectedCandidate.candidateId);
+    assert.equal(stage04Selected.structuredContent.preservedCandidateCount, 2);
+    assert.equal(stage04Selected.structuredContent.humanGate, "SATISFIED:HP-02_D1_CHAMPION_SELECTION");
+    assert.equal(stage04Selected.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage04Selected.structuredContent.stageActualUsd, 0);
+
+    const stage04SelectionReplay = await client.callTool({
+      name: "select_track_g_video_1_stage_04_champion",
+      arguments: {
+        candidateId: selectedCandidate.candidateId,
+        rationale,
+        confirm: true,
+        ownerApprovalText: "SELECT STAGE 04 CHAMPION",
+      },
+    });
+    assert.equal(stage04SelectionReplay.structuredContent.replayed, true);
+    assert.equal(stage04SelectionReplay.structuredContent.artifactSha256, stage04Selected.structuredContent.artifactSha256);
+
+    const stage04InstanceFrozen = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '04'").first();
+    const stage04Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage04InstanceFrozen.id).first();
+    const selection = await d1.prepare("SELECT * FROM creative_tournament_selection").first();
+    const humanDecision = await d1.prepare("SELECT * FROM human_decision WHERE id = ?")
+      .bind(selection.human_decision_id).first();
+    assert.equal(stage04InstanceFrozen.control_state, "FROZEN");
+    assert.equal(stage04Artifact.artifact_type, "CREATIVE_ROUTE_TOURNAMENT_PACKAGING");
+    assert.equal(selection.candidate_id, selectedCandidate.candidateId);
+    assert.equal(humanDecision.decision_type, "D1");
+    assert.equal(humanDecision.rationale_text, rationale);
+    const finalStage04Evidence = await bucket.get(stage04Artifact.r2_key);
+    const humanDecisionEvidence = await bucket.get(humanDecision.diff_r2_key);
+    assert.ok(finalStage04Evidence);
+    assert.ok(humanDecisionEvidence);
+    const finalStage04Json = JSON.parse(Buffer.from(await finalStage04Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(finalStage04Json.champion.candidateId, selectedCandidate.candidateId);
+    assert.equal(finalStage04Json.champion.machineRecommended, false);
+    assert.equal(finalStage04Json.candidateSet.preservedCandidateIds.length, 2);
+    await assert.rejects(
+      d1.prepare("UPDATE human_decision SET rationale_text = 'mutated'").run(),
+      /HUMAN_DECISION_APPEND_ONLY/u,
+    );
+
+    const unsupportedStage05 = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "05",
+        objective: "Verify that Stage 05 remains fail-closed until its story architecture executor is implemented.",
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(unsupportedStage05.isError, true);
+    assert.match(unsupportedStage05.content[0].text, /TRACK_G_STAGE_05_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_04_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_05_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [

@@ -210,6 +210,68 @@ export const truthTerminology = sqliteTable("truth_terminology", {
   arpabet: text("arpabet").notNull(),
 }, (table) => [uniqueIndex("truth_terminology_package_term_unique").on(table.packageId, table.term)]);
 
+export const creativeTournaments = sqliteTable("creative_tournament", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  candidateSetR2Key: text("candidate_set_r2_key").notNull(),
+  candidateSetHash: text("candidate_set_hash").notNull(),
+  routeCount: integer("route_count").notNull(),
+  criticCount: integer("critic_count").notNull(),
+  generatorProvenance: text("generator_provenance").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("creative_tournament_package_stage_unique").on(table.packageId, table.stageInstanceId),
+]);
+
+export const creativeRouteCandidates = sqliteTable("creative_route_candidate", {
+  id: text("id").primaryKey(),
+  tournamentId: text("tournament_id").notNull().references(() => creativeTournaments.id),
+  blindLabel: text("blind_label").notNull(),
+  routeOrder: integer("route_order").notNull(),
+  routeName: text("route_name").notNull(),
+  hookType: text("hook_type").notNull(),
+  narrativeDevice: text("narrative_device").notNull(),
+  routeJson: text("route_json").notNull(),
+  packagingJson: text("packaging_json").notNull(),
+  eligibilityState: text("eligibility_state", { enum: ["ELIGIBLE"] }).notNull(),
+  aggregateScore: real("aggregate_score").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("creative_route_tournament_blind_label_unique").on(table.tournamentId, table.blindLabel),
+  uniqueIndex("creative_route_tournament_order_unique").on(table.tournamentId, table.routeOrder),
+]);
+
+export const creativeTournamentJudgments = sqliteTable("creative_tournament_judgment", {
+  tournamentId: text("tournament_id").notNull().references(() => creativeTournaments.id),
+  criticId: text("critic_id").notNull(),
+  candidateId: text("candidate_id").notNull().references(() => creativeRouteCandidates.id),
+  rubricVersion: text("rubric_version").notNull(),
+  scoreJson: text("score_json").notNull(),
+  totalScore: real("total_score").notNull(),
+  blindInputHash: text("blind_input_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.tournamentId, table.criticId, table.candidateId] })]);
+
+export const humanDecisions = sqliteTable("human_decision", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  decisionType: text("decision_type", { enum: ["D1", "D2", "D3", "D4", "D5"] }).notNull(),
+  actorIdentity: text("actor_identity").notNull().references(() => ownerIdentity.identity),
+  artifactBeforeId: text("artifact_before_id").notNull(),
+  artifactAfterId: text("artifact_after_id").notNull(),
+  diffR2Key: text("diff_r2_key").notNull(),
+  rationaleText: text("rationale_text").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const creativeTournamentSelections = sqliteTable("creative_tournament_selection", {
+  tournamentId: text("tournament_id").primaryKey().references(() => creativeTournaments.id),
+  candidateId: text("candidate_id").notNull().references(() => creativeRouteCandidates.id),
+  humanDecisionId: text("human_decision_id").notNull().references(() => humanDecisions.id),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("creative_tournament_selection_decision_unique").on(table.humanDecisionId)]);
+
 export const spendCeilings = sqliteTable("spend_ceiling", {
   scope: text("scope", { enum: ["PORTFOLIO", "CHANNEL", "PACKAGE", "STAGE"] }).notNull(),
   scopeRef: text("scope_ref").notNull(),
