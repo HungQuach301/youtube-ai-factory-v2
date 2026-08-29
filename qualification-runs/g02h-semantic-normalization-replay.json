@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "G-02H-A",
+  "mode": "QUALIFICATION_REPLAY_ONLY",
+  "source": {
+    "runId": 33230810559,
+    "artifactId": 9708481045,
+    "artifactName": "dual-calibration-live-g-02g-b-33230810559",
+    "artifactZipSha256": "3a23b203cb7f6ca9a4fd6b9a1f6593309a92dde29c4bc89ee068c76a1eb60d4d",
+    "canonicalBundleSha256": "0ffaf572bbed5031a4ee81c82efc55d3076a29fb7d1e327cb469870617fec8fe",
+    "checksumEntryCount": 20
+  },
+  "normalizationProfile": {
+    "id": "en-US-financial-spoken-v1",
+    "locale": "en-US",
+    "currencyUnit": "dollar",
+    "yearStyle": "twenty_hundred",
+    "expandUppercaseAcronyms": true,
+    "semanticSubstitutionTolerance": false
+  },
+  "productionEligible": false,
+  "productionProviderDispatch": "OFF",
+  "autoPublish": "OFF"
+}
