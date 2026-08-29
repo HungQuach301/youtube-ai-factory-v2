@@ -40,6 +40,11 @@ const STAGE_01_STANDARD_VERSION = 1;
 const STAGE_01_INSTANCE_ID = "stage_track_g_video_1_01_attempt_1";
 const STAGE_01_ARTIFACT_ID = "artifact_track_g_video_1_stage_01_market_audience_v1";
 const STAGE_01_ARTIFACT_TYPE = "MARKET_AUDIENCE_INTELLIGENCE";
+const STAGE_02_CODE = "02";
+const STAGE_02_STANDARD_VERSION = 1;
+const STAGE_02_INSTANCE_ID = "stage_track_g_video_1_02_attempt_1";
+const STAGE_02_ARTIFACT_ID = "artifact_track_g_video_1_stage_02_reference_anti_copy_v1";
+const STAGE_02_ARTIFACT_TYPE = "REFERENCE_ANTI_COPY";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -279,6 +284,143 @@ function audienceJobLint(job: string): StageGateResult {
   };
 }
 
+function normalizedTokens(value: string): string[] {
+  return value.normalize("NFKC").toLowerCase().match(/[a-z0-9]+/gu) ?? [];
+}
+
+function ngrams(tokens: string[], width: number): Set<string> {
+  const result = new Set<string>();
+  for (let index = 0; index + width <= tokens.length; index += 1) {
+    result.add(tokens.slice(index, index + width).join(" "));
+  }
+  return result;
+}
+
+function intersectionSize(left: Set<string>, right: Set<string>): number {
+  let count = 0;
+  for (const value of left) if (right.has(value)) count += 1;
+  return count;
+}
+
+function deterministicTextEmbedding(value: string): number[] {
+  const tokens = normalizedTokens(value);
+  const features = [...tokens, ...tokens.slice(0, -1).map((token, index) => `${token}_${tokens[index + 1]}`)];
+  const vector = Array<number>(64).fill(0);
+  for (const feature of features) {
+    const digest = createHash("sha256").update(feature).digest();
+    const bucket = digest.readUInt16BE(0) % vector.length;
+    const sign = (digest[2] & 1) === 0 ? 1 : -1;
+    vector[bucket] += sign;
+  }
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (magnitude === 0) throw new Error("TRACK_G_STAGE_02_EMPTY_EMBEDDING");
+  return vector.map((value) => value / magnitude);
+}
+
+function cosineSimilarity(left: number[], right: number[]): number {
+  if (left.length !== right.length) throw new Error("TRACK_G_STAGE_02_EMBEDDING_DIMENSION_MISMATCH");
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function beatSignature(value: string): string[] {
+  const tokens = new Set(normalizedTokens(value));
+  const signature: string[] = [];
+  if (["alert", "call", "text", "ad", "job", "request"].some((token) => tokens.has(token))) signature.push("contact-pretext");
+  if (["voice", "boss", "family", "impersonation", "clone", "bank"].some((token) => tokens.has(token))) signature.push("trust-impersonation");
+  if (["payment", "payments", "money", "account", "investment", "mule"].some((token) => tokens.has(token))) signature.push("money-movement");
+  if (["verify", "verification", "before", "routine"].some((token) => tokens.has(token))) signature.push("independent-verification");
+  if (["breach", "funnel", "wrong", "number", "30"].some((token) => tokens.has(token))) signature.push("grooming-or-data-path");
+  return signature.length > 0 ? signature : ["mechanism-explainer"];
+}
+
+function structuralSimilarity(left: string[], right: string[]): number {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const union = new Set([...leftSet, ...rightSet]);
+  return union.size === 0 ? 0 : intersectionSize(leftSet, rightSet) / union.size;
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+function stage02Measurements() {
+  const target = {
+    episodeId: trackGVideoOneContract.episodeId,
+    title: approvedChannel.episodes[0],
+    text: [
+      approvedChannel.episodes[0],
+      stage01AudienceJob(),
+      "Reveal how the alert redirects trust, then give the viewer a channel-independent verification habit.",
+    ].join(" "),
+    beatSignature: ["contact-pretext", "trust-impersonation", "money-movement", "independent-verification"],
+  };
+  const targetSevenGrams = ngrams(normalizedTokens(target.text), 7);
+  const targetEmbedding = deterministicTextEmbedding(target.text);
+  const references = approvedChannel.episodes.slice(1).map((title, index) => {
+    const referenceText = title;
+    return {
+      referenceId: `hp01_episode_queue_${String(index + 2).padStart(2, "0")}`,
+      title,
+      provenance: approvedChannel.ownerDecisionKey,
+      sharedSevenGramCount: intersectionSize(targetSevenGrams, ngrams(normalizedTokens(referenceText), 7)),
+      semanticSimilarity: roundMetric(cosineSimilarity(targetEmbedding, deterministicTextEmbedding(referenceText))),
+      beatSimilarity: roundMetric(structuralSimilarity(target.beatSignature, beatSignature(referenceText))),
+    };
+  });
+  const maxSevenGramOverlap = Math.max(...references.map((reference) => reference.sharedSevenGramCount));
+  const maxSemanticSimilarity = Math.max(...references.map((reference) => reference.semanticSimilarity));
+  const maxBeatSimilarity = Math.max(...references.map((reference) => reference.beatSimilarity));
+  const lexicalUniqueness = maxSevenGramOverlap === 0 ? 1 : 0;
+  const semanticUniqueness = Math.max(0, 1 - maxSemanticSimilarity);
+  const structuralUniqueness = Math.max(0, 1 - maxBeatSimilarity);
+  const differentiationScore = roundMetric(
+    (0.45 * lexicalUniqueness) + (0.35 * semanticUniqueness) + (0.20 * structuralUniqueness),
+  );
+  const thresholds = {
+    maxSharedSevenGrams: 0,
+    maxSemanticSimilarity: 0.92,
+    maxBeatSimilarity: 0.8,
+    minDifferentiationScore: 0.35,
+  };
+  const antiCopyPass = maxSevenGramOverlap <= thresholds.maxSharedSevenGrams
+    && maxSemanticSimilarity <= thresholds.maxSemanticSimilarity
+    && maxBeatSimilarity <= thresholds.maxBeatSimilarity;
+  const differentiationPass = differentiationScore >= thresholds.minDifferentiationScore;
+  if (!antiCopyPass) throw new Error("TRACK_G_STAGE_02_M1_ANTI_COPY_FAILED");
+  if (!differentiationPass) throw new Error("TRACK_G_STAGE_02_M1_DIFFERENTIATION_FAILED");
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M1_ANTI_COPY",
+      state: "PASS",
+      evidence: `Nine owner-approved sibling references checked: max 7-gram overlap ${maxSevenGramOverlap}, semantic similarity ${maxSemanticSimilarity}, beat similarity ${maxBeatSimilarity}; visual pHash is fail-closed and deferred until rights-cleared assets exist at Stage 09.`,
+    },
+    {
+      gate: "M1_DIFFERENTIATION",
+      state: "PASS",
+      evidence: `Deterministic differentiation score ${differentiationScore} is above the conservative ${thresholds.minDifferentiationScore} floor; calibration remains WARNING_ONLY_UNCALIBRATED for Track G Video #1.`,
+    },
+  ];
+  return {
+    target,
+    references,
+    thresholds,
+    results: {
+      lexicalSevenGram: { maxSharedSevenGrams: maxSevenGramOverlap, state: "MEASURED" },
+      semanticEmbedding: { algorithm: "feature-hash-64-v1", maxSimilarity: maxSemanticSimilarity, state: "MEASURED" },
+      beatStructure: { maxSimilarity: maxBeatSimilarity, state: "MEASURED" },
+      visualPHash: {
+        algorithm: "phash-64-hamming-v1",
+        state: "DEFERRED_TO_STAGE_09",
+        reason: "No rights-cleared target visual exists before visual acquisition; text hashes are prohibited as visual substitutes.",
+      },
+      differentiationScore,
+      calibrationState: "WARNING_ONLY_UNCALIBRATED",
+    },
+    gateResults,
+  };
+}
+
 function stage01Envelope(
   operationRunId: string,
   briefHash: string,
@@ -379,7 +521,87 @@ async function readBackStage01(operationRunId: string) {
     },
     audienceJobLint(stage01AudienceJob()),
   ];
-  return { ...stage00, stage01: stage, stage01Artifact: artifact, gateResults };
+  return { ...stage00, stage01: stage, stage01Artifact: artifact, stageArtifact: artifact, gateResults };
+}
+
+function stage02Envelope(operationRunId: string, stage01ArtifactSha256: string) {
+  const measurement = stage02Measurements();
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-02-reference-anti-copy-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_02_CODE,
+    artifactType: STAGE_02_ARTIFACT_TYPE,
+    referenceMode: "SEALED_OWNER_APPROVED_QUEUE_ONLY",
+    referenceSet: {
+      ownerDecisionKey: approvedChannel.ownerDecisionKey,
+      count: measurement.references.length,
+      limitation: "The first Track G run measures self-differentiation against the sealed HP-01 queue; no unsealed external competitor claim or asset is introduced.",
+      items: measurement.references,
+    },
+    target: measurement.target,
+    fourDimensionAntiCopy: measurement.results,
+    thresholds: measurement.thresholds,
+    provenance: [
+      {
+        sourceType: "SEALED_STAGE_ARTIFACT",
+        sourceId: STAGE_01_ARTIFACT_ID,
+        canonicalHash: stage01ArtifactSha256,
+        authority: "PRODUCTION_STAGE_01",
+      },
+      {
+        sourceType: "OWNER_DECISION",
+        sourceId: approvedChannel.ownerDecisionKey,
+        canonicalHash: canonicalHash(approvedChannel.episodes),
+        authority: "HP01_APPROVED_EPISODE_QUEUE",
+      },
+    ],
+    gateResults: measurement.gateResults,
+    budget: { reservedUsd: 0, actualUsd: 0 },
+    controls: {
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+    },
+  };
+}
+
+async function readBackStage02(operationRunId: string) {
+  const stage01 = await readBackStage01(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_02_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_02_ARTIFACT_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) =>
+    value.scope === "STAGE" && value.scopeRef === STAGE_02_INSTANCE_ID)?.ceilingUsd;
+  if (!stage || !artifact
+    || stage.packageId !== STAGE_00_PACKAGE_ID
+    || stage.stageCode !== STAGE_02_CODE
+    || stage.controlState !== "FROZEN"
+    || stage.standardVersion !== STAGE_02_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id
+    || artifact.artifactType !== STAGE_02_ARTIFACT_TYPE
+    || artifact.namespace !== "production"
+    || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_02_STANDARD_VERSION
+    || stageCeiling !== 0
+    || !isAtOrAfterReadyStep(stage01.base.run.currentStep, "STAGE_03_READY")
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_02_READ_BACK_FAILED");
+  }
+  return {
+    ...stage01,
+    stage02: stage,
+    stage02Artifact: artifact,
+    stageArtifact: artifact,
+    gateResults: stage02Measurements().gateResults,
+  };
 }
 
 export async function startTrackGVideoOneQualification(
@@ -643,6 +865,9 @@ export async function advanceTrackGVideoOneStage(
   if (input.ownerApprovalText !== ADVANCE_STAGE_OWNER_APPROVAL_TEXT) {
     throw new Error("TRACK_G_STAGE_ADVANCE_OWNER_APPROVAL_REQUIRED");
   }
+  if (input.stageCode === STAGE_02_CODE) {
+    return advanceTrackGVideoOneStage02(user, input, objective);
+  }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
   }
@@ -760,6 +985,112 @@ export async function advanceTrackGVideoOneStage(
   return { ...(await readBackStage01(bootstrap.run.id)), replayed: false };
 }
 
+async function advanceTrackGVideoOneStage02(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+  objective: string,
+) {
+  const bootstrap = await readBackForStage00();
+  const stage01 = await readBackStage01(bootstrap.run.id);
+  const expectedIdempotencyKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    STAGE_02_CODE,
+    stage01.stage01Artifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedIdempotencyKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage02(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_02_READY") throw new Error("TRACK_G_STAGE_02_NOT_READY");
+  if (!await verifyImmutableEvidence(
+    stage01.stage01Artifact.r2Key,
+    stage01.stage01Artifact.canonicalHash,
+  )) {
+    throw new Error("TRACK_G_STAGE_02_PREDECESSOR_PROVENANCE_FAILED");
+  }
+
+  const envelope = stage02Envelope(bootstrap.run.id, stage01.stage01Artifact.canonicalHash);
+  const artifactJson = canonicalize(envelope);
+  const artifactBytes = new TextEncoder().encode(`${artifactJson}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = [
+    "prod",
+    approvedChannel.id,
+    trackGVideoOneContract.episodeId,
+    STAGE_02_CODE,
+    "reference-anti-copy",
+    `${artifactSha256}.json`,
+  ].join("/");
+  await putImmutableProductionEvidence(
+    artifactR2Key,
+    artifactBytes,
+    "application/json",
+    artifactSha256,
+  );
+
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id))
+    .orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_02_READY',
+          'TRACK_G_VIDEO_1_STAGE_03_READY', ?, ?)`)
+        .bind(commandId, canonicalize({
+          objective,
+          operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID,
+          stageCode: STAGE_02_CODE,
+          executorVersion: envelope.executorVersion,
+          artifactSha256,
+        }), input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '02', 'FROZEN', ?, 1, ?, ?)`)
+        .bind(STAGE_02_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_02_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`)
+        .bind(STAGE_02_ARTIFACT_ID, STAGE_02_INSTANCE_ID, STAGE_02_ARTIFACT_TYPE,
+          artifactR2Key, artifactSha256, STAGE_02_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`)
+        .bind(STAGE_02_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_03_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_02_READY'`)
+        .bind(now, bootstrap.run.id),
+      ...[
+        ["STAGE_02_DOR_PASSED", { predecessor: STAGE_01_ARTIFACT_ID, predecessorSha256: stage01.stage01Artifact.canonicalHash }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_02_CODE, traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_02_REFERENCE_SET_SEALED", { ownerDecisionKey: approvedChannel.ownerDecisionKey, count: envelope.referenceSet.count }],
+        ["STAGE_02_M1_ANTI_COPY_PASSED", { measurements: envelope.fourDimensionAntiCopy }],
+        ["STAGE_02_M1_DIFFERENTIATION_PASSED", { differentiationScore: envelope.fourDimensionAntiCopy.differentiationScore }],
+        ["STAGE_02_ARTIFACT_SEALED", { artifactId: STAGE_02_ARTIFACT_ID, artifactR2Key, artifactSha256 }],
+        ["STAGE_02_FROZEN", { nextStep: "STAGE_03_READY", reservedUsd: 0, actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+        .bind(crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+          canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage02(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage02(bootstrap.run.id)), replayed: false };
+}
+
 async function readBackForStage00() {
   const db = getDb();
   const [contract] = await db.select({ operationRunId: trackGRunContracts.operationRunId })
@@ -812,10 +1143,14 @@ function stageAdvanceIdempotencyKey(
 export async function trackGVideoOneStageIdempotencyKey(
   stageCode: TrackGAdvanceStageCode,
 ): Promise<string> {
-  if (stageCode !== STAGE_01_CODE) {
-    throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
-  }
   const bootstrap = await readBackForStage00();
-  const stage00 = await readBackStage00(bootstrap.run.id);
-  return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage00.artifact.canonicalHash);
+  if (stageCode === STAGE_01_CODE) {
+    const stage00 = await readBackStage00(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage00.artifact.canonicalHash);
+  }
+  if (stageCode === STAGE_02_CODE) {
+    const stage01 = await readBackStage01(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage01.stage01Artifact.canonicalHash);
+  }
+  throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }
