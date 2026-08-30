@@ -16,6 +16,7 @@ import {
   operationEvents,
   predictedPerformances,
   productionPackages,
+  scriptDrafts,
   spendCeilings,
   stageArtifacts,
   stageInstances,
@@ -75,6 +76,14 @@ const STAGE_05_ARTIFACT_ID = "artifact_track_g_video_1_stage_05_story_prediction
 const STAGE_05_ARTIFACT_TYPE = "STORY_ARCHITECTURE_PREDICTION_SEAL";
 const STAGE_05_PREDICTION_ID = "prediction_track_g_video_1_stage_05_v1";
 const STAGE_05_PREDICTION_MODEL_VERSION = "qualification-prior-v1-uncalibrated";
+const STAGE_06_CODE = "06";
+const STAGE_06_STANDARD_VERSION = 1;
+const STAGE_06_INSTANCE_ID = "stage_track_g_video_1_06_attempt_1";
+const STAGE_06_DRAFT_ID = "script_draft_track_g_video_1_stage_06_v1";
+const STAGE_06_ARTIFACT_ID = "artifact_track_g_video_1_stage_06_script_v1";
+const STAGE_06_ARTIFACT_TYPE = "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL";
+const STAGE_06_PREPARE_OWNER_APPROVAL_TEXT = "PREPARE STAGE 06 SCRIPT REVIEW";
+const STAGE_06_APPLY_OWNER_APPROVAL_TEXT = "APPLY STAGE 06 EDITORIAL DECISION";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -116,6 +125,23 @@ export type SelectTrackGVideoOneStage04ChampionInput = {
   candidateId: string;
   rationale: string;
   ownerApprovalText: typeof STAGE_04_SELECT_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type PrepareTrackGVideoOneStage06Input = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_06_PREPARE_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type ApplyTrackGVideoOneStage06EditorialInput = {
+  decisionType: "D2" | "D4";
+  revisedTitle?: string;
+  revisedHook?: string;
+  beatId?: string;
+  revisedBeatNarration?: string;
+  rationale: string;
+  ownerApprovalText: typeof STAGE_06_APPLY_OWNER_APPROVAL_TEXT;
   idempotencyKey: string;
 };
 
@@ -1500,7 +1526,7 @@ function stage05StoryModel(selectedCandidateId: string) {
       closeLoop: "The viewer knows exactly where to stop the conveyor belt.",
     },
   ];
-  const truthClaimIds = new Set(stage03TruthModel().claims.map((claim) => claim.id));
+  const truthClaimIds = new Set<string>(stage03TruthModel().claims.map((claim) => claim.id));
   const beatStatePass = beats.every((beat, index) =>
     beat.knowledgeBefore.trim() !== beat.knowledgeAfter.trim()
     && beat.claimIds.length > 0
@@ -1658,6 +1684,494 @@ async function readBackStage05(operationRunId: string) {
     prediction,
     gateResults: model.gateResults,
   };
+}
+
+function stage06ScriptModel(selectedCandidateId: string) {
+  const story = stage05StoryModel(selectedCandidateId);
+  const isAlertRoute = story.candidate.id === "creative_route_video_1_alert_is_the_trap_v1";
+  const narrations = isAlertRoute ? [
+    `Your phone says fraud was detected. The next instruction is the part designed to steal your money. That opening feels backwards because a warning is supposed to protect you. But in an impersonation scam, the warning can be the first piece of infrastructure the attacker controls. It creates urgency, frames the problem, and offers a path that looks official before you have independently verified anything. The scale of this category explains why the mechanism matters: consumers reported $3.5 billion in losses to imposter scams during 2025. Those figures describe reported loss, not the odds that any particular message is fake. The useful question is narrower. Who controls the channel asking for your attention, and who controls the next action? Until that is independently established, the alert is a claim, not proof.`,
+    `The second move is an authority stack. A familiar caller name appears. A confident voice supplies a case number. The person knows enough personal detail to make the conversation feel specific. Then the clock starts: suspicious activity is supposedly happening now, and delay is presented as dangerous. Each cue feels like another piece of verification, but the cues are not independent. They all arrive through the same contact path. Caller information can be imitated. A case number can be invented. Personal details can come from earlier breaches, public records, or previous contact. Urgency tests compliance; it does not prove identity. The scammer does not need every detail to be perfect. The attacker only needs the story to remain coherent long enough for the target to accept the next instruction without leaving the channel.`,
+    `Now the alert changes roles. It stops being a warning and becomes a guided solution. The same channel that announced the danger explains what happened, defines which evidence matters, and tells you how to resolve it. That is trust redirection. The attacker is not merely asking to be believed. The attacker is attempting to replace the institution as the source of truth for the next decision. This is why arguing with the details inside the call is weak protection. Every answer can be absorbed into the script. If you ask whether the caller is real, the caller can point back to the alert, the case number, or the familiar name on the screen. The loop remains closed because every verification path still belongs to the contact that created the fear.`,
+    `The decisive pivot is protective-sounding money movement. The story may describe a secure destination, a temporary safeguard, or an urgent reversal. The language changes, but the structure is stable: the person who created the emergency also directs the movement of funds. Federal consumer guidance treats a demand to relocate funds for protection as a scam indicator. That does not require the viewer to diagnose the attacker's technology, accent, or personal knowledge. It identifies the action that would convert a persuasive story into exposure. The stop point arrives before the transfer, not after a better explanation. Once the contact asks for money movement, verification must leave that contact path entirely. The key distinction is not whether the caller sounds helpful. It is whether the proposed safeguard depends on obeying the source of the panic.`,
+    `Independent verification breaks the loop. End the suspicious interaction without using a link, number, or button it supplied. Then re-establish contact through a channel you already know belongs to the institution: an official app opened separately, a website address entered independently, or a known number from a trusted source. The important feature is separation. A second call is not independent if the number came from the first message. A website is not independent if the alert supplied the link. A verification code does not prove identity if the caller asked you to read it aloud. The goal is not to win an argument with the suspicious contact. The goal is to remove that contact from the evidence chain, then let the institution confirm whether a real account problem exists through its own established process.`,
+    `The reusable rule is simple: do not let the channel that created the panic remain in control of the solution. A convincing alert may contain accurate details. A calm caller may sound professional. A warning may even resemble a genuine institutional message. None of those features independently establishes who controls the contact path. Pause before acting, separate from the original channel, and rebuild verification through an official route obtained on your own. This is a general fraud-resistance habit, not personalized financial or legal advice. It does not ask you to predict every new scam. It changes the sequence of trust. The suspicious channel can raise a question, but it cannot answer that question for itself. Once that distinction becomes automatic, the alert loses its power to steer the next decision.`,
+  ] : [
+    `The money is still safe—right up to the moment the fake security process persuades you to move it. That is the protection paradox. A warning arrives, claims that an account is at risk, and presents movement of funds as the cure. The process feels defensive because each step is framed as damage control. Yet the attacker does not control the money at the beginning. The attacker is trying to control the decision path that leads to it. Consumers reported $3.5 billion in losses to imposter scams during 2025. Those figures are reported context, not a prediction about any one message. The mechanism is more useful than the headline number: urgency narrows attention, staged authority lowers doubt, and a sequence of small actions prepares the target for the irreversible one.`,
+    `The decision chain usually begins with an alert and a request to stay engaged. A caller, text, or message supplies a problem, then asks for a response that seems administrative. The next step may involve confirming a detail, discussing a case number, or reacting to supposed account activity. Each action appears separate, but the sequence is designed as one connected path. The contact defines the emergency, decides which facts count, and controls the tempo. Familiar caller information and specific personal details can make the path feel institutional, but they still arrive through one unverified channel. The early steps matter because compliance becomes part of the evidence people use on themselves: after cooperating once, the next request can feel like a continuation rather than a new decision that deserves fresh verification.`,
+    `Progressive commitment is the hidden engine. A harmless answer makes the conversation feel real. A case number makes it feel documented. A supposed security check makes it feel procedural. None of those steps proves the identity of the person directing them. Together, however, they create momentum. The target begins solving the attacker's version of the problem instead of testing whether the problem and the helper share the same source. This is why one suspicious phrase is not always easy to find. The danger is structural. Every step keeps the target inside the contact's world, where the contact can reinterpret doubt as delay and delay as risk. The clean question is not whether the process feels professional. It is whether any part of the verification came from a channel the original contact did not control.`,
+    `The chain becomes dangerous when protection requires moving funds. The destination may be called secure, temporary, protected, or verified. Those labels do not change the action. Federal consumer guidance identifies a demand to relocate funds for protection as a scam indicator. That point is valuable because it creates a stop rule before the irreversible step. The viewer does not need to determine how caller information was imitated or where personal data came from. The process has already revealed its purpose when the source of the panic starts directing money movement. A legitimate-sounding explanation cannot make the verification independent. The correct boundary is procedural: no transfer instruction from the contact that initiated the emergency can serve as proof that the transfer is protective.`,
+    `A clean verification branch begins outside the suspicious contact. Leave the call or message, avoid every link and contact detail it supplied, and open an official route separately. That may be an institution's established app, a website address entered independently, or a known number from a trusted source. Separation is the control. Calling back a number from the alert keeps the same chain intact. Following a link from the message keeps the same chain intact. Reading a security code to the caller keeps the same chain intact. Independent verification removes the original contact from the evidence path and lets the institution address any real account issue through its own process. The objective is not speed inside the suspicious workflow. It is a trustworthy restart outside it.`,
+    `The protective habit is to stop the conveyor belt before money movement and rebuild the channel of trust. Convincing details do not replace independent identity. Urgency does not create authority. A sequence of professional-sounding steps does not become safe merely because each step seems small. The suspicious contact may raise a question, but it cannot be the only source allowed to answer that question. That pause protects the decision before any money leaves the account. Pause, separate, and verify through an official route obtained independently. This is a general educational rule, not personalized financial or legal advice. It does not depend on recognizing every technical trick. It changes the order of operations so the attacker cannot use a manufactured emergency to control both the problem and the proposed solution.`,
+  ];
+  const sections = story.beats.map((beat, index) => ({
+    beatId: beat.id,
+    title: beat.title,
+    startSec: beat.startSec,
+    endSec: beat.endSec,
+    narration: narrations[index],
+    claimIds: [...beat.claimIds],
+  }));
+  const title = story.candidate.packaging.primaryTitle;
+  const hook = story.candidate.route.hook;
+  const scriptText = sections.map((section) => section.narration).join("\n\n");
+  const words = scriptText.match(/[A-Za-z0-9$'.-]+/gu) ?? [];
+  const wordCount = words.length;
+  const estimatedDurationSec = Math.round((wordCount / 110) * 60);
+  const sentenceWordCounts = scriptText.split(/[.!?]+/u).map((sentence) =>
+    (sentence.match(/[A-Za-z0-9$'.-]+/gu) ?? []).length).filter(Boolean);
+  const truth = stage03TruthModel();
+  const truthClaimIds = new Set<string>(truth.claims.map((claim) => claim.id));
+  const numericSurfaces = scriptText.match(/\$\d+(?:\.\d+)?(?:\s+(?:million|billion|trillion))?|\b\d{4}\b|\b\d+(?:\.\d+)?%/gu) ?? [];
+  const numericClaim = truth.claims.find((claim) => claim.id === "truth_claim_video_1_001");
+  const numberTrace = numericSurfaces.map((surface) => ({
+    surface,
+    claimId: numericClaim?.id,
+    claimText: numericClaim?.text,
+    asOfDate: numericClaim?.asOfDate,
+    sourceId: numericClaim?.numeric?.sourceId,
+  }));
+  const adviceViolations = prohibitedAdviceMatches(`${title}\n${hook}\n${scriptText}`);
+  const packagingLintPass = title.length >= 20 && hook.length >= 30;
+  const sectionLintPass = sections.length === 6
+    && sections.every((section, index) => section.beatId === story.beats[index].id
+      && section.claimIds.length > 0
+      && section.claimIds.every((claimId) => truthClaimIds.has(claimId))
+      && (section.narration.match(/[A-Za-z0-9$'.-]+/gu) ?? []).length >= 95
+      && (section.narration.match(/[A-Za-z0-9$'.-]+/gu) ?? []).length <= 220);
+  const durationLintPass = wordCount >= 700
+    && wordCount <= 1300
+    && estimatedDurationSec >= 420
+    && estimatedDurationSec <= 600;
+  const sentenceLintPass = sentenceWordCounts.every((count) => count <= 44);
+  const scriptLintPass = packagingLintPass && sectionLintPass && durationLintPass && sentenceLintPass;
+  const numberTracePass = numericSurfaces.length === 2
+    && numberTrace.every((trace) => trace.claimId === "truth_claim_video_1_001"
+      && trace.sourceId === "truth_source_ftc_imposter_losses_2025_v1");
+  if (adviceViolations.length > 0) throw new Error("TRACK_G_STAGE_06_M0_ADVICE_LINT_FAILED");
+  if (!scriptLintPass) {
+    const failedSurface = !packagingLintPass ? "PACKAGING"
+      : !sectionLintPass ? "SECTIONS"
+        : !durationLintPass ? "DURATION"
+          : "SENTENCES";
+    throw new Error(`TRACK_G_STAGE_06_M1_SCRIPT_LINT_FAILED_${failedSurface}`);
+  }
+  if (!numberTracePass) throw new Error("TRACK_G_STAGE_06_M1_NUMBER_TRACE_FAILED");
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_ADVICE_LINT_SECOND_PASS",
+      state: "PASS",
+      evidence: "The complete narration and packaging contain no prohibited personalized financial directive; the Stage 03 deterministic policy patterns were applied again to final prose.",
+    },
+    {
+      gate: "M1_SCRIPT_LINT",
+      state: "PASS",
+      evidence: `${sections.length}/${sections.length} claim-bound sections preserve the sealed beat order; ${wordCount} words estimate ${estimatedDurationSec} seconds at the channel's measured documentary pace.`,
+    },
+    {
+      gate: "M1_NUMBER_TRACE",
+      state: "PASS",
+      evidence: `${numberTrace.length}/${numberTrace.length} numeric surfaces trace exactly to truth_claim_video_1_001 and its sealed FTC source; no orphan number remains.`,
+    },
+  ];
+  return { title, hook, sections, wordCount, estimatedDurationSec, numberTrace, gateResults };
+}
+
+function stage06DraftEnvelope(operationRunId: string, stage05ArtifactSha256: string,
+  selectedCandidateId: string) {
+  const model = stage06ScriptModel(selectedCandidateId);
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-06-script-number-audit-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_06_CODE,
+    draftId: STAGE_06_DRAFT_ID,
+    script: model,
+    provenance: [{
+      sourceType: "SEALED_STAGE_ARTIFACT",
+      sourceId: STAGE_05_ARTIFACT_ID,
+      canonicalHash: stage05ArtifactSha256,
+      authority: "PRODUCTION_STAGE_05_STORY_ARCHITECTURE",
+    }],
+    controls: {
+      humanGate: "REQUIRED:HP-02_D2_OR_D4_EDITORIAL_DECISION",
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+    },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage06Draft(operationRunId: string) {
+  const stage05 = await readBackStage05(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_06_INSTANCE_ID)).limit(1);
+  const [draft] = await db.select().from(scriptDrafts)
+    .where(eq(scriptDrafts.id, STAGE_06_DRAFT_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) =>
+    value.scope === "STAGE" && value.scopeRef === STAGE_06_INSTANCE_ID)?.ceilingUsd;
+  const model = stage06ScriptModel(stage05.selection.candidateId);
+  const draftLifecycleValid = (stage?.controlState === "RUNNING"
+      && stage05.base.run.currentStep === "STAGE_06_READY")
+    || (stage?.controlState === "FROZEN"
+      && isAtOrAfterReadyStep(stage05.base.run.currentStep, "STAGE_07A_READY"));
+  if (!stage || !draft
+    || stage.packageId !== STAGE_00_PACKAGE_ID
+    || stage.stageCode !== STAGE_06_CODE
+    || !draftLifecycleValid
+    || stage.standardVersion !== STAGE_06_STANDARD_VERSION
+    || draft.packageId !== STAGE_00_PACKAGE_ID
+    || draft.stageInstanceId !== stage.id
+    || draft.title !== model.title
+    || draft.hook !== model.hook
+    || canonicalize(JSON.parse(draft.sectionsJson)) !== canonicalize(model.sections)
+    || draft.wordCount !== model.wordCount
+    || draft.estimatedDurationSec !== model.estimatedDurationSec
+    || canonicalize(JSON.parse(draft.numberTraceJson)) !== canonicalize(model.numberTrace)
+    || draft.adviceLintState !== "PASS"
+    || draft.scriptLintState !== "PASS"
+    || draft.numberTraceState !== "PASS"
+    || stageCeiling !== 0
+    || !await verifyImmutableEvidence(stage05.stageArtifact.r2Key, stage05.stageArtifact.canonicalHash)
+    || !await verifyImmutableEvidence(draft.r2Key, draft.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_06_DRAFT_READ_BACK_FAILED");
+  }
+  return { ...stage05, stage06: stage, scriptDraft: draft, scriptModel: model,
+    gateResults: model.gateResults };
+}
+
+async function readBackStage06(operationRunId: string) {
+  const prepared = await readBackStage06Draft(operationRunId).catch(async (error) => {
+    const stage05 = await readBackStage05(operationRunId);
+    const db = getDb();
+    const [stage] = await db.select().from(stageInstances)
+      .where(eq(stageInstances.id, STAGE_06_INSTANCE_ID)).limit(1);
+    const [draft] = await db.select().from(scriptDrafts)
+      .where(eq(scriptDrafts.id, STAGE_06_DRAFT_ID)).limit(1);
+    if (!stage || !draft || stage.controlState !== "FROZEN") throw error;
+    return { ...stage05, stage06: stage, scriptDraft: draft,
+      scriptModel: stage06ScriptModel(stage05.selection.candidateId),
+      gateResults: stage06ScriptModel(stage05.selection.candidateId).gateResults };
+  });
+  const db = getDb();
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_06_ARTIFACT_ID)).limit(1);
+  const decisions = await db.select().from(humanDecisions)
+    .where(eq(humanDecisions.packageId, STAGE_00_PACKAGE_ID));
+  const decision = decisions.find((value) => value.artifactAfterId === STAGE_06_ARTIFACT_ID);
+  if (!artifact || !decision
+    || prepared.stage06.controlState !== "FROZEN"
+    || artifact.stageInstanceId !== prepared.stage06.id
+    || artifact.artifactType !== STAGE_06_ARTIFACT_TYPE
+    || artifact.namespace !== "production"
+    || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_06_STANDARD_VERSION
+    || !["D2", "D4"].includes(decision.decisionType)
+    || decision.artifactBeforeId !== STAGE_06_DRAFT_ID
+    || decision.rationaleText.trim().length < 20
+    || prepared.base.run.currentStep !== "STAGE_07A_READY"
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_06_READ_BACK_FAILED");
+  }
+  return { ...prepared, decision, stage06Artifact: artifact, stageArtifact: artifact };
+}
+
+function applyStage06Editorial(model: ReturnType<typeof stage06ScriptModel>,
+  input: ApplyTrackGVideoOneStage06EditorialInput) {
+  const rationale = input.rationale.trim();
+  const revisedTitle = input.revisedTitle?.trim() || model.title;
+  const revisedHook = input.revisedHook?.trim() || model.hook;
+  const sections = model.sections.map((section) => ({ ...section, claimIds: [...section.claimIds] }));
+  if (input.decisionType === "D2") {
+    if (revisedTitle === model.title && revisedHook === model.hook) {
+      throw new Error("TRACK_G_STAGE_06_D2_SUBSTANTIVE_EDIT_REQUIRED");
+    }
+    if (revisedTitle.length < 20 || revisedTitle.length > 140
+      || revisedHook.length < 30 || revisedHook.length > 400) {
+      throw new Error("TRACK_G_STAGE_06_D2_EDIT_LENGTH_OUT_OF_RANGE");
+    }
+    if (revisedHook !== model.hook) {
+      sections[0] = {
+        ...sections[0],
+        narration: `${revisedHook}${sections[0].narration.slice(model.hook.length)}`,
+      };
+    }
+  } else {
+    const beatId = input.beatId?.trim();
+    const revisedBeatNarration = input.revisedBeatNarration?.trim();
+    const index = sections.findIndex((section) => section.beatId === beatId);
+    if (index < 0 || !revisedBeatNarration || revisedBeatNarration === sections[index].narration) {
+      throw new Error("TRACK_G_STAGE_06_D4_SUBSTANTIVE_BEAT_EDIT_REQUIRED");
+    }
+    sections[index] = { ...sections[index], narration: revisedBeatNarration };
+  }
+  const scriptText = sections.map((section) => section.narration).join("\n\n");
+  const words = scriptText.match(/[A-Za-z0-9$'.-]+/gu) ?? [];
+  const wordCount = words.length;
+  const estimatedDurationSec = Math.round((wordCount / 110) * 60);
+  const sentenceWordCounts = scriptText.split(/[.!?]+/u).map((sentence) =>
+    (sentence.match(/[A-Za-z0-9$'.-]+/gu) ?? []).length).filter(Boolean);
+  const numericSurfaces = scriptText.match(/\$\d+(?:\.\d+)?(?:\s+(?:million|billion|trillion))?|\b\d{4}\b|\b\d+(?:\.\d+)?%/gu) ?? [];
+  const adviceViolations = prohibitedAdviceMatches(`${revisedTitle}\n${revisedHook}\n${scriptText}`);
+  const scriptLintPass = sections.length === 6
+    && sections.every((section) => {
+      const sectionWords = section.narration.match(/[A-Za-z0-9$'.-]+/gu) ?? [];
+      return sectionWords.length >= 95 && sectionWords.length <= 220 && section.claimIds.length > 0;
+    })
+    && wordCount >= 700 && wordCount <= 1300
+    && estimatedDurationSec >= 420 && estimatedDurationSec <= 600
+    && sentenceWordCounts.every((count) => count <= 44);
+  const numberTracePass = numericSurfaces.length === 2
+    && numericSurfaces.includes("$3.5 billion") && numericSurfaces.includes("2025");
+  if (adviceViolations.length > 0) throw new Error("TRACK_G_STAGE_06_M0_ADVICE_LINT_FAILED");
+  if (!scriptLintPass) throw new Error("TRACK_G_STAGE_06_M1_SCRIPT_LINT_FAILED");
+  if (!numberTracePass) throw new Error("TRACK_G_STAGE_06_M1_NUMBER_TRACE_FAILED");
+  const numberTrace = numericSurfaces.map((surface) => ({
+    surface,
+    claimId: "truth_claim_video_1_001",
+    claimText: stage03TruthModel().claims[0].text,
+    asOfDate: stage03TruthModel().claims[0].asOfDate,
+    sourceId: stage03TruthModel().claims[0].numeric?.sourceId,
+  }));
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_ADVICE_LINT_SECOND_PASS",
+      state: "PASS",
+      evidence: "The human-edited title, hook and narration passed the second deterministic advice lint with no personalized financial directive.",
+    },
+    {
+      gate: "M1_SCRIPT_LINT",
+      state: "PASS",
+      evidence: `The post-decision script preserves six claim-bound sections, ${wordCount} words and a ${estimatedDurationSec}-second documentary pace estimate.`,
+    },
+    {
+      gate: "M1_NUMBER_TRACE",
+      state: "PASS",
+      evidence: "Every post-decision numeric surface remains exactly traceable to the sealed FTC loss claim and no new number was introduced.",
+    },
+  ];
+  return { title: revisedTitle, hook: revisedHook, sections, wordCount,
+    estimatedDurationSec, numberTrace, gateResults, rationale };
+}
+
+export async function prepareTrackGVideoOneStage06ScriptReview(
+  user: ChatGPTUser,
+  input: PrepareTrackGVideoOneStage06Input,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== STAGE_06_PREPARE_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_06_PREPARE_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const stage05 = await readBackStage05(bootstrap.run.id);
+  const expectedKey = stage06PrepareIdempotencyKey(bootstrap.run.id, stage05.stageArtifact.canonicalHash);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage06Draft(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_06_READY") throw new Error("TRACK_G_STAGE_06_NOT_READY");
+  if (!await verifyImmutableEvidence(stage05.stageArtifact.r2Key, stage05.stageArtifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_06_PREDECESSOR_PROVENANCE_FAILED");
+  }
+  const envelope = stage06DraftEnvelope(
+    bootstrap.run.id,
+    stage05.stageArtifact.canonicalHash,
+    stage05.selection.candidateId,
+  );
+  const draftBytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const draftSha256 = sha256(draftBytes);
+  const draftR2Key = [
+    "prod", approvedChannel.id, trackGVideoOneContract.episodeId, STAGE_06_CODE,
+    "script-editorial-draft", `${draftSha256}.json`,
+  ].join("/");
+  await putImmutableProductionEvidence(draftR2Key, draftBytes, "application/json", draftSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const model = envelope.script;
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'PREPARE_TRACK_G_VIDEO_1_STAGE_06_SCRIPT', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_06_READY', 'TRACK_G_VIDEO_1_STAGE_06_AWAITING_EDITORIAL', ?, ?)`).bind(
+        commandId, canonicalize({ objective, operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_06_CODE, draftSha256 }),
+        input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at)
+        VALUES (?, ?, '06', 'RUNNING', ?, 1, ?)`).bind(
+        STAGE_06_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_06_STANDARD_VERSION, now),
+      d1.prepare(`INSERT INTO script_draft
+        (id, package_id, stage_instance_id, title, hook, sections_json, word_count,
+         estimated_duration_sec, number_trace_json, advice_lint_state, script_lint_state,
+         number_trace_state, r2_key, canonical_hash, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PASS', 'PASS', 'PASS', ?, ?, ?)`).bind(
+        STAGE_06_DRAFT_ID, STAGE_00_PACKAGE_ID, STAGE_06_INSTANCE_ID, model.title, model.hook,
+        canonicalize(model.sections), model.wordCount, model.estimatedDurationSec,
+        canonicalize(model.numberTrace), draftR2Key, draftSha256, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_06_INSTANCE_ID),
+      ...[
+        ["STAGE_06_DOR_PASSED", { predecessor: STAGE_05_ARTIFACT_ID,
+          predecessorSha256: stage05.stageArtifact.canonicalHash }],
+        ["STAGE_06_SCRIPT_DRAFT_SEALED", { draftId: STAGE_06_DRAFT_ID, draftR2Key, draftSha256 }],
+        ["STAGE_06_M0_ADVICE_LINT_PASSED", { pass: true }],
+        ["STAGE_06_M1_SCRIPT_LINT_PASSED", { wordCount: model.wordCount,
+          estimatedDurationSec: model.estimatedDurationSec }],
+        ["STAGE_06_M1_NUMBER_TRACE_PASSED", { traceCount: model.numberTrace.length }],
+        ["STAGE_06_HP02_EDITORIAL_REQUIRED", { allowedDecisionTypes: ["D2", "D4"] }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage06Draft(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage06Draft(bootstrap.run.id)), replayed: false };
+}
+
+export async function applyTrackGVideoOneStage06EditorialDecision(
+  user: ChatGPTUser,
+  input: ApplyTrackGVideoOneStage06EditorialInput,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const rationale = input.rationale.trim();
+  if (rationale.length < 20 || rationale.length > 500) throw new Error("RATIONALE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== STAGE_06_APPLY_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_06_EDITORIAL_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage06Draft(bootstrap.run.id);
+  const expectedKey = stage06EditorialIdempotencyKey(bootstrap.run.id,
+    prepared.scriptDraft.canonicalHash, input);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage06(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_06_READY" || prepared.stage06.controlState !== "RUNNING") {
+    throw new Error("TRACK_G_STAGE_06_EDITORIAL_GATE_NOT_READY");
+  }
+  const finalScript = applyStage06Editorial(prepared.scriptModel, input);
+  const actorIdentity = user.email.toLowerCase();
+  const diffEnvelope = {
+    schemaVersion: 1,
+    draftId: STAGE_06_DRAFT_ID,
+    draftSha256: prepared.scriptDraft.canonicalHash,
+    decisionType: input.decisionType,
+    actorIdentity,
+    rationale,
+    changes: input.decisionType === "D2"
+      ? { titleBefore: prepared.scriptModel.title, titleAfter: finalScript.title,
+        hookBefore: prepared.scriptModel.hook, hookAfter: finalScript.hook }
+      : { beatId: input.beatId?.trim(),
+        narrationBefore: prepared.scriptModel.sections.find((value) => value.beatId === input.beatId?.trim())?.narration,
+        narrationAfter: input.revisedBeatNarration?.trim() },
+  };
+  const diffBytes = new TextEncoder().encode(`${canonicalize(diffEnvelope)}\n`);
+  const diffSha256 = sha256(diffBytes);
+  const diffR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_06_CODE, `human-decision-${input.decisionType.toLowerCase()}`, `${diffSha256}.json`].join("/");
+  await putImmutableProductionEvidence(diffR2Key, diffBytes, "application/json", diffSha256);
+  const finalEnvelope = {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-06-script-number-audit-v1",
+    operationRunId: bootstrap.run.id,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_06_CODE,
+    artifactType: STAGE_06_ARTIFACT_TYPE,
+    draft: { id: STAGE_06_DRAFT_ID, r2Key: prepared.scriptDraft.r2Key,
+      sha256: prepared.scriptDraft.canonicalHash },
+    editorialDecision: { decisionType: input.decisionType, actorIdentity, rationale,
+      diffR2Key, diffSha256 },
+    finalScript,
+    provenance: [{ sourceType: "SEALED_STAGE_ARTIFACT", sourceId: STAGE_05_ARTIFACT_ID,
+      canonicalHash: prepared.stage05Artifact.canonicalHash, authority: "PRODUCTION_STAGE_05" }],
+    controls: { humanGate: `SATISFIED:HP-02_${input.decisionType}_EDITORIAL_DECISION`,
+      providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(finalEnvelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_06_CODE, "script-number-audit-editorial-seal", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const humanDecisionId = `human_decision_track_g_video_1_stage_06_${input.decisionType.toLowerCase()}_v1`;
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_06_AWAITING_EDITORIAL', 'TRACK_G_VIDEO_1_STAGE_07A_READY', ?, ?)`).bind(
+        commandId, canonicalize({ operationRunId: bootstrap.run.id, stageCode: STAGE_06_CODE,
+          decisionType: input.decisionType, rationale, diffSha256, artifactSha256 }),
+        input.idempotencyKey, actorIdentity, traceId, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_06_ARTIFACT_ID, STAGE_06_INSTANCE_ID, STAGE_06_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_06_STANDARD_VERSION, now),
+      d1.prepare(`INSERT INTO human_decision
+        (id, package_id, decision_type, actor_identity, artifact_before_id, artifact_after_id,
+         diff_r2_key, rationale_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+        humanDecisionId, STAGE_00_PACKAGE_ID, input.decisionType, actorIdentity,
+        STAGE_06_DRAFT_ID, STAGE_06_ARTIFACT_ID, diffR2Key, rationale, now),
+      d1.prepare(`UPDATE stage_instance SET control_state = 'FROZEN', frozen_at = ?
+        WHERE id = ? AND control_state = 'RUNNING'`).bind(now, STAGE_06_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_07A_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_06_READY'`).bind(
+        now, bootstrap.run.id),
+      ...[
+        ["STAGE_06_HP02_EDITORIAL_RECORDED", { decisionId: humanDecisionId,
+          decisionType: input.decisionType, diffSha256 }],
+        ["STAGE_06_POST_DECISION_GATES_PASSED", { gates: finalScript.gateResults }],
+        ["STAGE_06_ARTIFACT_SEALED", { artifactId: STAGE_06_ARTIFACT_ID,
+          artifactR2Key, artifactSha256 }],
+        ["STAGE_06_FROZEN", { nextStep: "STAGE_07A_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage06(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage06(bootstrap.run.id)), replayed: false };
 }
 
 export async function prepareTrackGVideoOneStage04Tournament(
@@ -2165,6 +2679,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_05_CODE) {
     return advanceTrackGVideoOneStage05(user, input, objective);
+  }
+  if (input.stageCode === STAGE_06_CODE) {
+    throw new Error("TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED");
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -2759,6 +3276,49 @@ function stage04SelectionIdempotencyKey(
   ].join("\0")).digest("hex");
 }
 
+function stage06PrepareIdempotencyKey(operationRunId: string, predecessorSha256: string): string {
+  return createHash("sha256").update([
+    "PREPARE_TRACK_G_VIDEO_1_STAGE_06_SCRIPT",
+    operationRunId,
+    predecessorSha256,
+    "stage-06-script-review-v1",
+  ].join("\0")).digest("hex");
+}
+
+function stage06EditorialIdempotencyKey(operationRunId: string, draftSha256: string,
+  input: ApplyTrackGVideoOneStage06EditorialInput): string {
+  return createHash("sha256").update([
+    "APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL",
+    operationRunId,
+    draftSha256,
+    input.decisionType,
+    input.revisedTitle?.trim() ?? "",
+    input.revisedHook?.trim() ?? "",
+    input.beatId?.trim() ?? "",
+    input.revisedBeatNarration?.trim() ?? "",
+    input.rationale.trim(),
+    "stage-06-human-gate-v1",
+  ].join("\0")).digest("hex");
+}
+
+export async function trackGVideoOneStage06PrepareIdempotencyKey(): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const stage05 = await readBackStage05(bootstrap.run.id);
+  return stage06PrepareIdempotencyKey(bootstrap.run.id, stage05.stageArtifact.canonicalHash);
+}
+
+export async function trackGVideoOneStage06EditorialIdempotencyKey(
+  input: Omit<ApplyTrackGVideoOneStage06EditorialInput, "idempotencyKey" | "ownerApprovalText">,
+): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage06Draft(bootstrap.run.id);
+  return stage06EditorialIdempotencyKey(bootstrap.run.id, prepared.scriptDraft.canonicalHash, {
+    ...input,
+    ownerApprovalText: STAGE_06_APPLY_OWNER_APPROVAL_TEXT,
+    idempotencyKey: "0".repeat(64),
+  });
+}
+
 export async function trackGVideoOneStage04SelectionIdempotencyKey(
   candidateId: string,
   rationale: string,
@@ -2795,6 +3355,9 @@ export async function trackGVideoOneStageIdempotencyKey(
   if (stageCode === STAGE_05_CODE) {
     const stage04 = await readBackStage04(bootstrap.run.id);
     return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode, stage04.stageArtifact.canonicalHash);
+  }
+  if (stageCode === STAGE_06_CODE) {
+    throw new Error("TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED");
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }
