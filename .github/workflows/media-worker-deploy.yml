@@ -60,6 +60,7 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0
           python -m pip install whisperx==3.4.2 g2p-en==2.1.0
           python -m nltk.downloader -q averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict
+          python scripts/replay-semantic-normalization.py --self-test-normalization
       - name: Acquire real human floor and validate qualified voice
         run: >-
           python scripts/run-dual-calibration-live.py
@@ -163,4 +164,3 @@ jobs:
           path: dual-calibration-live-output/
           if-no-files-found: error
           retention-days: 14
-

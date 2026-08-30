@@ -30,6 +30,7 @@ COPY --from=build /src/packages/contracts ./packages/contracts
 COPY --from=build /src/packages/core-hash ./packages/core-hash
 COPY --from=build /src/packages/media-worker ./packages/media-worker
 COPY scripts/whisperx-phoneme-observer.py ./scripts/whisperx-phoneme-observer.py
+COPY scripts/replay-semantic-normalization.py ./scripts/replay-semantic-normalization.py
 WORKDIR /app/packages/media-worker
 USER node
 
