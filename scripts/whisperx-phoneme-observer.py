@@ -65,20 +65,46 @@ def main() -> None:
     def phonemes(text: str) -> list[str]:
         return [token for token in g2p(text) if ARPABET.fullmatch(token)]
 
-    observed = []
+    sample_rate = 16000
+    silence = np.zeros(sample_rate, dtype=np.float32)
+    clips = []
+    boundaries = []
+    cursor = 0
     for item in items:
         audio = whisperx.load_audio(item["audioPath"])
-        transcription = model.transcribe(audio, batch_size=4, language="en")
-        aligned = whisperx.align(
-            transcription["segments"],
-            align_model,
-            align_metadata,
-            audio,
-            "cpu",
-            return_char_alignments=False,
-        )
+        start = cursor / sample_rate
+        clips.append(audio)
+        cursor += len(audio)
+        end = cursor / sample_rate
+        boundaries.append((start, end))
+        clips.append(silence)
+        cursor += len(silence)
+
+    combined_audio = np.concatenate(clips)
+    transcription = model.transcribe(combined_audio, batch_size=8, language="en")
+    aligned = whisperx.align(
+        transcription["segments"],
+        align_model,
+        align_metadata,
+        combined_audio,
+        "cpu",
+        return_char_alignments=False,
+    )
+
+    def belongs_to_interval(segment: dict[str, Any], start: float, end: float) -> bool:
+        segment_start = float(segment.get("start", 0.0))
+        segment_end = float(segment.get("end", segment_start))
+        midpoint = (segment_start + segment_end) / 2
+        return start <= midpoint < end
+
+    observed = []
+    for item, (start, end) in zip(items, boundaries, strict=True):
+        item_segments = [
+            segment for segment in aligned.get("segments", [])
+            if belongs_to_interval(segment, start, end)
+        ]
         observed_text = " ".join(
-            str(segment.get("text", "")).strip() for segment in aligned.get("segments", [])
+            str(segment.get("text", "")).strip() for segment in item_segments
         ).strip()
         normalized_reference = normalizer.normalize_text(item["transcript"])
         normalized_observed = normalizer.normalize_text(observed_text)
@@ -94,7 +120,10 @@ def main() -> None:
             "normalizedReferenceTranscript": normalized_reference,
             "normalizedObservedTranscript": normalized_observed,
             "normalizationProfile": NORMALIZATION_PROFILE,
-            "alignedWordCount": len(aligned.get("word_segments", [])),
+            "alignedWordCount": sum(
+                1 for word in aligned.get("word_segments", [])
+                if belongs_to_interval(word, start, end)
+            ),
         })
 
     Path(args.output).write_text(
