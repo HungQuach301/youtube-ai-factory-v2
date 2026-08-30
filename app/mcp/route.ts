@@ -69,7 +69,7 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
     ownerAuthorized: true,
     channelStatus: snapshot.channel?.status ?? "NOT_PREPARED",
     contractState: snapshot.identityContract?.approvalState ?? "NOT_PERSISTED",
-    latestRunStatus: snapshot.runs[0]?.status ?? "NO_RUN",
+    latestRunStatus: snapshot.trackGWorkbench?.run.status ?? snapshot.runs[0]?.status ?? "NO_RUN",
     pillar: snapshot.pillar?.name ?? "NOT_PERSISTED",
     episodeCount: snapshot.episodes.length,
     activationBlockers: [...snapshot.activationBlockers],
@@ -84,7 +84,7 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
 
 function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
-    { name: "youtube-ai-factory-v2", version: "1.0.0" },
+    { name: "youtube-ai-factory-v2", version: "1.1.0" },
     {
       capabilities: { tools: {} },
       instructions:
