@@ -29,6 +29,7 @@ import {
   trackGVideoOneStage07AVoiceModel,
   trackGVideoOneStage07BVisualGrammarModel,
   trackGVideoOneStage08ShotCueProgramModel,
+  trackGVideoOneStage09VisualCompositionModel,
   trackGVideoOneState,
 } from "./track-g-video-one";
 import { voiceQualificationReadBack } from "./voice-qualification";
@@ -190,6 +191,49 @@ async function getTrackGVideoOneWorkbench() {
     shots: stage08Model.shots,
     gateResults: stage08Model.gateResults,
   } : null;
+  const stage09Instance = instances.find((instance) => instance.stageCode === "09") ?? null;
+  const stage09Artifact = stage09Instance
+    ? artifactByStageInstance.get(stage09Instance.id) ?? null
+    : null;
+  const stage09Model = trackGVideoOneStage09VisualCompositionModel(selectedCreativeRouteId);
+  const [stage09SelectionCommand] = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const stage09Selection = stage09SelectionCommand
+    ? parseJson<{ selectedCandidateId?: string; revisedThumbnailText?: string }>(
+      stage09SelectionCommand.payloadJson, {})
+    : {};
+  const stage09Decision = decisions.find((decision) => decision.artifactAfterId === stage09Artifact?.id)
+    ?? null;
+  const stage09 = stage08Artifact ? {
+    reviewState: !stage09Instance ? "NOT_PREPARED"
+      : stage09Instance.controlState === "RUNNING" ? "AWAITING_HUMAN" : "SATISFIED",
+    controlState: stage09Instance?.controlState ?? "READY",
+    artifactSha256: stage09Artifact?.canonicalHash ?? null,
+    assetCount: stage09Model.assets.length,
+    sourceCandidatesPerShot: stage09Model.sourceCandidatesPerShot,
+    compositionsPerShot: stage09Model.compositionsPerShot,
+    duplicateRate: stage09Model.duplicateRate,
+    assets: stage09Model.assets,
+    candidates: stage09Model.thumbnailCandidates.map((candidate) => ({
+      candidateId: candidate.id,
+      routeName: candidate.routeName,
+      thumbnailText: candidate.id === stage09Selection.selectedCandidateId
+        ? stage09Selection.revisedThumbnailText ?? candidate.thumbnailText
+        : candidate.thumbnailText,
+      composition: candidate.composition,
+      palette: candidate.palette,
+      machineScore: candidate.machineScore,
+      machineRecommended: candidate.id === stage09Model.recommendedThumbnailId,
+      selected: candidate.id === stage09Selection.selectedCandidateId,
+    })),
+    gateResults: stage09Model.gateResults,
+    decision: stage09Decision ? {
+      decisionType: stage09Decision.decisionType,
+      rationale: stage09Decision.rationaleText,
+      createdAt: stage09Decision.createdAt,
+    } : null,
+  } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
@@ -256,6 +300,7 @@ async function getTrackGVideoOneWorkbench() {
     stage07A,
     stage07B,
     stage08,
+    stage09,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -267,6 +312,10 @@ async function getTrackGVideoOneWorkbench() {
             ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_07B"]
           : run.currentStep === "STAGE_08_READY"
             ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_08"]
+          : run.currentStep === "STAGE_09_READY" && stage09?.reviewState === "NOT_PREPARED"
+            ? ["PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW"]
+          : run.currentStep === "STAGE_09_READY" && stage09?.reviewState === "AWAITING_HUMAN"
+            ? ["SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL"]
           : [],
   };
 }
