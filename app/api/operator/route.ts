@@ -1,12 +1,14 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getOperatorSnapshot, prepareApprovedChannel } from "../../operator-runtime";
 import {
+  advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
   prepareTrackGVideoOneStage07AVoiceTournament,
   selectTrackGVideoOneStage07ATone,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
+  trackGVideoOneStageIdempotencyKey,
 } from "../../track-g-video-one";
 
 function errorResponse(error: unknown) {
@@ -111,6 +113,25 @@ export async function POST(request: Request) {
         stageCode: "07A", stageState: "FROZEN",
         artifactSha256: result.stageArtifact.canonicalHash, decisionType: "D5",
         selectedCandidateId: result.selectedCandidateId,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "ADVANCE_TRACK_G_VIDEO_1_STAGE_07B") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_07B_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await advanceTrackGVideoOneStage(user, {
+        stageCode: "07B",
+        objective: body.objective
+          ?? "Compile the sealed Stage 07B visual grammar and deterministic beat routing.",
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+        idempotencyKey: await trackGVideoOneStageIdempotencyKey("07B"),
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "07B", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash,
+        gateResults: result.gateResults,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }

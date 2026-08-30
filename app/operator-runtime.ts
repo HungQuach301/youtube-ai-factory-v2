@@ -25,7 +25,11 @@ import {
 import { activationBlockers, approvedChannel, trackGVideoOneContract } from "./factory-contract";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
-import { trackGVideoOneStage07AVoiceModel, trackGVideoOneState } from "./track-g-video-one";
+import {
+  trackGVideoOneStage07AVoiceModel,
+  trackGVideoOneStage07BVisualGrammarModel,
+  trackGVideoOneState,
+} from "./track-g-video-one";
 import { voiceQualificationReadBack } from "./voice-qualification";
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -124,6 +128,13 @@ async function getTrackGVideoOneWorkbench() {
   const selectedCandidateId = selectionCommand[0]
     ? parseJson<{ selectedCandidateId?: string }>(selectionCommand[0].payloadJson, {}).selectedCandidateId ?? null
     : null;
+  const stage04SelectionCommand = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "SELECT_TRACK_G_VIDEO_1_STAGE_04_CHAMPION"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const selectedCreativeRouteId = stage04SelectionCommand[0]
+    ? parseJson<{ candidateId?: string }>(stage04SelectionCommand[0].payloadJson, {}).candidateId
+      ?? "creative_route_video_1_alert_is_the_trap_v1"
+    : "creative_route_video_1_alert_is_the_trap_v1";
   const stage07A = stage07AInstance ? {
     reviewState: stage07AInstance.controlState === "RUNNING" ? "AWAITING_HUMAN" : "SATISFIED",
     tournamentId: stage07AModel.tournamentId,
@@ -146,6 +157,21 @@ async function getTrackGVideoOneWorkbench() {
       rationale: stage07ADecision.rationaleText,
       createdAt: stage07ADecision.createdAt,
     } : null,
+  } : null;
+  const stage07BInstance = instances.find((instance) => instance.stageCode === "07B") ?? null;
+  const stage07BArtifact = stage07BInstance
+    ? artifactByStageInstance.get(stage07BInstance.id) ?? null
+    : null;
+  const stage07BModel = trackGVideoOneStage07BVisualGrammarModel(
+    selectedCreativeRouteId,
+  );
+  const stage07B = stage07AArtifact ? {
+    controlState: stage07BInstance?.controlState ?? "READY",
+    artifactSha256: stage07BArtifact?.canonicalHash ?? null,
+    motionClasses: [...stage07BModel.motionClasses],
+    assignments: stage07BModel.assignments,
+    distribution: stage07BModel.distribution,
+    gateResults: stage07BModel.gateResults,
   } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
@@ -211,6 +237,7 @@ async function getTrackGVideoOneWorkbench() {
     } : null,
     stage06,
     stage07A,
+    stage07B,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -218,6 +245,8 @@ async function getTrackGVideoOneWorkbench() {
         ? ["PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT"]
         : run.currentStep === "STAGE_07A_READY" && stage07A?.reviewState === "AWAITING_HUMAN"
           ? ["SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"]
+          : run.currentStep === "STAGE_07B_READY"
+            ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_07B"]
           : [],
   };
 }

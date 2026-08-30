@@ -36,6 +36,17 @@ type Stage07A = {
   gateResults: Array<{ gate: string; state: string; evidence: string }>;
   decision: null | { decisionType: string; rationale: string; createdAt: string };
 };
+type Stage07B = {
+  controlState: string;
+  artifactSha256: string | null;
+  motionClasses: string[];
+  assignments: Array<{
+    beatId: string; beatTitle: string; startSec: number; endSec: number;
+    motionClass: string; visualRoute: string; treatment: string; acquisitionState: string;
+  }>;
+  distribution: Array<{ motionClass: string; count: number }>;
+  gateResults: Array<{ gate: string; state: string; evidence: string }>;
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -48,6 +59,7 @@ type Workbench = {
   stage05Prediction: null | { modelVersion: string; ctrEstimate: number; canonicalHash: string; sealedAt: string };
   stage06: Stage06 | null;
   stage07A: Stage07A | null;
+  stage07B: Stage07B | null;
   humanDecisionCount: number;
   allowedActions: string[];
 };
@@ -103,6 +115,7 @@ export default function OperatorClient() {
   const workbench = snapshot?.trackGWorkbench ?? null;
   const stage06 = workbench?.stage06 ?? null;
   const stage07A = workbench?.stage07A ?? null;
+  const stage07B = workbench?.stage07B ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
   const effectiveBeatId = beatId || stage06?.sections[0]?.beatId || "";
@@ -117,6 +130,7 @@ export default function OperatorClient() {
   const canPrepareTone = workbench?.allowedActions.includes("PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT");
   const canSelectTone = workbench?.allowedActions.includes("SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE")
     && selectedToneId.length > 0 && rationale.trim().length >= 20;
+  const canAdvanceVisualGrammar = workbench?.allowedActions.includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_07B");
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -183,6 +197,19 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
+  async function advanceVisualGrammar() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_07B", confirm: true }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Visual grammar compilation failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
   if (!snapshot?.channel) {
     return <div className="operator-layout">
       <section className="operator-command-card operator-full-card">
@@ -210,7 +237,7 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
@@ -258,6 +285,21 @@ export default function OperatorClient() {
       </>}
       {error ? <p className="operator-error" role="alert">{error}</p> : null}
       {receipt ? <p className="decision-receipt" role="status">Stage 07A {receipt.stageState} · next {receipt.currentStep}{receipt.artifactSha256 ? ` · evidence ${receipt.artifactSha256.slice(0, 16)}…` : " · awaiting D5"}</p> : null}
+    </section> : null}
+
+    {workbench?.run.currentStep === "STAGE_07B_READY" || stage07B?.controlState === "FROZEN" ? <section className="operator-command-card operator-full-card">
+      <div className="operator-card-heading"><div><p className="eyebrow">DESIGN LAYER · DETERMINISTIC</p><h2>Stage 07B visual grammar and routing</h2></div><span className="write-badge">M1 × 2</span></div>
+      {stage07B ? <>
+        <div className="script-metadata"><div><span>Closed motion taxonomy</span><strong>{stage07B.motionClasses.length} disjoint classes</strong></div><div><span>Beat coverage</span><strong>{stage07B.assignments.length}/{stage07B.assignments.length} routed</strong></div><div><span>Provider use</span><strong>Planning only · $0</strong></div><div><span>State</span><strong>{stage07B.controlState}</strong></div></div>
+        <div className="gate-strip">{stage07B.gateResults.map((gate) => <span key={gate.gate} className={gate.state === "PASS" ? "pass" : "waiting"}>{gate.gate.replaceAll("_", " ")} · {gate.state}</span>)}</div>
+        <ol className="beat-list">{stage07B.assignments.map((assignment) => <li key={assignment.beatId}><div><span>{assignment.beatId}</span><strong>{assignment.beatTitle}</strong></div><p>{assignment.treatment}</p><small>{assignment.motionClass.replaceAll("_", " ")} · {assignment.visualRoute.replaceAll("_", " ")} · {assignment.startSec}–{assignment.endSec}s</small></li>)}</ol>
+        {stage07B.controlState !== "FROZEN" ? <>
+          <button type="button" disabled={busy || !canAdvanceVisualGrammar} onClick={advanceVisualGrammar}>{busy ? "Compiling…" : "Compile, seal and freeze Stage 07B"}</button>
+          <p className="operator-boundary">This freezes deterministic routing only. No footage, image, TTS or paid provider request is dispatched.</p>
+        </> : <p className="decision-rationale">Visual grammar sealed. Stage 08 can now compile the ShotCueProgram.</p>}
+      </> : <p className="operator-empty">Stage 07B routing model is unavailable.</p>}
+      {error ? <p className="operator-error" role="alert">{error}</p> : null}
+      {receipt?.artifactSha256 && receipt.currentStep === "STAGE_08_READY" ? <p className="decision-receipt" role="status">Stage 07B {receipt.stageState} · next {receipt.currentStep} · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
     </section> : null}
 
     <section className="operator-timeline-card operator-full-card">
