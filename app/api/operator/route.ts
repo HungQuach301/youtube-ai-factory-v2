@@ -3,11 +3,15 @@ import { getOperatorSnapshot, prepareApprovedChannel } from "../../operator-runt
 import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
+  prepareTrackGVideoOneStage09VisualReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
+  selectTrackGVideoOneStage09Thumbnail,
   selectTrackGVideoOneStage07ATone,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
+  trackGVideoOneStage09PrepareIdempotencyKey,
+  trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
 } from "../../track-g-video-one";
 
@@ -43,6 +47,7 @@ export async function POST(request: Request) {
       revisedBeatNarration?: string;
       rationale?: string;
       candidateId?: string;
+      revisedThumbnailText?: string;
     };
     if (body.commandType === "PREPARE_CHANNEL") {
       const result = await prepareApprovedChannel(user, {
@@ -153,6 +158,48 @@ export async function POST(request: Request) {
         gateResults: result.gateResults,
         shotCount: result.shotCueProgramModel.shots.length,
         assertionCount: result.shotCueProgramModel.assertionCount,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_09_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await prepareTrackGVideoOneStage09VisualReview(user, {
+        objective: body.objective
+          ?? "Prepare bounded Stage 09 visual compositions and thumbnail routes for owner D3 review.",
+        ownerApprovalText: "PREPARE STAGE 09 VISUAL REVIEW",
+        idempotencyKey: await trackGVideoOneStage09PrepareIdempotencyKey(),
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "09", stageState: "RUNNING", reviewState: "AWAITING_HUMAN",
+        assetCount: result.tournamentModel.assets.length,
+        candidateCount: result.tournamentModel.thumbnailCandidates.length,
+        gateResults: result.tournamentModel.gateResults,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL") {
+      if (body.confirm !== true || !body.candidateId || !body.revisedThumbnailText) {
+        return Response.json({ error: "STAGE_09_OWNER_SELECTION_REQUIRED" }, { status: 400 });
+      }
+      const rationale = body.rationale ?? "";
+      const result = await selectTrackGVideoOneStage09Thumbnail(user, {
+        candidateId: body.candidateId,
+        revisedThumbnailText: body.revisedThumbnailText,
+        rationale,
+        ownerApprovalText: "SELECT STAGE 09 THUMBNAIL",
+        idempotencyKey: await trackGVideoOneStage09SelectionIdempotencyKey(
+          body.candidateId, body.revisedThumbnailText, rationale),
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "09", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash, decisionType: "D3",
+        selectedCandidateId: result.selection.selectedCandidateId,
+        revisedThumbnailText: result.selection.revisedThumbnailText,
+        gateResults: result.gateResults,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }
