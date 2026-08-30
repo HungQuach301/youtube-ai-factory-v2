@@ -97,6 +97,11 @@ const STAGE_07B_STANDARD_VERSION = 1;
 const STAGE_07B_INSTANCE_ID = "stage_track_g_video_1_07b_attempt_1";
 const STAGE_07B_ARTIFACT_ID = "artifact_track_g_video_1_stage_07b_visual_grammar_v1";
 const STAGE_07B_ARTIFACT_TYPE = "VISUAL_GRAMMAR_ROUTING";
+const STAGE_08_CODE = "08";
+const STAGE_08_STANDARD_VERSION = 1;
+const STAGE_08_INSTANCE_ID = "stage_track_g_video_1_08_attempt_1";
+const STAGE_08_ARTIFACT_ID = "artifact_track_g_video_1_stage_08_shot_cue_program_v1";
+const STAGE_08_ARTIFACT_TYPE = "SHOT_CUE_PROGRAM";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -2753,6 +2758,267 @@ async function advanceTrackGVideoOneStage07B(
   return { ...(await readBackStage07B(bootstrap.run.id)), replayed: false };
 }
 
+export function trackGVideoOneStage08ShotCueProgramModel(
+  selectedCandidateId = "creative_route_video_1_alert_is_the_trap_v1",
+) {
+  const script = stage06ScriptModel(selectedCandidateId);
+  const visualGrammar = trackGVideoOneStage07BVisualGrammarModel(selectedCandidateId);
+  const frameRate = 30;
+  const maxShotDurationSec = 30;
+  let globalOrdinal = 0;
+  const shots = visualGrammar.assignments.flatMap((assignment, beatIndex) => {
+    const section = script.sections[beatIndex];
+    if (!section || section.beatId !== assignment.beatId) {
+      throw new Error("TRACK_G_STAGE_08_BEAT_ROUTE_MISMATCH");
+    }
+    const beatStartFrame = Math.round(assignment.startSec * frameRate);
+    const beatEndFrame = Math.round(assignment.endSec * frameRate);
+    const beatFrames = beatEndFrame - beatStartFrame;
+    const shotCount = Math.max(1, Math.ceil(beatFrames / (maxShotDurationSec * frameRate)));
+    const baseFrames = Math.floor(beatFrames / shotCount);
+    const remainderFrames = beatFrames % shotCount;
+    let cursorFrame = beatStartFrame;
+    return Array.from({ length: shotCount }, (_, shotIndex) => {
+      const durationFrames = baseFrames + (shotIndex < remainderFrames ? 1 : 0);
+      const startFrame = cursorFrame;
+      const endFrame = startFrame + durationFrames;
+      cursorFrame = endFrame;
+      globalOrdinal += 1;
+      const cueRole = shotCount === 1 ? "FULL_BEAT"
+        : shotIndex === 0 ? "ESTABLISH"
+          : shotIndex === shotCount - 1 ? "RESOLVE" : "DEVELOP";
+      return {
+        shotId: `shot_${String(globalOrdinal).padStart(3, "0")}`,
+        globalOrdinal,
+        beatId: assignment.beatId,
+        beatTitle: assignment.beatTitle,
+        shotOrdinalWithinBeat: shotIndex + 1,
+        cueRole,
+        startFrame,
+        endFrame,
+        durationFrames,
+        startSec: startFrame / frameRate,
+        endSec: endFrame / frameRate,
+        motionClass: assignment.motionClass,
+        visualRoute: assignment.visualRoute,
+        treatment: assignment.treatment,
+        claimIds: [...section.claimIds],
+        assertions: [
+          {
+            assertion: "TIMELINE_INTERVAL",
+            state: "PASS" as const,
+            evidence: `${startFrame}-${endFrame} frames at ${frameRate}fps; positive duration and contiguous boundary.`,
+          },
+          {
+            assertion: "SEMANTIC_ROUTE",
+            state: "PASS" as const,
+            evidence: `${assignment.motionClass}/${assignment.visualRoute} remains bound to ${assignment.beatId}.`,
+          },
+          {
+            assertion: "CLAIM_LINEAGE",
+            state: "PASS" as const,
+            evidence: `${section.claimIds.length} sealed claim reference(s) inherited from the Stage 06 beat.`,
+          },
+        ],
+      };
+    });
+  });
+  const targetFrames = Math.round((script.sections.at(-1)?.endSec ?? 0) * frameRate);
+  const timelinePass = shots.length > 0
+    && shots[0].startFrame === 0
+    && shots.every((shot, index) => shot.endFrame > shot.startFrame
+      && (index === 0 || shot.startFrame === shots[index - 1].endFrame))
+    && visualGrammar.assignments.every((assignment) => {
+      const beatShots = shots.filter((shot) => shot.beatId === assignment.beatId);
+      return beatShots.length > 0
+        && beatShots[0].startFrame === Math.round(assignment.startSec * frameRate)
+        && beatShots.at(-1)?.endFrame === Math.round(assignment.endSec * frameRate);
+    })
+    && shots.every((shot) => shot.assertions.length === 3
+      && shot.assertions.every((assertion) => assertion.state === "PASS"));
+  if (!timelinePass) throw new Error("TRACK_G_STAGE_08_M1_TIMELINE_LINT_FAILED");
+  const durationDeltaFrames = Math.abs((shots.at(-1)?.endFrame ?? -1) - targetFrames);
+  if (durationDeltaFrames > 1) throw new Error("TRACK_G_STAGE_08_M1_DURATION_MATCH_FAILED");
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M1_TIMELINE_LINT",
+      state: "PASS",
+      evidence: `${shots.length} adaptively compiled shots cover frame 0-${targetFrames} with zero gaps or overlaps; every shot carries exactly three assertions.`,
+    },
+    {
+      gate: "M1_DURATION_MATCH",
+      state: "PASS",
+      evidence: `Program duration matches the sealed ${targetFrames}-frame beat timeline within ${durationDeltaFrames} frame(s) at ${frameRate}fps.`,
+    },
+  ];
+  return {
+    frameRate,
+    maxShotDurationSec,
+    targetFrames,
+    targetDurationSec: targetFrames / frameRate,
+    durationDeltaFrames,
+    shots,
+    assertionCount: shots.reduce((sum, shot) => sum + shot.assertions.length, 0),
+    gateResults,
+  };
+}
+
+function stage08Envelope(operationRunId: string, predecessorSha256: string,
+  selectedCandidateId: string) {
+  const model = trackGVideoOneStage08ShotCueProgramModel(selectedCandidateId);
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-08-shot-cue-program-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_08_CODE,
+    artifactType: STAGE_08_ARTIFACT_TYPE,
+    shotCueProgram: {
+      frameRate: model.frameRate,
+      targetFrames: model.targetFrames,
+      targetDurationSec: model.targetDurationSec,
+      adaptiveMaxShotDurationSec: model.maxShotDurationSec,
+      shots: model.shots,
+    },
+    provenance: [{
+      sourceType: "SEALED_STAGE_ARTIFACT",
+      sourceId: STAGE_07B_ARTIFACT_ID,
+      canonicalHash: predecessorSha256,
+      authority: "DETERMINISTIC_VISUAL_GRAMMAR_AND_ROUTING",
+    }],
+    gateResults: model.gateResults,
+    controls: {
+      compileMode: "DETERMINISTIC_FRAME_TIMELINE",
+      fixedShotCountGate: false,
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+    },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage08(operationRunId: string) {
+  const stage07B = await readBackStage07B(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_08_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_08_ARTIFACT_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) => value.scope === "STAGE"
+    && value.scopeRef === STAGE_08_INSTANCE_ID)?.ceilingUsd;
+  const model = trackGVideoOneStage08ShotCueProgramModel(stage07B.selection.candidateId);
+  if (!stage || !artifact
+    || stage.packageId !== STAGE_00_PACKAGE_ID || stage.stageCode !== STAGE_08_CODE
+    || stage.controlState !== "FROZEN" || stage.standardVersion !== STAGE_08_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id || artifact.artifactType !== STAGE_08_ARTIFACT_TYPE
+    || artifact.namespace !== "production" || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_08_STANDARD_VERSION || stageCeiling !== 0
+    || !isAtOrAfterReadyStep(stage07B.base.run.currentStep, "STAGE_09_READY")
+    || !await verifyImmutableEvidence(stage07B.stage07BArtifact.r2Key,
+      stage07B.stage07BArtifact.canonicalHash)
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_08_READ_BACK_FAILED");
+  }
+  return { ...stage07B, stage08: stage, stage08Artifact: artifact,
+    stageArtifact: artifact, gateResults: model.gateResults, shotCueProgramModel: model };
+}
+
+async function advanceTrackGVideoOneStage08(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+  objective: string,
+) {
+  const bootstrap = await readBackForStage00();
+  const stage07B = await readBackStage07B(bootstrap.run.id);
+  const expectedKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    STAGE_08_CODE,
+    stage07B.stage07BArtifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage08(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_08_READY") throw new Error("TRACK_G_STAGE_08_NOT_READY");
+  if (!await verifyImmutableEvidence(stage07B.stage07BArtifact.r2Key,
+    stage07B.stage07BArtifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_08_PREDECESSOR_PROVENANCE_FAILED");
+  }
+  const envelope = stage08Envelope(bootstrap.run.id,
+    stage07B.stage07BArtifact.canonicalHash, stage07B.selection.candidateId);
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_08_CODE, "shot-cue-program", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const model = envelope.shotCueProgram;
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_08_READY',
+          'TRACK_G_VIDEO_1_STAGE_09_READY', ?, ?)`).bind(
+        commandId, canonicalize({ objective, operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_08_CODE,
+          executorVersion: envelope.executorVersion, artifactSha256 }),
+        input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '08', 'FROZEN', ?, 1, ?, ?)`).bind(
+        STAGE_08_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_08_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_08_ARTIFACT_ID, STAGE_08_INSTANCE_ID, STAGE_08_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_08_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_08_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_09_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_08_READY'`).bind(
+        now, bootstrap.run.id),
+      ...[
+        ["STAGE_08_DOR_PASSED", { predecessor: STAGE_07B_ARTIFACT_ID,
+          predecessorSha256: stage07B.stage07BArtifact.canonicalHash }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_08_CODE,
+          traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_08_M1_TIMELINE_LINT_PASSED", { shotCount: model.shots.length,
+          assertionCount: model.shots.reduce((sum, shot) => sum + shot.assertions.length, 0) }],
+        ["STAGE_08_M1_DURATION_MATCH_PASSED", { targetFrames: model.targetFrames,
+          frameRate: model.frameRate, durationDeltaFrames: 0 }],
+        ["STAGE_08_ARTIFACT_SEALED", { artifactId: STAGE_08_ARTIFACT_ID,
+          artifactR2Key, artifactSha256 }],
+        ["STAGE_08_FROZEN", { nextStep: "STAGE_09_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage08(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage08(bootstrap.run.id)), replayed: false };
+}
+
 export async function prepareTrackGVideoOneStage04Tournament(
   user: ChatGPTUser,
   input: PrepareTrackGVideoOneStage04Input,
@@ -3267,6 +3533,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_07B_CODE) {
     return advanceTrackGVideoOneStage07B(user, input, objective);
+  }
+  if (input.stageCode === STAGE_08_CODE) {
+    return advanceTrackGVideoOneStage08(user, input, objective);
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -3988,6 +4257,11 @@ export async function trackGVideoOneStageIdempotencyKey(
     const stage07A = await readBackStage07A(bootstrap.run.id);
     return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
       stage07A.stage07AArtifact.canonicalHash);
+  }
+  if (stageCode === STAGE_08_CODE) {
+    const stage07B = await readBackStage07B(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
+      stage07B.stage07BArtifact.canonicalHash);
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

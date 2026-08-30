@@ -28,6 +28,7 @@ import { getFactoryEnv } from "./runtime-env";
 import {
   trackGVideoOneStage07AVoiceModel,
   trackGVideoOneStage07BVisualGrammarModel,
+  trackGVideoOneStage08ShotCueProgramModel,
   trackGVideoOneState,
 } from "./track-g-video-one";
 import { voiceQualificationReadBack } from "./voice-qualification";
@@ -173,6 +174,22 @@ async function getTrackGVideoOneWorkbench() {
     distribution: stage07BModel.distribution,
     gateResults: stage07BModel.gateResults,
   } : null;
+  const stage08Instance = instances.find((instance) => instance.stageCode === "08") ?? null;
+  const stage08Artifact = stage08Instance
+    ? artifactByStageInstance.get(stage08Instance.id) ?? null
+    : null;
+  const stage08Model = trackGVideoOneStage08ShotCueProgramModel(selectedCreativeRouteId);
+  const stage08 = stage07BArtifact ? {
+    controlState: stage08Instance?.controlState ?? "READY",
+    artifactSha256: stage08Artifact?.canonicalHash ?? null,
+    frameRate: stage08Model.frameRate,
+    targetFrames: stage08Model.targetFrames,
+    targetDurationSec: stage08Model.targetDurationSec,
+    maxShotDurationSec: stage08Model.maxShotDurationSec,
+    assertionCount: stage08Model.assertionCount,
+    shots: stage08Model.shots,
+    gateResults: stage08Model.gateResults,
+  } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
@@ -238,6 +255,7 @@ async function getTrackGVideoOneWorkbench() {
     stage06,
     stage07A,
     stage07B,
+    stage08,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -247,6 +265,8 @@ async function getTrackGVideoOneWorkbench() {
           ? ["SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"]
           : run.currentStep === "STAGE_07B_READY"
             ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_07B"]
+          : run.currentStep === "STAGE_08_READY"
+            ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_08"]
           : [],
   };
 }
