@@ -25,7 +25,7 @@ import {
 import { activationBlockers, approvedChannel, trackGVideoOneContract } from "./factory-contract";
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
-import { trackGVideoOneState } from "./track-g-video-one";
+import { trackGVideoOneStage07AVoiceModel, trackGVideoOneState } from "./track-g-video-one";
 import { voiceQualificationReadBack } from "./voice-qualification";
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -114,6 +114,40 @@ async function getTrackGVideoOneWorkbench() {
     } : null,
   } : null;
 
+  const stage07AInstance = instances.find((instance) => instance.stageCode === "07A") ?? null;
+  const stage07AArtifact = stage07AInstance ? artifactByStageInstance.get(stage07AInstance.id) ?? null : null;
+  const stage07ADecision = decisions.find((decision) => decision.artifactAfterId === stage07AArtifact?.id) ?? null;
+  const stage07AModel = trackGVideoOneStage07AVoiceModel();
+  const selectionCommand = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const selectedCandidateId = selectionCommand[0]
+    ? parseJson<{ selectedCandidateId?: string }>(selectionCommand[0].payloadJson, {}).selectedCandidateId ?? null
+    : null;
+  const stage07A = stage07AInstance ? {
+    reviewState: stage07AInstance.controlState === "RUNNING" ? "AWAITING_HUMAN" : "SATISFIED",
+    tournamentId: stage07AModel.tournamentId,
+    settingsHash: stage07AModel.settingsHash,
+    segmentCount: stage07AModel.segments.length,
+    candidates: stage07AModel.candidates.map((candidate) => ({
+      candidateId: candidate.id,
+      routeName: candidate.routeName,
+      summary: candidate.summary,
+      deliveryDirection: candidate.deliveryDirection,
+      pauseProfile: candidate.pauseProfile,
+      emphasis: [...candidate.emphasis],
+      machineScore: candidate.machineScore,
+      machineRecommended: candidate.id === stage07AModel.recommendedCandidateId,
+      selected: candidate.id === selectedCandidateId,
+    })),
+    gateResults: stage07AModel.gateResults,
+    decision: stage07ADecision ? {
+      decisionType: stage07ADecision.decisionType,
+      rationale: stage07ADecision.rationaleText,
+      createdAt: stage07ADecision.createdAt,
+    } : null,
+  } : null;
+
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
   const candidates = tournament
@@ -176,10 +210,15 @@ async function getTrackGVideoOneWorkbench() {
       sealedAt: prediction.sealedAt,
     } : null,
     stage06,
+    stage07A,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
-      : [],
+      : run.currentStep === "STAGE_07A_READY" && !stage07A
+        ? ["PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT"]
+        : run.currentStep === "STAGE_07A_READY" && stage07A?.reviewState === "AWAITING_HUMAN"
+          ? ["SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"]
+          : [],
   };
 }
 
