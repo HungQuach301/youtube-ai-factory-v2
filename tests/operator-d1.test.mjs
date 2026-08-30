@@ -1426,13 +1426,24 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stage09EvidenceJson.controls.humanGate,
       "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION");
 
-    const unsupportedStage10 = await client.callTool({
+    const stage10WorkbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage10Workbench = await stage10WorkbenchResponse.json();
+    assert.deepEqual(stage10Workbench.trackGWorkbench.allowedActions,
+      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_10"]);
+
+    const unavailableStage10 = await client.callTool({
       name: "advance_track_g_video_1_stage",
-      arguments: { stageCode: "10", objective: "Verify Stage 10 remains fail-closed until its executor exists.",
+      arguments: { stageCode: "10", objective: "Verify Stage 10 remains fail-closed without its signed calibrated media worker.",
         confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
     });
-    assert.equal(unsupportedStage10.isError, true);
-    assert.match(unsupportedStage10.content[0].text, /TRACK_G_STAGE_10_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(unavailableStage10.isError, true);
+    assert.match(unavailableStage10.content[0].text, /MEDIA_WORKER_URL_UNAVAILABLE/u);
+    const stage10Rows = await d1.prepare(
+      "SELECT count(*) AS count FROM stage_instance WHERE stage_code = '10'",
+    ).first();
+    assert.equal(stage10Rows.count, 0);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");

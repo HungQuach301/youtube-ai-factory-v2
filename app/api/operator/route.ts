@@ -151,13 +151,19 @@ export async function POST(request: Request) {
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
         idempotencyKey: await trackGVideoOneStageIdempotencyKey("08"),
       });
+      if (!("shotCueProgramModel" in result)) {
+        throw new Error("TRACK_G_STAGE_08_EXECUTOR_RECEIPT_INVALID");
+      }
+      const shotCueProgramModel = result.shotCueProgramModel as {
+        shots: unknown[]; assertionCount: number;
+      };
       return Response.json({ accepted: true, replayed: result.replayed,
         runId: result.base.run.id, currentStep: result.base.run.currentStep,
         stageCode: "08", stageState: "FROZEN",
         artifactSha256: result.stageArtifact.canonicalHash,
         gateResults: result.gateResults,
-        shotCount: result.shotCueProgramModel.shots.length,
-        assertionCount: result.shotCueProgramModel.assertionCount,
+        shotCount: shotCueProgramModel.shots.length,
+        assertionCount: shotCueProgramModel.assertionCount,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }
@@ -200,6 +206,36 @@ export async function POST(request: Request) {
         selectedCandidateId: result.selection.selectedCandidateId,
         revisedThumbnailText: result.selection.revisedThumbnailText,
         gateResults: result.gateResults,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "ADVANCE_TRACK_G_VIDEO_1_STAGE_10") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_10_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await advanceTrackGVideoOneStage(user, {
+        stageCode: "10",
+        objective: body.objective
+          ?? "Produce the bounded calibrated narration tournament and freeze eligible Stage 10 audio.",
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+        idempotencyKey: await trackGVideoOneStageIdempotencyKey("10"),
+      });
+      if (!("production" in result)) {
+        throw new Error("TRACK_G_STAGE_10_EXECUTOR_RECEIPT_INVALID");
+      }
+      const production = result.production as {
+        narrationSha256: string; reservedUsd: number; actualUsd: number;
+        providerCallCount: number;
+      };
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "10", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash,
+        narrationSha256: production.narrationSha256,
+        gateResults: result.gateResults,
+        stageReservedUsd: production.reservedUsd,
+        stageActualUsd: production.actualUsd,
+        providerCallCount: production.providerCallCount,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "b9d330848c3d1d87c5c384ee546033f3c2ec2a50d3115c74dc29a327b99572d6",
+  "aggregate_sha256": "604072f2b6f943b9a4d4980853946b38d4718562dd8b536e2423f047e621f1a6",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -45,7 +45,7 @@
     },
     {
       "path": "app/api/operator/route.ts",
-      "sha256": "c905bcec29a6b469dafa243d50b09d0e7549e81ddc522e8cf16ae24f5dc281d6"
+      "sha256": "bed6f30b3c63b7e57eec6e52de0b9758841301f9fea74a7f55b52405c8faf5af"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -53,7 +53,7 @@
     },
     {
       "path": "app/evidence-storage.ts",
-      "sha256": "44dcc1dff18a056cd5ee04c3e11b22326e624547fff8d9962b98b76bddc311bf"
+      "sha256": "457eb05d9a4872729439ef5295171a1e2f9c9039a954fd266949905cd7554b95"
     },
     {
       "path": "app/factory-contract.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "3d4b39dc0ddb128d809fb71c2d394a029c74ca0583333d30aacfa36020ac1779"
+      "sha256": "5fc08733c66f4fbc7388b3fa8db68fafaaf37b150e74fb522d542eba7e61ea62"
     },
     {
       "path": "app/oauth-server.ts",
@@ -89,7 +89,7 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "c86aafae126d697575d91536c00a7621076b3abe92856211ed4cdce34fab9527"
+      "sha256": "4d34fa1980e7c60216c38d9b79dd220b4ba115114d347d097450e7f67c5fe423"
     },
     {
       "path": "app/operate/page.tsx",
@@ -97,7 +97,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "a10f2d53245bcbfbe66249cf8dbf75ebea59df2da4b95922aaeb4e3e027e9da2"
+      "sha256": "79b010f8d2442eb9e5dad25ab99e2a8fed8aeae803f3e5c97e87dd751c663879"
     },
     {
       "path": "app/page.tsx",
@@ -105,11 +105,15 @@
     },
     {
       "path": "app/runtime-env.ts",
-      "sha256": "810e3378899275ce80fc62a9f83da55ab31bff0a0448308d219ec7d56550a8e8"
+      "sha256": "eed2388fb9014ac8ab330b1f42195d3117f18434680fa0ae3733cd02a5b8e929"
+    },
+    {
+      "path": "app/stage10-media.ts",
+      "sha256": "611f146ba9551a6589826b1371044c829e2a5438a967e0c6d7d6393ad3032c88"
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "a3da3fb1c9332e395f2959e929f93c849d00ac214eee61c8dee54edabf673603"
+      "sha256": "179c150796696e7e9efe4f7cf8514b20c6ef5d6dbd035933d8d2aa4bdd9da784"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +129,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "bf74d2ed044ea610db94e733edb56d91e2aef7d8a0e12a7dc2e5176e35bcee04"
+      "sha256": "5fd37c4001f427772ddde20500e5069266272a5f0594273765c014008ba5a81e"
     },
     {
       "path": "drizzle.config.ts",
@@ -180,6 +184,10 @@
       "sha256": "043fd72f6fb0ededaaf59832ae6e2d94cf5bb6b16935f7e78912438a6f4487db"
     },
     {
+      "path": "drizzle/0012_stage10_audio_production.sql",
+      "sha256": "8cf4c991d9229a90d77c391a34596a5cef04fd31fea10bc9d3bce7ec66603dd2"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -216,8 +224,12 @@
       "sha256": "22c6b1746362d5706d441d2dacebbcf1950d2b275b3b401759cdd3e005f4dd8b"
     },
     {
+      "path": "drizzle/meta/0012_snapshot.json",
+      "sha256": "25aafdb6890f1672138cd4158a7167df3adc086c1fad2245bae44dbc85b9e18b"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "ca674c92f2c0a6b1c3ef8a10e180c402b3dc54803210f637291eba637d0b60bc"
+      "sha256": "e307967f8cff3d7f4e0359c515ffa49c84a6b6ac3390ae8e19d7d7580ae5af10"
     },
     {
       "path": "eslint.config.mjs",
@@ -289,7 +301,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "9e3db238a52e2cfa3a8da2ef26779aefd8c30ceab620a1be68608e13fcb32a03"
+      "sha256": "0a223a525e235030dc3d02b379d0dd8e23a6a483eb66d797c6393ef2a90121b5"
     },
     {
       "path": "tests/rendered-html.test.mjs",
@@ -298,6 +310,10 @@
     {
       "path": "tsconfig.json",
       "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3"
+    },
+    {
+      "path": "tsconfig.tsbuildinfo",
+      "sha256": "0aa7677c841ec0c2ffc55cdf98998bbb3be9b1d49c3adb5b2587e2c823209b16"
     },
     {
       "path": "vite.config.ts",

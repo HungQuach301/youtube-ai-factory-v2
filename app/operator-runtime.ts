@@ -18,6 +18,7 @@ import {
   predictedPerformances,
   productionPackages,
   scriptDrafts,
+  stage10AudioProductions,
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
@@ -234,6 +235,23 @@ async function getTrackGVideoOneWorkbench() {
       createdAt: stage09Decision.createdAt,
     } : null,
   } : null;
+  const stage10Instance = instances.find((instance) => instance.stageCode === "10") ?? null;
+  const stage10Artifact = stage10Instance
+    ? artifactByStageInstance.get(stage10Instance.id) ?? null
+    : null;
+  const [stage10Production] = await db.select().from(stage10AudioProductions)
+    .where(eq(stage10AudioProductions.packageId, productionPackage.id)).limit(1);
+  const stage10 = stage10Instance && stage10Production ? {
+    controlState: stage10Instance.controlState,
+    artifactSha256: stage10Artifact?.canonicalHash ?? null,
+    provider: stage10Production.provider,
+    providerCallCount: stage10Production.providerCallCount,
+    totalCharacters: stage10Production.totalCharacters,
+    reservedUsd: stage10Production.reservedUsd,
+    actualUsd: stage10Production.actualUsd,
+    calibrationEvidenceSha256: stage10Production.calibrationEvidenceSha256,
+    narrationSha256: stage10Production.narrationSha256,
+  } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
@@ -301,6 +319,7 @@ async function getTrackGVideoOneWorkbench() {
     stage07B,
     stage08,
     stage09,
+    stage10,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -316,6 +335,8 @@ async function getTrackGVideoOneWorkbench() {
             ? ["PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW"]
           : run.currentStep === "STAGE_09_READY" && stage09?.reviewState === "AWAITING_HUMAN"
             ? ["SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL"]
+          : run.currentStep === "STAGE_10_READY"
+            ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_10"]
           : [],
   };
 }
