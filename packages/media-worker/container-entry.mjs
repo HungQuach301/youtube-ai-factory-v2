@@ -22,6 +22,8 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
 const MAX_BODY_BYTES = 2 * 1024 * 1024
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 const SEAM_THRESHOLD = 0.005
+const STAGE10_EXECUTION_CACHE_LIMIT = 8
+const stage10Executions = new Map()
 
 function stage10Ready() {
   return STAGE10_ENABLED
@@ -380,6 +382,27 @@ async function processStage10(payload) {
   }
 }
 
+async function processStage10Idempotent(payload) {
+  const existing = stage10Executions.get(payload.idempotencyKey)
+  if (existing) return existing
+
+  const execution = processStage10(payload)
+  stage10Executions.set(payload.idempotencyKey, execution)
+  try {
+    const result = await execution
+    while (stage10Executions.size > STAGE10_EXECUTION_CACHE_LIMIT) {
+      const oldestKey = stage10Executions.keys().next().value
+      stage10Executions.delete(oldestKey)
+    }
+    return result
+  } catch (error) {
+    if (stage10Executions.get(payload.idempotencyKey) === execution) {
+      stage10Executions.delete(payload.idempotencyKey)
+    }
+    throw error
+  }
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -403,7 +426,7 @@ const server = createServer(async (request, response) => {
         response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
         return
       }
-      const result = await processStage10(validateStage10Payload(JSON.parse(body.toString('utf8'))))
+      const result = await processStage10Idempotent(validateStage10Payload(JSON.parse(body.toString('utf8'))))
       response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result))
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE10_FAILED'

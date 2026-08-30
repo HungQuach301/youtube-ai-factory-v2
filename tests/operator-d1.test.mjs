@@ -29,6 +29,18 @@ test("Stage 10 observes all tournament takes in one WhisperX batch", async () =>
   assert.equal(source.match(/whisperx\.align\(/g)?.length, 1);
 });
 
+test("Stage 10 replays one bounded worker execution per idempotency key", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /const STAGE10_EXECUTION_CACHE_LIMIT = 8/);
+  assert.match(source, /stage10Executions\.get\(payload\.idempotencyKey\)/);
+  assert.match(source, /stage10Executions\.set\(payload\.idempotencyKey, execution\)/);
+  assert.match(source, /stage10Executions\.delete\(payload\.idempotencyKey\)/);
+  assert.match(source, /processStage10Idempotent\(validateStage10Payload/);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
