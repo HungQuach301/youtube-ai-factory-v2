@@ -20,7 +20,9 @@ import {
   executeTrackGVideoOneStage00,
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
+  prepareTrackGVideoOneStage07AVoiceTournament,
   selectTrackGVideoOneStage04Champion,
+  selectTrackGVideoOneStage07ATone,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -28,6 +30,8 @@ import {
   trackGVideoOneStage04SelectionIdempotencyKey,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage06PrepareIdempotencyKey,
+  trackGVideoOneStage07APrepareIdempotencyKey,
+  trackGVideoOneStage07ASelectionIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -763,6 +767,105 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "prepare_track_g_video_1_stage_07a_voice_tournament",
+    {
+      title: "Prepare Track G Video #1 Stage 07A voice tournament",
+      description:
+        "Seal two REDUCED-profile tone routes for the already-qualified voice, verify six TTS segment boundaries and the immutable voice-settings hash, then stop for the required HP-02 D5 owner tone selection. No TTS provider call or spend occurs.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("PREPARE STAGE 07A VOICE TOURNAMENT"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_07A_READY"), stageCode: z.literal("07A"),
+        stageState: z.literal("RUNNING"), tournamentState: z.literal("AWAITING_HUMAN"),
+        candidates: z.array(z.object({ candidateId: z.string(), routeName: z.string(),
+          summary: z.string(), deliveryDirection: z.string(), machineScore: z.number(),
+          machineRecommended: z.boolean() })),
+        segmentCount: z.number().int().positive(), settingsHash: z.string().regex(/^[0-9a-f]{64}$/u),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        humanGate: z.literal("REQUIRED:HP-02_D5_TONE_SELECTION"),
+        stageReservedUsd: z.literal(0), stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false), autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await prepareTrackGVideoOneStage07AVoiceTournament(user, {
+        objective, ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage07APrepareIdempotencyKey(),
+      });
+      const output = {
+        accepted: true, replayed: result.replayed, runId: result.base.run.id,
+        currentStep: "STAGE_07A_READY" as const, stageCode: "07A" as const,
+        stageState: "RUNNING" as const, tournamentState: "AWAITING_HUMAN" as const,
+        candidates: result.tournamentModel.candidates.map((candidate) => ({
+          candidateId: candidate.id, routeName: candidate.routeName, summary: candidate.summary,
+          deliveryDirection: candidate.deliveryDirection, machineScore: candidate.machineScore,
+          machineRecommended: candidate.id === result.tournamentModel.recommendedCandidateId,
+        })),
+        segmentCount: result.tournamentModel.segments.length,
+        settingsHash: result.tournamentModel.settingsHash,
+        gateResults: result.tournamentModel.gateResults,
+        humanGate: "REQUIRED:HP-02_D5_TONE_SELECTION" as const,
+        stageReservedUsd: 0 as const, stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const, releaseEligible: false as const, autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "select_track_g_video_1_stage_07a_tone",
+    {
+      title: "Select Track G Video #1 Stage 07A tone",
+      description:
+        "Record the owner's HP-02 D5 tone selection and rationale, preserve the rejected route, seal voice design and TTS segmentation, freeze Stage 07A and advance exactly to STAGE_07B_READY with zero provider spend.",
+      inputSchema: {
+        candidateId: z.string().min(12).max(160), rationale: z.string().min(20).max(500),
+        confirm: z.literal(true), ownerApprovalText: z.literal("SELECT STAGE 07A TONE"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_07B_READY"), stageCode: z.literal("07A"),
+        stageState: z.literal("FROZEN"), artifactType: z.literal("VOICE_DESIGN_TTS_SEGMENTATION_SEAL"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u), selectedCandidateId: z.string(),
+        selectedRouteName: z.string(), preservedCandidateCount: z.number().int().positive(),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        humanGate: z.literal("SATISFIED:HP-02_D5_TONE_SELECTION"),
+        stageReservedUsd: z.literal(0), stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false), autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ candidateId, rationale, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await selectTrackGVideoOneStage07ATone(user, {
+        candidateId, rationale, ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage07ASelectionIdempotencyKey(candidateId, rationale),
+      });
+      const selected = result.tournamentModel.candidates.find((value) => value.id === result.selectedCandidateId)!;
+      const output = {
+        accepted: true, replayed: result.replayed, runId: result.base.run.id,
+        currentStep: "STAGE_07B_READY" as const, stageCode: "07A" as const,
+        stageState: "FROZEN" as const, artifactType: "VOICE_DESIGN_TTS_SEGMENTATION_SEAL" as const,
+        artifactSha256: result.stageArtifact.canonicalHash, selectedCandidateId: selected.id,
+        selectedRouteName: selected.routeName, preservedCandidateCount: result.tournamentModel.candidates.length,
+        gateResults: result.tournamentModel.gateResults,
+        humanGate: "SATISFIED:HP-02_D5_TONE_SELECTION" as const,
+        stageReservedUsd: 0 as const, stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const, releaseEligible: false as const, autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
     "advance_track_g_video_1_stage",
     {
       title: "Advance Track G Video #1 through a qualified stage",
@@ -937,6 +1040,12 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "apply_track_g_video_1_stage_06_editorial_decision") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "prepare_track_g_video_1_stage_07a_voice_tournament") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "select_track_g_video_1_stage_07a_tone") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }
