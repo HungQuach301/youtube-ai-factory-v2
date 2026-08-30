@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787659311569,
+      "tag": "0000_opposite_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787667308725,
+      "tag": "0001_flat_zombie",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787879025372,
+      "tag": "0002_brainy_magik",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787999814370,
+      "tag": "0003_ancient_black_widow",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788007744220,
+      "tag": "0004_amusing_cable",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788021442542,
+      "tag": "0006_truth_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788024046603,
+      "tag": "0007_creative_tournament",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788054865450,
+      "tag": "0008_story_architecture_prediction",
+      "breakpoints": true
+    }
+  ]
+}
