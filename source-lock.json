@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "213b471d03709ede472bb542b7a226f20ce77455e3433faec5eb22f8f837013f",
+  "aggregate_sha256": "b9d330848c3d1d87c5c384ee546033f3c2ec2a50d3115c74dc29a327b99572d6",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -45,7 +45,7 @@
     },
     {
       "path": "app/api/operator/route.ts",
-      "sha256": "8a821f94bfdbcf2544580547e2433863969702ebc34caead581682fc05d490c6"
+      "sha256": "c905bcec29a6b469dafa243d50b09d0e7549e81ddc522e8cf16ae24f5dc281d6"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "fa263cbbe40299232154460974363d7d4b51131f42b7414bf761cb242e8592d6"
+      "sha256": "3d4b39dc0ddb128d809fb71c2d394a029c74ca0583333d30aacfa36020ac1779"
     },
     {
       "path": "app/oauth-server.ts",
@@ -89,7 +89,7 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "8b809e807b51254fe72273b707e573996c55a52b94004ebbd4c0b67bd1c21359"
+      "sha256": "c86aafae126d697575d91536c00a7621076b3abe92856211ed4cdce34fab9527"
     },
     {
       "path": "app/operate/page.tsx",
@@ -97,7 +97,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "db9bc03faa1cbf2fd0f37425ef9323840a021e7a3ddfa6c644e8bae789afb681"
+      "sha256": "a10f2d53245bcbfbe66249cf8dbf75ebea59df2da4b95922aaeb4e3e027e9da2"
     },
     {
       "path": "app/page.tsx",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "a6d675b93b47d843058d3ac6a403a7b10980ab656d0888dae968ab2858e2d636"
+      "sha256": "a3da3fb1c9332e395f2959e929f93c849d00ac214eee61c8dee54edabf673603"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -176,6 +176,10 @@
       "sha256": "130d3fcf14ff90d31cba188049d98dbcaa10dc382d0f22ddd4fe0aa724388577"
     },
     {
+      "path": "drizzle/0011_stage09_visual_review.sql",
+      "sha256": "043fd72f6fb0ededaaf59832ae6e2d94cf5bb6b16935f7e78912438a6f4487db"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -213,7 +217,7 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "8c2cdf071715e23a63cb7d61042e5c179fc6c83de9812b089d9b9e9754f50ac1"
+      "sha256": "ca674c92f2c0a6b1c3ef8a10e180c402b3dc54803210f637291eba637d0b60bc"
     },
     {
       "path": "eslint.config.mjs",
@@ -285,7 +289,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "8caa66a38033ec25ba2e34f21ce637a093f3c9f048d51c655b235ac82b33a0f6"
+      "sha256": "9e3db238a52e2cfa3a8da2ef26779aefd8c30ceab620a1be68608e13fcb32a03"
     },
     {
       "path": "tests/rendered-html.test.mjs",

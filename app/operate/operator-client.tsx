@@ -63,6 +63,28 @@ type Stage08 = {
   }>;
   gateResults: Array<{ gate: string; state: string; evidence: string }>;
 };
+type Stage09 = {
+  reviewState: string;
+  controlState: string;
+  artifactSha256: string | null;
+  assetCount: number;
+  sourceCandidatesPerShot: number;
+  compositionsPerShot: number;
+  duplicateRate: number;
+  assets: Array<{
+    assetId: string; shotId: string; beatId: string; startFrame: number; endFrame: number;
+    motionClass: string; visualRoute: string; acquisitionMode: string; visualFingerprint: string;
+    rightsLineage: { origin: string; license: string; sourceUri: string; state: string };
+    semanticFit: { state: string; evidence: string };
+  }>;
+  candidates: Array<{
+    candidateId: string; routeName: string; thumbnailText: string; composition: string;
+    palette: { background: string; accent: string; signal: string };
+    machineScore: number; machineRecommended: boolean; selected: boolean;
+  }>;
+  gateResults: Array<{ gate: string; state: string; evidence: string }>;
+  decision: null | { decisionType: string; rationale: string; createdAt: string };
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -77,6 +99,7 @@ type Workbench = {
   stage07A: Stage07A | null;
   stage07B: Stage07B | null;
   stage08: Stage08 | null;
+  stage09: Stage09 | null;
   humanDecisionCount: number;
   allowedActions: string[];
 };
@@ -107,6 +130,8 @@ export default function OperatorClient() {
   const [revisedBeatNarration, setRevisedBeatNarration] = useState("");
   const [rationale, setRationale] = useState("");
   const [toneCandidateId, setToneCandidateId] = useState("");
+  const [thumbnailCandidateId, setThumbnailCandidateId] = useState("");
+  const [thumbnailText, setThumbnailText] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -134,6 +159,7 @@ export default function OperatorClient() {
   const stage07A = workbench?.stage07A ?? null;
   const stage07B = workbench?.stage07B ?? null;
   const stage08 = workbench?.stage08 ?? null;
+  const stage09 = workbench?.stage09 ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
   const effectiveBeatId = beatId || stage06?.sections[0]?.beatId || "";
@@ -150,6 +176,19 @@ export default function OperatorClient() {
     && selectedToneId.length > 0 && rationale.trim().length >= 20;
   const canAdvanceVisualGrammar = workbench?.allowedActions.includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_07B");
   const canAdvanceShotCueProgram = workbench?.allowedActions.includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_08");
+  const selectedThumbnailId = thumbnailCandidateId
+    || stage09?.candidates.find((candidate) => candidate.machineRecommended)?.candidateId || "";
+  const selectedThumbnail = stage09?.candidates.find((candidate) =>
+    candidate.candidateId === selectedThumbnailId) ?? null;
+  const effectiveThumbnailText = thumbnailText || selectedThumbnail?.thumbnailText || "";
+  const canPrepareVisualReview = workbench?.allowedActions
+    .includes("PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW");
+  const canSelectThumbnail = workbench?.allowedActions
+    .includes("SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL")
+    && selectedThumbnailId.length > 0
+    && effectiveThumbnailText.trim().length >= 6
+    && effectiveThumbnailText.trim().length <= 48
+    && rationale.trim().length >= 20;
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -242,6 +281,35 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
+  async function prepareVisualReview() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW",
+          confirm: true }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 09 visual review preparation failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function selectThumbnail() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL",
+          confirm: true, candidateId: selectedThumbnailId,
+          revisedThumbnailText: effectiveThumbnailText, rationale }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 09 thumbnail decision failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
   if (!snapshot?.channel) {
     return <div className="operator-layout">
       <section className="operator-command-card operator-full-card">
@@ -269,7 +337,7 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
@@ -347,6 +415,31 @@ export default function OperatorClient() {
       </> : <p className="operator-empty">Stage 08 compiler model is unavailable.</p>}
       {error ? <p className="operator-error" role="alert">{error}</p> : null}
       {receipt?.artifactSha256 && receipt.currentStep === "STAGE_09_READY" ? <p className="decision-receipt" role="status">Stage 08 {receipt.stageState} · next {receipt.currentStep} · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
+    </section> : null}
+
+    {workbench?.run.currentStep === "STAGE_09_READY" || stage09?.controlState === "FROZEN" ? <section className="operator-command-card operator-full-card">
+      <div className="operator-card-heading"><div><p className="eyebrow">HP-02 · OWNER REVIEW</p><h2>Stage 09 visual acquisition and thumbnail</h2></div><span className="write-badge">D3</span></div>
+      {stage09?.reviewState === "NOT_PREPARED" ? <>
+        <p className="operator-help">Prepare one original vector composition per sealed shot and two bounded thumbnail routes. Rights, semantic-fit and duplicate-rate gates run before review; no stock or compositor provider is called.</p>
+        <button type="button" disabled={busy || !canPrepareVisualReview} onClick={prepareVisualReview}>{busy ? "Preparing…" : "Prepare visual review"}</button>
+        <p className="operator-boundary">PROFILE=REDUCED keeps six source candidates and one composition per shot. Provider dispatch and spend remain zero.</p>
+      </> : stage09 ? <>
+        <div className="script-metadata"><div><span>Visual coverage</span><strong>{stage09.assetCount} compositions · one per shot</strong></div><div><span>Candidate width</span><strong>{stage09.sourceCandidatesPerShot} sources → {stage09.compositionsPerShot} selected</strong></div><div><span>Duplicate rate</span><strong>{(stage09.duplicateRate * 100).toFixed(1)}%</strong></div><div><span>Rights mode</span><strong>Owner-controlled original vector</strong></div></div>
+        <div className="gate-strip">{stage09.gateResults.map((gate) => <span key={gate.gate} className={gate.state === "PASS" ? "pass" : "waiting"}>{gate.gate.replaceAll("_", " ")} · {gate.state}</span>)}</div>
+        <div className="route-grid">{stage09.candidates.map((candidate) => <article key={candidate.candidateId} className={candidate.selected ? "selected" : ""}>
+          <label><input type="radio" name="thumbnail" checked={selectedThumbnailId === candidate.candidateId} onChange={() => { setThumbnailCandidateId(candidate.candidateId); setThumbnailText(candidate.thumbnailText); }} disabled={stage09.reviewState !== "AWAITING_HUMAN"} /> {candidate.machineRecommended ? "RECOMMENDED" : "ALTERNATIVE"}</label>
+          <div aria-hidden="true" style={{ background: candidate.palette.background, color: candidate.palette.accent, borderLeft: `8px solid ${candidate.palette.signal}`, minHeight: 92, padding: 16, display: "grid", alignContent: "center" }}><strong>{candidate.thumbnailText}</strong></div>
+          <strong>{candidate.routeName}</strong><p>{candidate.composition}</p><small>Score {candidate.machineScore}</small>
+        </article>)}</div>
+        {stage09.reviewState === "AWAITING_HUMAN" ? <div className="editorial-form">
+          <label>Thumbnail text (6–48 characters)<input value={effectiveThumbnailText} onChange={(event) => setThumbnailText(event.target.value)} minLength={6} maxLength={48} /></label>
+          <label className="rationale-field">Why this thumbnail earns attention without breaking trust (minimum 20 characters)<textarea rows={3} value={rationale} onChange={(event) => setRationale(event.target.value)} /></label>
+          <button type="button" disabled={busy || !canSelectThumbnail} onClick={selectThumbnail}>{busy ? "Applying…" : "Apply D3 and freeze Stage 09"}</button>
+          <p className="operator-boundary">The rejected route remains sealed. No provider dispatch, release or publication is authorized.</p>
+        </div> : stage09.decision ? <p className="decision-rationale">D3 accepted: {stage09.decision.rationale}</p> : null}
+      </> : <p className="operator-empty">Stage 09 visual model is unavailable.</p>}
+      {error ? <p className="operator-error" role="alert">{error}</p> : null}
+      {receipt ? <p className="decision-receipt" role="status">Stage 09 {receipt.stageState} · next {receipt.currentStep}{receipt.artifactSha256 ? ` · evidence ${receipt.artifactSha256.slice(0, 16)}…` : " · awaiting D3"}</p> : null}
     </section> : null}
 
     <section className="operator-timeline-card operator-full-card">

@@ -71,6 +71,13 @@
       "when": 1788073200000,
       "tag": "0010_stage07a_voice_tournament",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788080400000,
+      "tag": "0011_stage09_visual_review",
+      "breakpoints": true
     }
   ]
 }

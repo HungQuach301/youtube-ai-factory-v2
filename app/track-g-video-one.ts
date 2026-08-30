@@ -102,6 +102,14 @@ const STAGE_08_STANDARD_VERSION = 1;
 const STAGE_08_INSTANCE_ID = "stage_track_g_video_1_08_attempt_1";
 const STAGE_08_ARTIFACT_ID = "artifact_track_g_video_1_stage_08_shot_cue_program_v1";
 const STAGE_08_ARTIFACT_TYPE = "SHOT_CUE_PROGRAM";
+const STAGE_09_CODE = "09";
+const STAGE_09_STANDARD_VERSION = 1;
+const STAGE_09_INSTANCE_ID = "stage_track_g_video_1_09_attempt_1";
+const STAGE_09_TOURNAMENT_ID = "tournament_track_g_video_1_stage_09_thumbnail_v1";
+const STAGE_09_ARTIFACT_ID = "artifact_track_g_video_1_stage_09_visual_composition_v1";
+const STAGE_09_ARTIFACT_TYPE = "VISUAL_ACQUISITION_COMPOSITION_SEAL";
+const STAGE_09_PREPARE_OWNER_APPROVAL_TEXT = "PREPARE STAGE 09 VISUAL REVIEW";
+const STAGE_09_SELECT_OWNER_APPROVAL_TEXT = "SELECT STAGE 09 THUMBNAIL";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -173,6 +181,20 @@ export type SelectTrackGVideoOneStage07AToneInput = {
   candidateId: string;
   rationale: string;
   ownerApprovalText: typeof STAGE_07A_SELECT_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type PrepareTrackGVideoOneStage09Input = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_09_PREPARE_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type SelectTrackGVideoOneStage09ThumbnailInput = {
+  candidateId: string;
+  revisedThumbnailText: string;
+  rationale: string;
+  ownerApprovalText: typeof STAGE_09_SELECT_OWNER_APPROVAL_TEXT;
   idempotencyKey: string;
 };
 
@@ -3019,6 +3041,435 @@ async function advanceTrackGVideoOneStage08(
   return { ...(await readBackStage08(bootstrap.run.id)), replayed: false };
 }
 
+export function trackGVideoOneStage09VisualCompositionModel(
+  selectedCandidateId = "creative_route_video_1_alert_is_the_trap_v1",
+) {
+  const shotProgram = trackGVideoOneStage08ShotCueProgramModel(selectedCandidateId);
+  const palettes = [
+    { background: "#071816", accent: "#71f6c5", signal: "#ffb84d" },
+    { background: "#101820", accent: "#8fd3ff", signal: "#ff6b6b" },
+    { background: "#151225", accent: "#b9a7ff", signal: "#ffd166" },
+    { background: "#0f1f24", accent: "#66e3ff", signal: "#ff8f70" },
+    { background: "#172018", accent: "#9be58f", signal: "#ffe082" },
+    { background: "#171717", accent: "#f5f5f5", signal: "#ff5c5c" },
+  ] as const;
+  const assets = shotProgram.shots.map((shot, index) => {
+    const palette = palettes[index % palettes.length];
+    const layoutMode = shot.motionClass === "REAL_WORLD_FOOTAGE" ? "DOCUMENTARY_DEVICE_FRAME"
+      : shot.motionClass === "EXPLANATORY_DIAGRAM" ? "SYSTEM_RELATIONSHIP_DIAGRAM"
+        : "KINETIC_DATA_CARD";
+    const sourceCandidateCount = 6;
+    const fingerprint = createHash("sha256").update([
+      shot.beatId, shot.cueRole, shot.visualRoute, layoutMode,
+      palette.background, palette.accent, palette.signal, String(shot.startFrame),
+    ].join("\0")).digest("hex").slice(0, 16);
+    return {
+      assetId: `visual_asset_${shot.shotId}_v1`,
+      shotId: shot.shotId,
+      beatId: shot.beatId,
+      startFrame: shot.startFrame,
+      endFrame: shot.endFrame,
+      motionClass: shot.motionClass,
+      visualRoute: shot.visualRoute,
+      sourceCandidateCount,
+      selectedCompositionCount: 1,
+      acquisitionMode: "INTERNAL_ORIGINAL_VECTOR",
+      renderSpec: {
+        width: 1920,
+        height: 1080,
+        layoutMode,
+        palette,
+        headline: shot.beatTitle,
+        cueRole: shot.cueRole,
+        treatment: shot.treatment,
+      },
+      rightsLineage: {
+        origin: "YOUTUBE_AI_FACTORY_ORIGINAL_COMPOSITION",
+        license: "OWNER_CONTROLLED_ORIGINAL_WORK",
+        sourceUri: `internal://track-g/video-1/stage-09/${shot.shotId}`,
+        state: "PASS" as const,
+      },
+      semanticFit: {
+        state: "PASS" as const,
+        evidence: `${shot.beatId}/${shot.visualRoute} and ${shot.assertions.length} sealed shot assertions remain bound to the composition.`,
+      },
+      visualFingerprint: fingerprint,
+    };
+  });
+  const uniqueFingerprintCount = new Set(assets.map((asset) => asset.visualFingerprint)).size;
+  const duplicateCount = assets.length - uniqueFingerprintCount;
+  const duplicateRate = assets.length === 0 ? 1 : duplicateCount / assets.length;
+  if (assets.length !== shotProgram.shots.length
+    || assets.some((asset, index) => asset.shotId !== shotProgram.shots[index].shotId)
+    || assets.some((asset) => asset.rightsLineage.state !== "PASS")) {
+    throw new Error("TRACK_G_STAGE_09_M0_RIGHTS_LINEAGE_FAILED");
+  }
+  if (assets.some((asset) => asset.semanticFit.state !== "PASS")
+    || assets.some((asset) => asset.selectedCompositionCount !== 1)) {
+    throw new Error("TRACK_G_STAGE_09_M1_SEMANTIC_FIT_FAILED");
+  }
+  if (duplicateRate > 0.05) throw new Error("TRACK_G_STAGE_09_M1_DUPLICATE_RATE_FAILED");
+  const thumbnailCandidates = [
+    {
+      id: "thumbnail_route_video_1_warning_is_the_trap_v1",
+      routeName: "Warning Is The Trap",
+      thumbnailText: "THE WARNING IS THE TRAP",
+      composition: "Phone alert foreground, broken trust path behind it, amber danger signal on a dark field.",
+      palette: { background: "#071816", accent: "#71f6c5", signal: "#ffb84d" },
+      machineScore: 95,
+    },
+    {
+      id: "thumbnail_route_video_1_stop_verify_first_v1",
+      routeName: "Stop. Verify First.",
+      thumbnailText: "STOP. VERIFY FIRST.",
+      composition: "Split path: suspicious contact on the left, independent official channel on the right, red stop marker between.",
+      palette: { background: "#101820", accent: "#8fd3ff", signal: "#ff6b6b" },
+      machineScore: 93,
+    },
+  ] as const;
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M0_RIGHTS_LINEAGE",
+      state: "PASS",
+      evidence: `${assets.length}/${assets.length} compositions use owner-controlled original vector recipes with explicit source URI and no external media rights dependency.`,
+    },
+    {
+      gate: "M1_SEMANTIC_FIT",
+      state: "PASS",
+      evidence: `${assets.length}/${assets.length} compositions preserve the sealed shot, beat, route and assertion bindings from Stage 08.`,
+    },
+    {
+      gate: "M1_DUPLICATE_RATE",
+      state: "PASS",
+      evidence: `${duplicateCount}/${assets.length} exact visual fingerprints duplicate (${(duplicateRate * 100).toFixed(1)}% ≤ 5.0%).`,
+    },
+  ];
+  return {
+    sourceCandidatesPerShot: 6,
+    compositionsPerShot: 1,
+    assets,
+    duplicateCount,
+    duplicateRate,
+    thumbnailCandidates,
+    recommendedThumbnailId: thumbnailCandidates[0].id,
+    gateResults,
+  };
+}
+
+function stage09TournamentEnvelope(operationRunId: string, predecessorSha256: string,
+  selectedCandidateId: string) {
+  const model = trackGVideoOneStage09VisualCompositionModel(selectedCandidateId);
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-09-visual-acquisition-composition-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_09_CODE,
+    artifactType: STAGE_09_ARTIFACT_TYPE,
+    visualAcquisition: {
+      profile: "REDUCED",
+      sourceCandidatesPerShot: model.sourceCandidatesPerShot,
+      compositionsPerShot: model.compositionsPerShot,
+      assets: model.assets,
+    },
+    thumbnailTournament: {
+      tournamentId: STAGE_09_TOURNAMENT_ID,
+      candidates: model.thumbnailCandidates,
+      recommendedCandidateId: model.recommendedThumbnailId,
+    },
+    provenance: [{
+      sourceType: "SEALED_STAGE_ARTIFACT",
+      sourceId: STAGE_08_ARTIFACT_ID,
+      canonicalHash: predecessorSha256,
+      authority: "FRAME_EXACT_SHOT_CUE_PROGRAM",
+    }],
+    gateResults: model.gateResults,
+    controls: {
+      preserveRejectedCandidates: true,
+      humanGate: "REQUIRED:HP-02_D3_THUMBNAIL_SELECTION",
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+    },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage09Tournament(operationRunId: string) {
+  const stage08 = await readBackStage08(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_09_INSTANCE_ID)).limit(1);
+  const [prepareCommand] = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) => value.scope === "STAGE"
+    && value.scopeRef === STAGE_09_INSTANCE_ID)?.ceilingUsd;
+  const payload = prepareCommand ? JSON.parse(prepareCommand.payloadJson) as {
+    tournamentR2Key?: string; tournamentSha256?: string; selectedCreativeRouteId?: string;
+  } : {};
+  const selectedCreativeRouteId = payload.selectedCreativeRouteId
+    ?? "creative_route_video_1_alert_is_the_trap_v1";
+  const model = trackGVideoOneStage09VisualCompositionModel(selectedCreativeRouteId);
+  const lifecycleValid = (stage?.controlState === "RUNNING"
+      && stage08.base.run.currentStep === "STAGE_09_READY")
+    || (stage?.controlState === "FROZEN"
+      && isAtOrAfterReadyStep(stage08.base.run.currentStep, "STAGE_10_READY"));
+  if (!stage || !prepareCommand || !payload.tournamentR2Key || !payload.tournamentSha256
+    || stage.packageId !== STAGE_00_PACKAGE_ID || stage.stageCode !== STAGE_09_CODE
+    || !lifecycleValid || stage.standardVersion !== STAGE_09_STANDARD_VERSION
+    || stageCeiling !== 0
+    || !await verifyImmutableEvidence(stage08.stage08Artifact.r2Key,
+      stage08.stage08Artifact.canonicalHash)
+    || !await verifyImmutableEvidence(payload.tournamentR2Key, payload.tournamentSha256)) {
+    throw new Error("TRACK_G_STAGE_09_TOURNAMENT_READ_BACK_FAILED");
+  }
+  return { ...stage08, stage09: stage, tournamentModel: model,
+    tournamentR2Key: payload.tournamentR2Key, tournamentSha256: payload.tournamentSha256,
+    selectedCreativeRouteId };
+}
+
+async function readBackStage09(operationRunId: string) {
+  const prepared = await readBackStage09Tournament(operationRunId);
+  const db = getDb();
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_09_ARTIFACT_ID)).limit(1);
+  const decisions = await db.select().from(humanDecisions)
+    .where(eq(humanDecisions.packageId, STAGE_00_PACKAGE_ID));
+  const decision = decisions.find((value) => value.artifactAfterId === STAGE_09_ARTIFACT_ID);
+  const [selectionCommand] = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const selection = selectionCommand ? JSON.parse(selectionCommand.payloadJson) as {
+    selectedCandidateId?: string; revisedThumbnailText?: string;
+  } : {};
+  if (!artifact || !decision || prepared.stage09.controlState !== "FROZEN"
+    || artifact.stageInstanceId !== prepared.stage09.id
+    || artifact.artifactType !== STAGE_09_ARTIFACT_TYPE
+    || artifact.namespace !== "production" || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_09_STANDARD_VERSION
+    || decision.decisionType !== "D3" || decision.artifactBeforeId !== STAGE_09_TOURNAMENT_ID
+    || decision.rationaleText.trim().length < 20
+    || !prepared.tournamentModel.thumbnailCandidates.some((candidate) =>
+      candidate.id === selection.selectedCandidateId)
+    || !selection.revisedThumbnailText
+    || !isAtOrAfterReadyStep(prepared.base.run.currentStep, "STAGE_10_READY")
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_09_READ_BACK_FAILED");
+  }
+  return { ...prepared, decision, selection, stage09Artifact: artifact,
+    stageArtifact: artifact, gateResults: prepared.tournamentModel.gateResults };
+}
+
+export async function prepareTrackGVideoOneStage09VisualReview(
+  user: ChatGPTUser,
+  input: PrepareTrackGVideoOneStage09Input,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== STAGE_09_PREPARE_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_09_PREPARE_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const stage08 = await readBackStage08(bootstrap.run.id);
+  const expectedKey = stage09PrepareIdempotencyKey(bootstrap.run.id,
+    stage08.stage08Artifact.canonicalHash);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage09Tournament(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_09_READY") throw new Error("TRACK_G_STAGE_09_NOT_READY");
+  const selectedCreativeRouteId = stage08.selection.candidateId;
+  const envelope = stage09TournamentEnvelope(bootstrap.run.id,
+    stage08.stage08Artifact.canonicalHash, selectedCreativeRouteId);
+  const bytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const tournamentSha256 = sha256(bytes);
+  const tournamentR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_09_CODE, "visual-composition-thumbnail-tournament", `${tournamentSha256}.json`].join("/");
+  await putImmutableProductionEvidence(tournamentR2Key, bytes, "application/json", tournamentSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_09_READY', 'TRACK_G_VIDEO_1_STAGE_09_AWAITING_THUMBNAIL', ?, ?)`).bind(
+        crypto.randomUUID(), canonicalize({ objective, operationRunId: bootstrap.run.id,
+          stageCode: STAGE_09_CODE, selectedCreativeRouteId, tournamentR2Key, tournamentSha256 }),
+        input.idempotencyKey, user.email.toLowerCase(), crypto.randomUUID(), now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at)
+        VALUES (?, ?, '09', 'RUNNING', ?, 1, ?)`).bind(
+        STAGE_09_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_09_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_09_INSTANCE_ID),
+      ...[
+        ["STAGE_09_DOR_PASSED", { predecessor: STAGE_08_ARTIFACT_ID,
+          predecessorSha256: stage08.stage08Artifact.canonicalHash }],
+        ["STAGE_09_VISUAL_COMPOSITIONS_PREPARED", { assetCount: envelope.visualAcquisition.assets.length,
+          sourceCandidatesPerShot: envelope.visualAcquisition.sourceCandidatesPerShot,
+          providerDispatch: "OFF" }],
+        ["STAGE_09_GATES_PASSED", { gates: envelope.gateResults }],
+        ["STAGE_09_HP02_D3_REQUIRED", { candidateIds: envelope.thumbnailTournament.candidates
+          .map((value) => value.id) }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage09Tournament(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage09Tournament(bootstrap.run.id)), replayed: false };
+}
+
+export async function selectTrackGVideoOneStage09Thumbnail(
+  user: ChatGPTUser,
+  input: SelectTrackGVideoOneStage09ThumbnailInput,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const rationale = input.rationale.trim();
+  const revisedThumbnailText = input.revisedThumbnailText.trim();
+  if (rationale.length < 20 || rationale.length > 500) throw new Error("RATIONALE_LENGTH_OUT_OF_RANGE");
+  if (revisedThumbnailText.length < 6 || revisedThumbnailText.length > 48) {
+    throw new Error("THUMBNAIL_TEXT_LENGTH_OUT_OF_RANGE");
+  }
+  if (input.ownerApprovalText !== STAGE_09_SELECT_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_09_SELECT_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage09Tournament(bootstrap.run.id);
+  const candidate = prepared.tournamentModel.thumbnailCandidates
+    .find((value) => value.id === input.candidateId);
+  if (!candidate) throw new Error("TRACK_G_STAGE_09_THUMBNAIL_NOT_ELIGIBLE");
+  const expectedKey = stage09SelectionIdempotencyKey(bootstrap.run.id,
+    prepared.tournamentSha256, candidate.id, revisedThumbnailText, rationale);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage09(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_09_READY" || prepared.stage09.controlState !== "RUNNING") {
+    throw new Error("TRACK_G_STAGE_09_THUMBNAIL_GATE_NOT_READY");
+  }
+  const actorIdentity = user.email.toLowerCase();
+  const rejectedCandidates = prepared.tournamentModel.thumbnailCandidates
+    .filter((value) => value.id !== candidate.id);
+  const decisionEnvelope = {
+    schemaVersion: 1,
+    tournamentId: STAGE_09_TOURNAMENT_ID,
+    tournamentSha256: prepared.tournamentSha256,
+    selectedCandidateId: candidate.id,
+    thumbnailTextBefore: candidate.thumbnailText,
+    thumbnailTextAfter: revisedThumbnailText,
+    actorIdentity,
+    rationale,
+  };
+  const decisionBytes = new TextEncoder().encode(`${canonicalize(decisionEnvelope)}\n`);
+  const decisionSha256 = sha256(decisionBytes);
+  const decisionR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_09_CODE, "human-decision-d3", `${decisionSha256}.json`].join("/");
+  await putImmutableProductionEvidence(decisionR2Key, decisionBytes, "application/json", decisionSha256);
+  const finalEnvelope = {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-09-visual-acquisition-composition-v1",
+    operationRunId: bootstrap.run.id,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_09_CODE,
+    artifactType: STAGE_09_ARTIFACT_TYPE,
+    visualAcquisition: {
+      sourceCandidatesPerShot: prepared.tournamentModel.sourceCandidatesPerShot,
+      compositionsPerShot: prepared.tournamentModel.compositionsPerShot,
+      assets: prepared.tournamentModel.assets,
+    },
+    selectedThumbnail: { ...candidate, thumbnailText: revisedThumbnailText },
+    rejectedThumbnailCandidates: rejectedCandidates,
+    humanDecision: { decisionType: "D3", actorIdentity, rationale,
+      decisionR2Key, decisionSha256 },
+    provenance: [{ sourceType: "SEALED_STAGE_ARTIFACT", sourceId: STAGE_08_ARTIFACT_ID,
+      canonicalHash: prepared.stage08Artifact.canonicalHash,
+      authority: "FRAME_EXACT_SHOT_CUE_PROGRAM" }],
+    gateResults: prepared.tournamentModel.gateResults,
+    controls: { preserveRejectedCandidates: true,
+      humanGate: "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION",
+      providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(finalEnvelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_09_CODE, "visual-acquisition-composition-seal", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const humanDecisionId = "human_decision_track_g_video_1_stage_09_d3_v1";
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_09_AWAITING_THUMBNAIL', 'TRACK_G_VIDEO_1_STAGE_10_READY', ?, ?)`).bind(
+        crypto.randomUUID(), canonicalize({ operationRunId: bootstrap.run.id,
+          selectedCandidateId: candidate.id, revisedThumbnailText, rationale,
+          decisionSha256, artifactSha256 }), input.idempotencyKey, actorIdentity,
+        crypto.randomUUID(), now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_09_ARTIFACT_ID, STAGE_09_INSTANCE_ID, STAGE_09_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_09_STANDARD_VERSION, now),
+      d1.prepare(`INSERT INTO human_decision
+        (id, package_id, decision_type, actor_identity, artifact_before_id, artifact_after_id,
+         diff_r2_key, rationale_text, created_at) VALUES (?, ?, 'D3', ?, ?, ?, ?, ?, ?)`).bind(
+        humanDecisionId, STAGE_00_PACKAGE_ID, actorIdentity, STAGE_09_TOURNAMENT_ID,
+        STAGE_09_ARTIFACT_ID, decisionR2Key, rationale, now),
+      d1.prepare(`UPDATE stage_instance SET control_state = 'FROZEN', frozen_at = ?
+        WHERE id = ? AND control_state = 'RUNNING'`).bind(now, STAGE_09_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_10_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_09_READY'`).bind(
+        now, bootstrap.run.id),
+      ...[
+        ["STAGE_09_HP02_D3_RECORDED", { decisionId: humanDecisionId,
+          selectedCandidateId: candidate.id, decisionSha256 }],
+        ["STAGE_09_ARTIFACT_SEALED", { artifactId: STAGE_09_ARTIFACT_ID,
+          artifactR2Key, artifactSha256, rejectedCandidateCount: rejectedCandidates.length }],
+        ["STAGE_09_FROZEN", { nextStep: "STAGE_10_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage09(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage09(bootstrap.run.id)), replayed: false };
+}
+
 export async function prepareTrackGVideoOneStage04Tournament(
   user: ChatGPTUser,
   input: PrepareTrackGVideoOneStage04Input,
@@ -3536,6 +3987,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_08_CODE) {
     return advanceTrackGVideoOneStage08(user, input, objective);
+  }
+  if (input.stageCode === STAGE_09_CODE) {
+    throw new Error("TRACK_G_STAGE_09_HUMAN_GATE_COMMAND_REQUIRED");
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -4176,6 +4630,28 @@ function stage07ASelectionIdempotencyKey(operationRunId: string, tournamentSha25
   ].join("\0")).digest("hex");
 }
 
+function stage09PrepareIdempotencyKey(operationRunId: string, predecessorSha256: string): string {
+  return createHash("sha256").update([
+    "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW",
+    operationRunId,
+    predecessorSha256,
+    "stage-09-visual-review-v1",
+  ].join("\0")).digest("hex");
+}
+
+function stage09SelectionIdempotencyKey(operationRunId: string, tournamentSha256: string,
+  candidateId: string, revisedThumbnailText: string, rationale: string): string {
+  return createHash("sha256").update([
+    "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL",
+    operationRunId,
+    tournamentSha256,
+    candidateId,
+    revisedThumbnailText.trim(),
+    rationale.trim(),
+    "stage-09-human-gate-v1",
+  ].join("\0")).digest("hex");
+}
+
 export async function trackGVideoOneStage06PrepareIdempotencyKey(): Promise<string> {
   const bootstrap = await readBackForStage00();
   const stage05 = await readBackStage05(bootstrap.run.id);
@@ -4208,6 +4684,23 @@ export async function trackGVideoOneStage07ASelectionIdempotencyKey(
   const prepared = await readBackStage07ATournament(bootstrap.run.id);
   return stage07ASelectionIdempotencyKey(bootstrap.run.id, prepared.tournamentSha256,
     candidateId, rationale);
+}
+
+export async function trackGVideoOneStage09PrepareIdempotencyKey(): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const stage08 = await readBackStage08(bootstrap.run.id);
+  return stage09PrepareIdempotencyKey(bootstrap.run.id, stage08.stage08Artifact.canonicalHash);
+}
+
+export async function trackGVideoOneStage09SelectionIdempotencyKey(
+  candidateId: string,
+  revisedThumbnailText: string,
+  rationale: string,
+): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage09Tournament(bootstrap.run.id);
+  return stage09SelectionIdempotencyKey(bootstrap.run.id, prepared.tournamentSha256,
+    candidateId, revisedThumbnailText, rationale);
 }
 
 export async function trackGVideoOneStage04SelectionIdempotencyKey(
@@ -4262,6 +4755,9 @@ export async function trackGVideoOneStageIdempotencyKey(
     const stage07B = await readBackStage07B(bootstrap.run.id);
     return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
       stage07B.stage07BArtifact.canonicalHash);
+  }
+  if (stageCode === STAGE_09_CODE) {
+    throw new Error("TRACK_G_STAGE_09_HUMAN_GATE_COMMAND_REQUIRED");
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

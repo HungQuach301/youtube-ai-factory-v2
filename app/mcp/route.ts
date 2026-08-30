@@ -21,8 +21,10 @@ import {
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
+  prepareTrackGVideoOneStage09VisualReview,
   selectTrackGVideoOneStage04Champion,
   selectTrackGVideoOneStage07ATone,
+  selectTrackGVideoOneStage09Thumbnail,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -32,6 +34,8 @@ import {
   trackGVideoOneStage06PrepareIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
+  trackGVideoOneStage09PrepareIdempotencyKey,
+  trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -866,6 +870,103 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "prepare_track_g_video_1_stage_09_visual_review",
+    {
+      title: "Prepare Track G Video #1 Stage 09 visual review",
+      description:
+        "Prepare the bounded REDUCED Stage 09 visual-composition manifest and two thumbnail routes for owner HP-02 D3 review. It uses owner-controlled original vector recipes, dispatches no provider, spends nothing and leaves Stage 09 awaiting the owner.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("PREPARE STAGE 09 VISUAL REVIEW"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_09_READY"), stageCode: z.literal("09"),
+        stageState: z.literal("RUNNING"), reviewState: z.literal("AWAITING_HUMAN"),
+        assetCount: z.number().int().positive(), candidateCount: z.number().int().positive(),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        humanGate: z.literal("REQUIRED:HP-02_D3_THUMBNAIL_SELECTION"),
+        stageReservedUsd: z.literal(0), stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false), autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await prepareTrackGVideoOneStage09VisualReview(user, {
+        objective, ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage09PrepareIdempotencyKey(),
+      });
+      const output = {
+        accepted: true, replayed: result.replayed, runId: result.base.run.id,
+        currentStep: "STAGE_09_READY" as const, stageCode: "09" as const,
+        stageState: "RUNNING" as const, reviewState: "AWAITING_HUMAN" as const,
+        assetCount: result.tournamentModel.assets.length,
+        candidateCount: result.tournamentModel.thumbnailCandidates.length,
+        gateResults: result.tournamentModel.gateResults,
+        humanGate: "REQUIRED:HP-02_D3_THUMBNAIL_SELECTION" as const,
+        stageReservedUsd: 0 as const, stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const, releaseEligible: false as const, autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "select_track_g_video_1_stage_09_thumbnail",
+    {
+      title: "Select Track G Video #1 Stage 09 thumbnail",
+      description:
+        "Record the owner's HP-02 D3 thumbnail selection, optional text edit and rationale; preserve the rejected route, seal Stage 09 and advance exactly to STAGE_10_READY with zero provider spend.",
+      inputSchema: {
+        candidateId: z.string().min(12).max(160),
+        revisedThumbnailText: z.string().min(6).max(48),
+        rationale: z.string().min(20).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("SELECT STAGE 09 THUMBNAIL"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_10_READY"), stageCode: z.literal("09"),
+        stageState: z.literal("FROZEN"),
+        artifactType: z.literal("VISUAL_ACQUISITION_COMPOSITION_SEAL"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        selectedCandidateId: z.string(), revisedThumbnailText: z.string(),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        humanGate: z.literal("SATISFIED:HP-02_D3_THUMBNAIL_SELECTION"),
+        stageReservedUsd: z.literal(0), stageActualUsd: z.literal(0),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false), autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ candidateId, revisedThumbnailText, rationale, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await selectTrackGVideoOneStage09Thumbnail(user, {
+        candidateId, revisedThumbnailText, rationale, ownerApprovalText,
+        idempotencyKey: await trackGVideoOneStage09SelectionIdempotencyKey(
+          candidateId, revisedThumbnailText, rationale),
+      });
+      const output = {
+        accepted: true, replayed: result.replayed, runId: result.base.run.id,
+        currentStep: "STAGE_10_READY" as const, stageCode: "09" as const,
+        stageState: "FROZEN" as const,
+        artifactType: "VISUAL_ACQUISITION_COMPOSITION_SEAL" as const,
+        artifactSha256: result.stageArtifact.canonicalHash,
+        selectedCandidateId: result.selection.selectedCandidateId!,
+        revisedThumbnailText: result.selection.revisedThumbnailText!,
+        gateResults: result.gateResults,
+        humanGate: "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION" as const,
+        stageReservedUsd: 0 as const, stageActualUsd: 0 as const,
+        providerDispatch: "OFF" as const, releaseEligible: false as const, autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
     "advance_track_g_video_1_stage",
     {
       title: "Advance Track G Video #1 through a qualified stage",
@@ -1046,6 +1147,12 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "select_track_g_video_1_stage_07a_tone") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "prepare_track_g_video_1_stage_09_visual_review") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "select_track_g_video_1_stage_09_thumbnail") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
   }
