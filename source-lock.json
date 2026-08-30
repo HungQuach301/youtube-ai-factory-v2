@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "90541f52bece904e0422c4fb98fc23e27d7f6f784995ae2cd216008f096c1583",
+  "aggregate_sha256": "6e7873e090cfd0b6c9e6ae7d0a43a9ed36cd497ca326334fa2657a39639ee0a7",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -305,7 +305,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "2c5d2f894b0582bb91ae0ac644104a02655aa5a425abf5d24bc39215b8fa9295"
+      "sha256": "05f8f427163e7176dff45418d0a9290ffb0af92c3e554b8cb016fa9b44cdb0be"
     },
     {
       "path": "tests/rendered-html.test.mjs",
