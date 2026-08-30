@@ -1082,6 +1082,15 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(scriptDraft.number_trace_state, "PASS");
     assert.equal(JSON.parse(scriptDraft.sections_json).length, 6);
     assert.equal(JSON.parse(scriptDraft.number_trace_json).length, 2);
+    const workbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", { headers: ownerHeaders });
+    const workbenchSnapshot = await workbenchResponse.json();
+    assert.equal(workbenchResponse.status, 200);
+    assert.equal(workbenchSnapshot.trackGWorkbench.run.currentStep, "STAGE_06_READY");
+    assert.equal(workbenchSnapshot.trackGWorkbench.stage06.reviewState, "AWAITING_HUMAN");
+    assert.equal(workbenchSnapshot.trackGWorkbench.stage06.sections.length, 6);
+    assert.deepEqual(workbenchSnapshot.trackGWorkbench.allowedActions,
+      ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]);
+    assert.equal(workbenchSnapshot.latestRunEvents[0].runId, workbenchSnapshot.trackGWorkbench.run.id);
     const scriptDraftEvidence = await bucket.get(scriptDraft.r2_key);
     assert.ok(scriptDraftEvidence);
     await assert.rejects(
@@ -1106,6 +1115,27 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     const revisedTitle = "The Bank Fraud Alert Is the Trap — Break Its Control";
     const revisedHook = "That fraud alert may not be protecting your account. It may be the first move in a process built to control your next decision.";
     const editorialRationale = "Use a more direct opening and title so the audience immediately understands that the alert channel itself is the mechanism of control.";
+    const stage06ApiResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST",
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        commandType: "APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION",
+        decisionType: "D2",
+        revisedTitle,
+        revisedHook,
+        rationale: editorialRationale,
+        confirm: true,
+      }),
+    });
+    const stage06ApiApplied = await stage06ApiResponse.json();
+    assert.equal(stage06ApiResponse.status, 201);
+    assert.equal(stage06ApiApplied.accepted, true);
+    assert.equal(stage06ApiApplied.replayed, false);
+    assert.equal(stage06ApiApplied.currentStep, "STAGE_07A_READY");
+    assert.equal(stage06ApiApplied.stageState, "FROZEN");
+    assert.equal(stage06ApiApplied.decisionType, "D2");
+    assert.equal(stage06ApiApplied.providerDispatch, "OFF");
+
     const stage06Applied = await client.callTool({
       name: "apply_track_g_video_1_stage_06_editorial_decision",
       arguments: {
@@ -1118,32 +1148,13 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
       },
     });
     assert.equal(stage06Applied.isError, undefined, JSON.stringify(stage06Applied));
-    assert.equal(stage06Applied.structuredContent.accepted, true);
-    assert.equal(stage06Applied.structuredContent.replayed, false);
+    assert.equal(stage06Applied.structuredContent.replayed, true);
     assert.equal(stage06Applied.structuredContent.currentStep, "STAGE_07A_READY");
-    assert.equal(stage06Applied.structuredContent.stageState, "FROZEN");
     assert.equal(stage06Applied.structuredContent.artifactType, "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL");
     assert.equal(stage06Applied.structuredContent.artifactState, "SEALED");
-    assert.equal(stage06Applied.structuredContent.decisionType, "D2");
     assert.equal(stage06Applied.structuredContent.finalTitle, revisedTitle);
     assert.equal(stage06Applied.structuredContent.finalHook, revisedHook);
-    assert.equal(stage06Applied.structuredContent.providerDispatch, "OFF");
-    assert.equal(stage06Applied.structuredContent.stageActualUsd, 0);
-
-    const stage06ApplyReplay = await client.callTool({
-      name: "apply_track_g_video_1_stage_06_editorial_decision",
-      arguments: {
-        decisionType: "D2",
-        revisedTitle,
-        revisedHook,
-        rationale: editorialRationale,
-        confirm: true,
-        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
-      },
-    });
-    assert.equal(stage06ApplyReplay.structuredContent.replayed, true);
-    assert.equal(stage06ApplyReplay.structuredContent.artifactSha256,
-      stage06Applied.structuredContent.artifactSha256);
+    assert.equal(stage06Applied.structuredContent.artifactSha256, stage06ApiApplied.artifactSha256);
 
     const stage06InstanceFrozen = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '06'").first();
     const stage06Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
