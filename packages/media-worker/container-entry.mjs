@@ -290,11 +290,15 @@ async function processStage10(payload) {
     const candidates = []
     const observerItems = []
     let totalCharacters = 0
-    for (const segment of payload.segments) {
-      for (const route of ['A', 'B']) {
+    const plans = payload.segments.flatMap((segment) => ['A', 'B'].map((route) => ({ segment, route })))
+    for (let offset = 0; offset < plans.length; offset += 4) {
+      const batch = await Promise.all(plans.slice(offset, offset + 4).map(async ({ segment, route }) => {
         const takeId = `${segment.segmentId}-take-${route.toLowerCase()}`
         const filePath = join(workRoot, `${takeId}.mp3`)
         const synthesized = await synthesizeCandidate(payload, segment, route, filePath)
+        return { takeId, segment, route, filePath, synthesized }
+      }))
+      for (const { takeId, segment, filePath, synthesized } of batch) {
         totalCharacters += segment.text.length
         candidates.push({ takeId, segmentId: segment.segmentId, filePath, ...synthesized })
         observerItems.push({ id: takeId, audioPath: filePath, transcript: segment.text })

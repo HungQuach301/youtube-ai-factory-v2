@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "9ac6de21ef445b8b4b3fed09df6e0593faa84c7359369eb8240940a21ee566b1",
+  "aggregate_sha256": "3ec7063d43a76f05552cfc7ee866cd34e565f1da8e68bc98762dd458b5772d9f",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -298,6 +298,10 @@
     {
       "path": "source-contract.json",
       "sha256": "260a49997db09019e6969804b3e865ca6d1ba8560e8b2c6462d5b88b8baa24e0"
+    },
+    {
+      "path": "tests/guardrails/stage10-edge-fetch.test.ts",
+      "sha256": "130bdd2e6050eda61d6c825c1939637aa0b0f9058858e888daf662477983f591"
     },
     {
       "path": "tests/operator-d1.test.mjs",
