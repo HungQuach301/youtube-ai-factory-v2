@@ -1,0 +1,139 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+test("renders the canonical-source control plane", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/", { headers: { accept: "text/html", "oai-authenticated-user-email": "owner@example.com" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, FACTORY_OWNER_EMAIL: "owner@example.com" },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+  assert.match(html, /YouTube AI Factory V2/i);
+  assert.match(html, /Split authority policy active/i);
+  assert.match(html, /Production remains locked/i);
+  assert.match(html, /29 activation-ready · 33 implemented \/ 33/i);
+  assert.match(html, /Lease &amp; Fencing/i);
+  assert.match(html, /Definition of Ready Resolver/i);
+  assert.match(html, /Standard &amp; Policy Registry/i);
+  assert.match(html, /Evidence Store/i);
+  assert.match(html, /Provider Adapter Framework/i);
+  assert.match(html, /Cost Reservation &amp; Ledger/i);
+  assert.match(html, /Two-phase reservation/i);
+  assert.match(html, /Capability Registry &amp; Dispatch Guard/i);
+  assert.match(html, /nine-step fail-closed guard/i);
+  assert.match(html, /Stage Runner Framework/i);
+  assert.match(html, /deterministic preflight/i);
+  assert.match(html, /Tournament Engine/i);
+  assert.match(html, /deterministic seeded selection/i);
+  assert.match(html, /Media Worker Runtime/i);
+  assert.match(html, /Pinned CPU-only image/i);
+  assert.match(html, /Cost Benchmark/i);
+  assert.match(html, /selected PROFILE=REDUCED/i);
+  assert.match(html, /Media runtime[\s\S]*PASS/i);
+  assert.match(html, /Fly\.io Production is QUALIFIED\/READY/i);
+  assert.doesNotMatch(html, /Fly\.io production deployment credentials remain unavailable/i);
+  assert.match(html, /Deterministic Measurement/i);
+  assert.match(html, /All 15 MSR-01 measurements/i);
+  assert.match(html, /Gold Set &amp; Calibration/i);
+  assert.match(html, /15 real rejected masters/i);
+  assert.match(html, /Aligner Calibration/i);
+  assert.match(html, /10–15 real human-reader samples/i);
+  assert.match(html, /Truth Layer/i);
+  assert.match(html, /Intelligence &amp; Anti-copy/i);
+  assert.match(html, /Creative Layer/i);
+  assert.match(html, /Design Layer/i);
+  assert.match(html, /ShotCueProgram Compiler/i);
+  assert.match(html, /no fixed shot-count gate/i);
+  assert.match(html, /Media Layer/i);
+  assert.match(html, /pre-byte rights eligibility/i);
+  assert.match(html, /Assurance Panel/i);
+  assert.match(html, /HARD_GATE waits for 36 human anchors/i);
+  assert.match(html, /Publishing/i);
+  assert.match(html, /keeps auto-publish OFF/i);
+  assert.match(html, /Human Evidence/i);
+  assert.match(html, /explicit real-human allowlist identity/i);
+  assert.match(html, /Policy Defense · Minimum/i);
+  assert.match(html, /Failure Mining/i);
+  assert.match(html, /OPERATE Mode Harness/i);
+  assert.match(html, /Phase 5 complete · G-01 decision sealed/i);
+  assert.match(html, /TRACK G · G-01/i);
+  assert.match(html, /HP-01 decision &amp; channel strategy/i);
+  assert.match(html, /HP-01 SEALED · PREPARATION READY/i);
+  assert.match(html, /AI-Era Money Defense/i);
+  assert.match(html, /OWNER APPROVED · 2026-08-25/i);
+  assert.match(html, /Evidence-led, faceless explainers/i);
+  assert.match(html, /See the trap before it touches your money/i);
+  assert.match(html, /United States · English \(en-US\)/i);
+  assert.match(html, /Adults 30–55 managing household money/i);
+  assert.match(html, /APPROVED SOURCE · COMMAND PENDING/i);
+  assert.match(html, /How Modern Money Traps Work/i);
+  assert.match(html, /10 episodes queued/i);
+  assert.match(html, /The Bank Fraud Alert That Sends Your Money to the Scammer/i);
+  assert.match(html, /The 10-Minute Verification Routine Before Moving Money/i);
+  assert.match(html, /AI-Era Money Defense[\s\S]*90/i);
+  assert.match(html, /Digital Credit &amp; BNPL Decoder[\s\S]*85/i);
+  assert.match(html, /Cash-Flow Resilience Lab[\s\S]*84/i);
+  assert.match(html, /20%[\s\S]*\$56B/i);
+  assert.match(html, /\$16B[\s\S]*\$3\.5B/i);
+  assert.match(html, /68%[\s\S]*AI/i);
+  assert.match(html, /Hidden Systems Behind Money[\s\S]*not imported/i);
+  assert.match(html, /Production D1 or its operational schema is unavailable/i);
+  assert.match(html, /PREPARED requires an authenticated owner command plus Production D1 read-back/i);
+  assert.match(html, /Open Production Operator/i);
+  assert.match(html, /Observability &amp; Operator UI/i);
+  assert.match(html, /Trace reconstruction now proves the complete provider, cost and output chain/i);
+  assert.match(html, /G11–G15 Enforcement/i);
+  assert.match(html, /Sealed threshold diffs, OPERATE protected paths, shadow-gated meta-change, append-only gold retirement and PC1–PC8 publishing checks/i);
+  assert.match(html, /Evolution Pipeline/i);
+  assert.match(html, /Structural strictness audit, qualification shadow replay, five-part evidence bundles, exact owner-command promotion binding and one-key rollback/i);
+  assert.match(html, /FAIL · measured failure/i);
+  assert.match(html, /NOT_EVALUATED · not measured/i);
+  assert.match(html, /QUALIFICATION FIXTURE — NOT A RELEASE CANDIDATE/i);
+  assert.match(html, /Unified human-touchpoint queue/i);
+  assert.match(html, /D1–D5 side-by-side desk \+ diff/i);
+  assert.match(html, /Structured rejection labeling/i);
+  assert.match(html, /Generate Evidence Report action/i);
+  assert.match(html, /Attention budget clock/i);
+  assert.match(html, /trace_id[\s\S]*provider request\/response, settled cost and sealed output/i);
+  assert.match(html, /WP-00 through WP-31 are implemented/i);
+  assert.match(html, /G-01A1 accepts only the authenticated PREPARE_CHANNEL command and persists its receipt in D1/i);
+  assert.match(html, /WP-22 remains warning-only pending anchors, gold evidence and critic qualification/i);
+  assert.match(html, /WP-24 activation awaits 14–28 day production Analytics and an owner-issued promotion command/i);
+  assert.match(html, /WP-27 activation requires a real qualification shadow run, stored evidence bundle and exact owner-signed PROMOTE_EVOLUTION command/i);
+  assert.match(html, /YouTube transport and production provider dispatch remain locked/i);
+  assert.match(html, /Provider dispatch[\s\S]*OFF/i);
+  assert.match(html, /Production spend[\s\S]*\$0/i);
+  assert.match(html, /Automatic publishing[\s\S]*BLOCKED/i);
+  assert.doesNotMatch(html, /codex-preview/i);
+});
+
+test("renders the authenticated Production operator surface", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("operator-test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/operate", {
+      headers: {
+        accept: "text/html",
+        "oai-authenticated-user-email": "owner@example.com",
+        "oai-authenticated-user-full-name": "Factory%20Owner",
+        "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
+      },
+    }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, FACTORY_OWNER_EMAIL: "owner@example.com" },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(html, /PRODUCTION WORKING SURFACE/i);
+  assert.match(html, /OPERATE · TRACK G/i);
+  assert.match(html, /Review the work/i);
+  assert.match(html, /Track G workbench/i);
+  assert.match(html, /Run PREPARE_CHANNEL/i);
+  assert.match(html, /D1 WRITE/i);
+});
