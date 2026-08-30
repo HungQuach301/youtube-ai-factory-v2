@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "604072f2b6f943b9a4d4980853946b38d4718562dd8b536e2423f047e621f1a6",
+  "aggregate_sha256": "9ac6de21ef445b8b4b3fed09df6e0593faa84c7359369eb8240940a21ee566b1",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/stage10-media.ts",
-      "sha256": "611f146ba9551a6589826b1371044c829e2a5438a967e0c6d7d6393ad3032c88"
+      "sha256": "1f4eab97402d1365f9ec694a31644ce6006d55b45ba717961bc73dd74542d75e"
     },
     {
       "path": "app/track-g-video-one.ts",

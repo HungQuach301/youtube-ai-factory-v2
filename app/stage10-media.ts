@@ -89,8 +89,11 @@ export async function dispatchStage10Media(
       "x-factory-signature": signature,
     },
     body,
-    redirect: "error",
+    redirect: "manual",
   });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error("TRACK_G_STAGE_10_MEDIA_WORKER_REDIRECT_REJECTED");
+  }
   const result = await response.json() as Stage10MediaResult & { code?: string };
   if (!response.ok || result.accepted !== true) {
     throw new Error(`TRACK_G_STAGE_10_MEDIA_WORKER_FAILED:${result.code ?? response.status}`);
