@@ -199,9 +199,11 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "prepare_track_g_video_1_stage_04_tournament",
       "prepare_track_g_video_1_stage_06_script_review",
       "prepare_track_g_video_1_stage_07a_voice_tournament",
+      "prepare_track_g_video_1_stage_09_visual_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
       "select_track_g_video_1_stage_07a_tone",
+      "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
     ]);
 
@@ -447,9 +449,11 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "prepare_track_g_video_1_stage_04_tournament",
       "prepare_track_g_video_1_stage_06_script_review",
       "prepare_track_g_video_1_stage_07a_voice_tournament",
+      "prepare_track_g_video_1_stage_09_visual_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
       "select_track_g_video_1_stage_07a_tone",
+      "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -1343,17 +1347,96 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stage08EvidenceJson.shotCueProgram.shots.length, compiledShotCount);
     assert.ok(stage08EvidenceJson.shotCueProgram.shots.every((shot) => shot.assertions.length === 3));
 
-    const unsupportedStage09 = await client.callTool({
+    const stage09BeforeResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage09Before = await stage09BeforeResponse.json();
+    assert.equal(stage09Before.trackGWorkbench.stage09.reviewState, "NOT_PREPARED");
+    assert.deepEqual(stage09Before.trackGWorkbench.allowedActions,
+      ["PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW"]);
+
+    const stage09PrepareResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW", confirm: true }),
+    });
+    const stage09Prepare = await stage09PrepareResponse.json();
+    assert.equal(stage09PrepareResponse.status, 201, JSON.stringify(stage09Prepare));
+    assert.equal(stage09Prepare.currentStep, "STAGE_09_READY");
+    assert.equal(stage09Prepare.stageState, "RUNNING");
+    assert.equal(stage09Prepare.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage09Prepare.assetCount, compiledShotCount);
+    assert.equal(stage09Prepare.candidateCount, 2);
+    assert.deepEqual(stage09Prepare.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M0_RIGHTS_LINEAGE", "PASS"],
+      ["M1_SEMANTIC_FIT", "PASS"],
+      ["M1_DUPLICATE_RATE", "PASS"],
+    ]);
+
+    const stage09WorkbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage09Workbench = await stage09WorkbenchResponse.json();
+    const stage09Model = stage09Workbench.trackGWorkbench.stage09;
+    assert.equal(stage09Model.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage09Model.assetCount, compiledShotCount);
+    assert.equal(stage09Model.sourceCandidatesPerShot, 6);
+    assert.equal(stage09Model.compositionsPerShot, 1);
+    assert.equal(stage09Model.duplicateRate, 0);
+    assert.ok(stage09Model.assets.every((asset) => asset.rightsLineage.state === "PASS"));
+    assert.ok(stage09Model.assets.every((asset) => asset.semanticFit.state === "PASS"));
+    assert.equal(new Set(stage09Model.assets.map((asset) => asset.visualFingerprint)).size,
+      compiledShotCount);
+    const selectedThumbnail = stage09Model.candidates.find((candidate) => candidate.machineRecommended);
+    const thumbnailRationale = "This direct warning exposes the trust trap immediately while preserving a clear protective action.";
+    const revisedThumbnailText = "THE WARNING IS THE TRAP";
+    const stage09SelectResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL",
+        confirm: true, candidateId: selectedThumbnail.candidateId,
+        revisedThumbnailText, rationale: thumbnailRationale }),
+    });
+    const stage09Select = await stage09SelectResponse.json();
+    assert.equal(stage09SelectResponse.status, 201, JSON.stringify(stage09Select));
+    assert.equal(stage09Select.currentStep, "STAGE_10_READY");
+    assert.equal(stage09Select.stageState, "FROZEN");
+    assert.equal(stage09Select.decisionType, "D3");
+    assert.equal(stage09Select.revisedThumbnailText, revisedThumbnailText);
+
+    const stage09Replay = await client.callTool({
+      name: "select_track_g_video_1_stage_09_thumbnail",
+      arguments: { candidateId: selectedThumbnail.candidateId, revisedThumbnailText,
+        rationale: thumbnailRationale, confirm: true,
+        ownerApprovalText: "SELECT STAGE 09 THUMBNAIL" },
+    });
+    assert.equal(stage09Replay.isError, undefined, JSON.stringify(stage09Replay));
+    assert.equal(stage09Replay.structuredContent.replayed, true);
+    assert.equal(stage09Replay.structuredContent.currentStep, "STAGE_10_READY");
+    assert.equal(stage09Replay.structuredContent.artifactType,
+      "VISUAL_ACQUISITION_COMPOSITION_SEAL");
+    const stage09Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '09'").first();
+    const stage09Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage09Instance.id).first();
+    assert.equal(stage09Instance.control_state, "FROZEN");
+    assert.equal(stage09Artifact.artifact_type, "VISUAL_ACQUISITION_COMPOSITION_SEAL");
+    const stage09Evidence = await bucket.get(stage09Artifact.r2_key);
+    assert.ok(stage09Evidence);
+    const stage09EvidenceJson = JSON.parse(Buffer.from(await stage09Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage09EvidenceJson.visualAcquisition.assets.length, compiledShotCount);
+    assert.equal(stage09EvidenceJson.selectedThumbnail.thumbnailText, revisedThumbnailText);
+    assert.equal(stage09EvidenceJson.controls.humanGate,
+      "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION");
+
+    const unsupportedStage10 = await client.callTool({
       name: "advance_track_g_video_1_stage",
-      arguments: { stageCode: "09", objective: "Verify Stage 09 remains fail-closed until its executor exists.",
+      arguments: { stageCode: "10", objective: "Verify Stage 10 remains fail-closed until its executor exists.",
         confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
     });
-    assert.equal(unsupportedStage09.isError, true);
-    assert.match(unsupportedStage09.content[0].text, /TRACK_G_STAGE_09_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(unsupportedStage10.isError, true);
+    assert.match(unsupportedStage10.content[0].text, /TRACK_G_STAGE_10_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_09_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_10_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [
