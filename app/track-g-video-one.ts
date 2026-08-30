@@ -92,6 +92,11 @@ const STAGE_07A_ARTIFACT_TYPE = "VOICE_DESIGN_TTS_SEGMENTATION_SEAL";
 const STAGE_07A_TOURNAMENT_ID = "tournament_track_g_video_1_stage_07a_voice_v1";
 const STAGE_07A_PREPARE_OWNER_APPROVAL_TEXT = "PREPARE STAGE 07A VOICE TOURNAMENT";
 const STAGE_07A_SELECT_OWNER_APPROVAL_TEXT = "SELECT STAGE 07A TONE";
+const STAGE_07B_CODE = "07B";
+const STAGE_07B_STANDARD_VERSION = 1;
+const STAGE_07B_INSTANCE_ID = "stage_track_g_video_1_07b_attempt_1";
+const STAGE_07B_ARTIFACT_ID = "artifact_track_g_video_1_stage_07b_visual_grammar_v1";
+const STAGE_07B_ARTIFACT_TYPE = "VISUAL_GRAMMAR_ROUTING";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -2333,7 +2338,7 @@ async function readBackStage07A(operationRunId: string) {
     || artifact.standardVersion !== STAGE_07A_STANDARD_VERSION
     || decision.decisionType !== "D5" || decision.artifactBeforeId !== STAGE_07A_TOURNAMENT_ID
     || decision.rationaleText.trim().length < 20
-    || prepared.base.run.currentStep !== "STAGE_07B_READY"
+    || !isAtOrAfterReadyStep(prepared.base.run.currentStep, "STAGE_07B_READY")
     || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
     throw new Error("TRACK_G_STAGE_07A_READ_BACK_FAILED");
   }
@@ -2516,6 +2521,236 @@ export async function selectTrackGVideoOneStage07ATone(
     throw error;
   }
   return { ...(await readBackStage07A(bootstrap.run.id)), replayed: false };
+}
+
+export function trackGVideoOneStage07BVisualGrammarModel(
+  selectedCandidateId = "creative_route_video_1_alert_is_the_trap_v1",
+) {
+  const script = stage06ScriptModel(selectedCandidateId);
+  const motionClasses = [
+    "REAL_WORLD_FOOTAGE",
+    "EXPLANATORY_DIAGRAM",
+    "DATA_MOTION_GRAPHIC",
+  ] as const;
+  const routePlan = [
+    {
+      motionClass: "REAL_WORLD_FOOTAGE",
+      visualRoute: "AUTHENTIC_ALERT_CONTEXT",
+      treatment: "Phone-level real-world alert context with the unverified contact path identified before any response.",
+    },
+    {
+      motionClass: "EXPLANATORY_DIAGRAM",
+      visualRoute: "AUTHORITY_STACK",
+      treatment: "Layered authority-stack diagram showing caller identity, case number, personal detail and urgency as one dependent channel.",
+    },
+    {
+      motionClass: "EXPLANATORY_DIAGRAM",
+      visualRoute: "TRUST_REDIRECTION_LOOP",
+      treatment: "Animated trust-loop diagram showing how the same source defines the danger, evidence and proposed solution.",
+    },
+    {
+      motionClass: "DATA_MOTION_GRAPHIC",
+      visualRoute: "MONEY_MOVEMENT_STOP_POINT",
+      treatment: "Decision timeline that marks protective-sounding money movement as the procedural stop point.",
+    },
+    {
+      motionClass: "REAL_WORLD_FOOTAGE",
+      visualRoute: "INDEPENDENT_VERIFICATION",
+      treatment: "Real-world verification sequence that exits the suspicious contact and opens a separately obtained official channel.",
+    },
+    {
+      motionClass: "DATA_MOTION_GRAPHIC",
+      visualRoute: "PAUSE_SEPARATE_VERIFY",
+      treatment: "Three-step kinetic checklist that closes on pause, separate and independently verify.",
+    },
+  ] as const;
+  const assignments = script.sections.map((section, index) => ({
+    beatId: section.beatId,
+    beatTitle: section.title,
+    startSec: section.startSec,
+    endSec: section.endSec,
+    ...routePlan[index],
+    acquisitionState: "PLANNED_ZERO_PROVIDER",
+  }));
+  const distribution = motionClasses.map((motionClass) => ({
+    motionClass,
+    count: assignments.filter((assignment) => assignment.motionClass === motionClass).length,
+  }));
+  if (assignments.length !== script.sections.length
+    || assignments.some((assignment, index) => assignment.beatId !== script.sections[index].beatId)
+    || assignments.some((assignment) => !motionClasses.includes(assignment.motionClass))) {
+    throw new Error("TRACK_G_STAGE_07B_M1_MOTION_CLASS_TOTAL_FAILED");
+  }
+  if (distribution.some((entry) => entry.count < 1)
+    || distribution.reduce((sum, entry) => sum + entry.count, 0) !== assignments.length
+    || new Set(assignments.map((assignment) => assignment.visualRoute)).size !== assignments.length) {
+    throw new Error("TRACK_G_STAGE_07B_M1_ROUTE_DISTRIBUTION_FAILED");
+  }
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M1_MOTION_CLASS_TOTAL",
+      state: "PASS",
+      evidence: `${assignments.length}/${assignments.length} sealed beats map to exactly one member of the closed three-class motion taxonomy.`,
+    },
+    {
+      gate: "M1_ROUTE_DISTRIBUTION",
+      state: "PASS",
+      evidence: distribution.map((entry) => `${entry.motionClass}=${entry.count}`).join(" · "),
+    },
+  ];
+  return { motionClasses, assignments, distribution, gateResults };
+}
+
+function stage07BEnvelope(operationRunId: string, predecessorSha256: string,
+  selectedCandidateId: string) {
+  const model = trackGVideoOneStage07BVisualGrammarModel(selectedCandidateId);
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-07b-visual-grammar-routing-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_07B_CODE,
+    artifactType: STAGE_07B_ARTIFACT_TYPE,
+    visualGrammar: {
+      motionTaxonomy: model.motionClasses,
+      beatRouting: model.assignments,
+      routeDistribution: model.distribution,
+    },
+    provenance: [{
+      sourceType: "SEALED_STAGE_ARTIFACT",
+      sourceId: STAGE_07A_ARTIFACT_ID,
+      canonicalHash: predecessorSha256,
+      authority: "OWNER_SELECTED_VOICE_AND_SEALED_TTS_SEGMENTATION",
+    }],
+    gateResults: model.gateResults,
+    controls: {
+      routingMode: "DETERMINISTIC_PLANNING_ONLY",
+      providerDispatch: "OFF",
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+    },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage07B(operationRunId: string) {
+  const stage07A = await readBackStage07A(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_07B_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_07B_ARTIFACT_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) => value.scope === "STAGE"
+    && value.scopeRef === STAGE_07B_INSTANCE_ID)?.ceilingUsd;
+  const model = trackGVideoOneStage07BVisualGrammarModel(stage07A.selection.candidateId);
+  if (!stage || !artifact
+    || stage.packageId !== STAGE_00_PACKAGE_ID || stage.stageCode !== STAGE_07B_CODE
+    || stage.controlState !== "FROZEN" || stage.standardVersion !== STAGE_07B_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id || artifact.artifactType !== STAGE_07B_ARTIFACT_TYPE
+    || artifact.namespace !== "production" || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_07B_STANDARD_VERSION || stageCeiling !== 0
+    || !isAtOrAfterReadyStep(stage07A.base.run.currentStep, "STAGE_08_READY")
+    || !await verifyImmutableEvidence(stage07A.stage07AArtifact.r2Key,
+      stage07A.stage07AArtifact.canonicalHash)
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_07B_READ_BACK_FAILED");
+  }
+  return { ...stage07A, stage07B: stage, stage07BArtifact: artifact,
+    stageArtifact: artifact, gateResults: model.gateResults, visualGrammarModel: model };
+}
+
+async function advanceTrackGVideoOneStage07B(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+  objective: string,
+) {
+  const bootstrap = await readBackForStage00();
+  const stage07A = await readBackStage07A(bootstrap.run.id);
+  const expectedKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    STAGE_07B_CODE,
+    stage07A.stage07AArtifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage07B(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_07B_READY") throw new Error("TRACK_G_STAGE_07B_NOT_READY");
+  if (!await verifyImmutableEvidence(stage07A.stage07AArtifact.r2Key,
+    stage07A.stage07AArtifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_07B_PREDECESSOR_PROVENANCE_FAILED");
+  }
+  const envelope = stage07BEnvelope(bootstrap.run.id,
+    stage07A.stage07AArtifact.canonicalHash, stage07A.selection.candidateId);
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_07B_CODE, "visual-grammar-routing", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const model = envelope.visualGrammar;
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_07B_READY',
+          'TRACK_G_VIDEO_1_STAGE_08_READY', ?, ?)`).bind(
+        commandId, canonicalize({ objective, operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_07B_CODE,
+          executorVersion: envelope.executorVersion, artifactSha256 }),
+        input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '07B', 'FROZEN', ?, 1, ?, ?)`).bind(
+        STAGE_07B_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_07B_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_07B_ARTIFACT_ID, STAGE_07B_INSTANCE_ID, STAGE_07B_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_07B_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_07B_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_08_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_07B_READY'`).bind(
+        now, bootstrap.run.id),
+      ...[
+        ["STAGE_07B_DOR_PASSED", { predecessor: STAGE_07A_ARTIFACT_ID,
+          predecessorSha256: stage07A.stage07AArtifact.canonicalHash }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_07B_CODE,
+          traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_07B_M1_MOTION_CLASS_TOTAL_PASSED", { assignmentCount: model.beatRouting.length,
+          taxonomy: model.motionTaxonomy }],
+        ["STAGE_07B_M1_ROUTE_DISTRIBUTION_PASSED", { distribution: model.routeDistribution }],
+        ["STAGE_07B_ARTIFACT_SEALED", { artifactId: STAGE_07B_ARTIFACT_ID,
+          artifactR2Key, artifactSha256 }],
+        ["STAGE_07B_FROZEN", { nextStep: "STAGE_08_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage07B(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage07B(bootstrap.run.id)), replayed: false };
 }
 
 export async function prepareTrackGVideoOneStage04Tournament(
@@ -3029,6 +3264,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_07A_CODE) {
     throw new Error("TRACK_G_STAGE_07A_HUMAN_GATE_COMMAND_REQUIRED");
+  }
+  if (input.stageCode === STAGE_07B_CODE) {
+    return advanceTrackGVideoOneStage07B(user, input, objective);
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -3745,6 +3983,11 @@ export async function trackGVideoOneStageIdempotencyKey(
   }
   if (stageCode === STAGE_07A_CODE) {
     throw new Error("TRACK_G_STAGE_07A_HUMAN_GATE_COMMAND_REQUIRED");
+  }
+  if (stageCode === STAGE_07B_CODE) {
+    const stage07A = await readBackStage07A(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
+      stage07A.stage07AArtifact.canonicalHash);
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

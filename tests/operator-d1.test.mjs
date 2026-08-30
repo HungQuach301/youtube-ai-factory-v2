@@ -1256,17 +1256,56 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.ok(await bucket.get(stage07AArtifact.r2_key));
     assert.ok(await bucket.get(stage07ADecision.diff_r2_key));
 
-    const unsupportedStage07B = await client.callTool({
+    const stage07BWorkbench = await (await mf.dispatchFetch("http://localhost/api/operator",
+      { headers: ownerHeaders })).json();
+    assert.deepEqual(stage07BWorkbench.trackGWorkbench.allowedActions,
+      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_07B"]);
+    assert.equal(stage07BWorkbench.trackGWorkbench.stage07B.controlState, "READY");
+    assert.equal(stage07BWorkbench.trackGWorkbench.stage07B.assignments.length, 6);
+    assert.deepEqual(stage07BWorkbench.trackGWorkbench.stage07B.distribution.map((entry) => entry.count),
+      [2, 2, 2]);
+
+    const stage07BResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_07B", confirm: true }),
+    });
+    const stage07BApi = await stage07BResponse.json();
+    assert.equal(stage07BResponse.status, 201, JSON.stringify(stage07BApi));
+    assert.equal(stage07BApi.currentStep, "STAGE_08_READY");
+    assert.equal(stage07BApi.stageState, "FROZEN");
+    assert.equal(stage07BApi.gateResults.length, 2);
+
+    const stage07BReplay = await client.callTool({
       name: "advance_track_g_video_1_stage",
-      arguments: { stageCode: "07B", objective: "Verify Stage 07B remains fail-closed until its executor exists.",
+      arguments: { stageCode: "07B", objective: "Compile the sealed visual grammar and deterministic routing for all six beats.",
         confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
     });
-    assert.equal(unsupportedStage07B.isError, true);
-    assert.match(unsupportedStage07B.content[0].text, /TRACK_G_STAGE_07B_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(stage07BReplay.isError, undefined, JSON.stringify(stage07BReplay));
+    assert.equal(stage07BReplay.structuredContent.replayed, true);
+    assert.equal(stage07BReplay.structuredContent.currentStep, "STAGE_08_READY");
+    assert.equal(stage07BReplay.structuredContent.artifactType, "VISUAL_GRAMMAR_ROUTING");
+    assert.deepEqual(stage07BReplay.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_MOTION_CLASS_TOTAL", "PASS"],
+      ["M1_ROUTE_DISTRIBUTION", "PASS"],
+    ]);
+    const stage07BInstance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '07B'").first();
+    const stage07BArtifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage07BInstance.id).first();
+    assert.equal(stage07BInstance.control_state, "FROZEN");
+    assert.equal(stage07BArtifact.artifact_type, "VISUAL_GRAMMAR_ROUTING");
+    assert.ok(await bucket.get(stage07BArtifact.r2_key));
+
+    const unsupportedStage08 = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: { stageCode: "08", objective: "Verify Stage 08 remains fail-closed until its executor exists.",
+        confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
+    });
+    assert.equal(unsupportedStage08.isError, true);
+    assert.match(unsupportedStage08.content[0].text, /TRACK_G_STAGE_08_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_07B_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_08_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [
