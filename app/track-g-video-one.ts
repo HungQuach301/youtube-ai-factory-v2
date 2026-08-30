@@ -27,7 +27,7 @@ import {
   truthTerminology,
 } from "../db/schema";
 import type { ChatGPTUser } from "./chatgpt-auth";
-import { approvedChannel, trackGVideoOneContract } from "./factory-contract";
+import { approvedChannel, qualifiedVoice, trackGVideoOneContract } from "./factory-contract";
 import {
   putImmutableEvidence,
   putImmutableProductionEvidence,
@@ -84,6 +84,14 @@ const STAGE_06_ARTIFACT_ID = "artifact_track_g_video_1_stage_06_script_v1";
 const STAGE_06_ARTIFACT_TYPE = "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL";
 const STAGE_06_PREPARE_OWNER_APPROVAL_TEXT = "PREPARE STAGE 06 SCRIPT REVIEW";
 const STAGE_06_APPLY_OWNER_APPROVAL_TEXT = "APPLY STAGE 06 EDITORIAL DECISION";
+const STAGE_07A_CODE = "07A";
+const STAGE_07A_STANDARD_VERSION = 1;
+const STAGE_07A_INSTANCE_ID = "stage_track_g_video_1_07a_attempt_1";
+const STAGE_07A_ARTIFACT_ID = "artifact_track_g_video_1_stage_07a_voice_design_v1";
+const STAGE_07A_ARTIFACT_TYPE = "VOICE_DESIGN_TTS_SEGMENTATION_SEAL";
+const STAGE_07A_TOURNAMENT_ID = "tournament_track_g_video_1_stage_07a_voice_v1";
+const STAGE_07A_PREPARE_OWNER_APPROVAL_TEXT = "PREPARE STAGE 07A VOICE TOURNAMENT";
+const STAGE_07A_SELECT_OWNER_APPROVAL_TEXT = "SELECT STAGE 07A TONE";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -142,6 +150,19 @@ export type ApplyTrackGVideoOneStage06EditorialInput = {
   revisedBeatNarration?: string;
   rationale: string;
   ownerApprovalText: typeof STAGE_06_APPLY_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type PrepareTrackGVideoOneStage07AVoiceInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_07A_PREPARE_OWNER_APPROVAL_TEXT;
+  idempotencyKey: string;
+};
+
+export type SelectTrackGVideoOneStage07AToneInput = {
+  candidateId: string;
+  rationale: string;
+  ownerApprovalText: typeof STAGE_07A_SELECT_OWNER_APPROVAL_TEXT;
   idempotencyKey: string;
 };
 
@@ -1875,7 +1896,7 @@ async function readBackStage06(operationRunId: string) {
     || !["D2", "D4"].includes(decision.decisionType)
     || decision.artifactBeforeId !== STAGE_06_DRAFT_ID
     || decision.rationaleText.trim().length < 20
-    || prepared.base.run.currentStep !== "STAGE_07A_READY"
+    || !isAtOrAfterReadyStep(prepared.base.run.currentStep, "STAGE_07A_READY")
     || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
     throw new Error("TRACK_G_STAGE_06_READ_BACK_FAILED");
   }
@@ -2172,6 +2193,329 @@ export async function applyTrackGVideoOneStage06EditorialDecision(
     throw error;
   }
   return { ...(await readBackStage06(bootstrap.run.id)), replayed: false };
+}
+
+export function trackGVideoOneStage07AVoiceModel() {
+  const script = stage06ScriptModel("creative_route_video_1_alert_is_the_trap_v1");
+  const segments = script.sections.map((section, index) => ({
+    segmentId: `tts_segment_${String(index + 1).padStart(2, "0")}`,
+    beatId: section.beatId,
+    title: section.title,
+    startSec: section.startSec,
+    endSec: section.endSec,
+    boundary: "SEALED_BEAT_BOUNDARY",
+  }));
+  const candidates = [
+    {
+      id: "voice_route_video_1_controlled_urgency_v1",
+      routeOrder: 1,
+      routeName: "Controlled Urgency",
+      summary: "Direct and high-clarity delivery that names the danger early, keeps momentum, and never becomes alarmist.",
+      deliveryDirection: "Firm opening, compact pauses, decisive stress on the trust break and the money-movement stop point.",
+      pauseProfile: { sentenceMs: 180, beatMs: 520, verificationBreakMs: 760 },
+      emphasis: ["the warning can be the trap", "move money", "independent verification"],
+      machineScore: 95,
+    },
+    {
+      id: "voice_route_video_1_forensic_calm_v1",
+      routeOrder: 2,
+      routeName: "Forensic Calm",
+      summary: "Measured investigative delivery that builds credibility through restraint and makes each mechanism easy to follow.",
+      deliveryDirection: "Calm opening, longer explanatory pauses, restrained stress on evidence and channel independence.",
+      pauseProfile: { sentenceMs: 260, beatMs: 640, verificationBreakMs: 900 },
+      emphasis: ["same contact path", "trust redirection", "official channel"],
+      machineScore: 93,
+    },
+  ] as const;
+  const settings = {
+    provider: qualifiedVoice.settings.provider,
+    voiceId: qualifiedVoice.voiceId,
+    modelId: qualifiedVoice.model,
+    voiceSettings: qualifiedVoice.settings.voiceSettings,
+    outputFormat: qualifiedVoice.settings.outputFormat,
+  };
+  const settingsHash = qualifiedVoice.settingsHash;
+  const canonicalVoiceSettingsHash = canonicalHash(settings.voiceSettings);
+  if (segments.length !== script.sections.length
+    || segments.some((segment, index) => segment.beatId !== script.sections[index].beatId
+      || segment.startSec !== script.sections[index].startSec
+      || segment.endSec !== script.sections[index].endSec)
+    || segments.some((segment, index) => index > 0 && segment.startSec !== segments[index - 1].endSec)) {
+    throw new Error("TRACK_G_STAGE_07A_M1_SEGMENTATION_BOUNDARY_FAILED");
+  }
+  const gateResults: StageGateResult[] = [
+    {
+      gate: "M1_SEGMENTATION_BOUNDARY",
+      state: "PASS",
+      evidence: `${segments.length}/${segments.length} TTS segments align exactly to sealed Stage 06 beat boundaries with zero gap or overlap.`,
+    },
+    {
+      gate: "M1_VOICE_SETTINGS_HASH",
+      state: "PASS",
+      evidence: `Both tone routes retain the QUALIFIED voice, model, output format and immutable settings hash ${settingsHash}.`,
+    },
+  ];
+  return {
+    tournamentId: STAGE_07A_TOURNAMENT_ID,
+    candidates,
+    segments,
+    settings,
+    settingsHash,
+    canonicalVoiceSettingsHash,
+    recommendedCandidateId: candidates[0].id,
+    gateResults,
+  };
+}
+
+function stage07ATournamentEnvelope(operationRunId: string, predecessorSha256: string) {
+  const model = trackGVideoOneStage07AVoiceModel();
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-07a-voice-design-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_07A_CODE,
+    ...model,
+    provenance: [{ sourceType: "SEALED_STAGE_ARTIFACT", sourceId: STAGE_06_ARTIFACT_ID,
+      canonicalHash: predecessorSha256, authority: "PRODUCTION_STAGE_06_FINAL_SCRIPT" }],
+    controls: { preserveRejectedCandidates: true,
+      humanGate: "REQUIRED:HP-02_D5_TONE_SELECTION", providerDispatch: "OFF",
+      releaseEligible: false, autoPublish: "OFF" },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage07ATournament(operationRunId: string) {
+  const stage06 = await readBackStage06(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_07A_INSTANCE_ID)).limit(1);
+  const [prepareCommand] = await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT"))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) => value.scope === "STAGE"
+    && value.scopeRef === STAGE_07A_INSTANCE_ID)?.ceilingUsd;
+  const payload = prepareCommand ? JSON.parse(prepareCommand.payloadJson) as {
+    tournamentR2Key?: string; tournamentSha256?: string;
+  } : {};
+  const model = trackGVideoOneStage07AVoiceModel();
+  const lifecycleValid = (stage?.controlState === "RUNNING"
+      && stage06.base.run.currentStep === "STAGE_07A_READY")
+    || (stage?.controlState === "FROZEN"
+      && isAtOrAfterReadyStep(stage06.base.run.currentStep, "STAGE_07B_READY"));
+  if (!stage || !prepareCommand || !payload.tournamentR2Key || !payload.tournamentSha256
+    || stage.packageId !== STAGE_00_PACKAGE_ID || stage.stageCode !== STAGE_07A_CODE
+    || !lifecycleValid || stage.standardVersion !== STAGE_07A_STANDARD_VERSION
+    || stageCeiling !== 0
+    || !await verifyImmutableEvidence(stage06.stageArtifact.r2Key, stage06.stageArtifact.canonicalHash)
+    || !await verifyImmutableEvidence(payload.tournamentR2Key, payload.tournamentSha256)) {
+    throw new Error("TRACK_G_STAGE_07A_TOURNAMENT_READ_BACK_FAILED");
+  }
+  return { ...stage06, stage07A: stage, tournamentModel: model,
+    tournamentR2Key: payload.tournamentR2Key, tournamentSha256: payload.tournamentSha256 };
+}
+
+async function readBackStage07A(operationRunId: string) {
+  const prepared = await readBackStage07ATournament(operationRunId);
+  const db = getDb();
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_07A_ARTIFACT_ID)).limit(1);
+  const decisions = await db.select().from(humanDecisions)
+    .where(eq(humanDecisions.packageId, STAGE_00_PACKAGE_ID));
+  const decision = decisions.find((value) => value.artifactAfterId === STAGE_07A_ARTIFACT_ID);
+  if (!artifact || !decision || prepared.stage07A.controlState !== "FROZEN"
+    || artifact.stageInstanceId !== prepared.stage07A.id
+    || artifact.artifactType !== STAGE_07A_ARTIFACT_TYPE
+    || artifact.namespace !== "production" || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_07A_STANDARD_VERSION
+    || decision.decisionType !== "D5" || decision.artifactBeforeId !== STAGE_07A_TOURNAMENT_ID
+    || decision.rationaleText.trim().length < 20
+    || prepared.base.run.currentStep !== "STAGE_07B_READY"
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_07A_READ_BACK_FAILED");
+  }
+  const selectedCandidateId = JSON.parse((await db.select().from(commandLog)
+    .where(eq(commandLog.commandType, "SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"))
+    .orderBy(desc(commandLog.createdAt)).limit(1))[0]?.payloadJson ?? "{}")
+    .selectedCandidateId as string | undefined;
+  if (!prepared.tournamentModel.candidates.some((candidate) => candidate.id === selectedCandidateId)) {
+    throw new Error("TRACK_G_STAGE_07A_SELECTION_READ_BACK_FAILED");
+  }
+  return { ...prepared, decision, stage07AArtifact: artifact, stageArtifact: artifact,
+    selectedCandidateId };
+}
+
+export async function prepareTrackGVideoOneStage07AVoiceTournament(
+  user: ChatGPTUser,
+  input: PrepareTrackGVideoOneStage07AVoiceInput,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== STAGE_07A_PREPARE_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_07A_PREPARE_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const stage06 = await readBackStage06(bootstrap.run.id);
+  const expectedKey = stage07APrepareIdempotencyKey(bootstrap.run.id, stage06.stageArtifact.canonicalHash);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage07ATournament(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_07A_READY") throw new Error("TRACK_G_STAGE_07A_NOT_READY");
+  const voice = await voiceQualificationReadBack();
+  if (!voice.qualified || voice.bindingCount !== 8) throw new Error("TRACK_G_STAGE_07A_VOICE_NOT_QUALIFIED");
+  const envelope = stage07ATournamentEnvelope(bootstrap.run.id, stage06.stageArtifact.canonicalHash);
+  const bytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const tournamentSha256 = sha256(bytes);
+  const tournamentR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_07A_CODE, "voice-tournament", `${tournamentSha256}.json`].join("/");
+  await putImmutableProductionEvidence(tournamentR2Key, bytes, "application/json", tournamentSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_07A_READY', 'TRACK_G_VIDEO_1_STAGE_07A_AWAITING_TONE', ?, ?)`).bind(
+        crypto.randomUUID(), canonicalize({ objective, operationRunId: bootstrap.run.id,
+          stageCode: STAGE_07A_CODE, tournamentR2Key, tournamentSha256 }), input.idempotencyKey,
+        user.email.toLowerCase(), crypto.randomUUID(), now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at)
+        VALUES (?, ?, '07A', 'RUNNING', ?, 1, ?)`).bind(
+        STAGE_07A_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_07A_STANDARD_VERSION, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_07A_INSTANCE_ID),
+      ...[
+        ["STAGE_07A_DOR_PASSED", { predecessor: STAGE_06_ARTIFACT_ID,
+          predecessorSha256: stage06.stageArtifact.canonicalHash }],
+        ["STAGE_07A_VOICE_TOURNAMENT_SEALED", { tournamentR2Key, tournamentSha256,
+          candidateCount: envelope.candidates.length }],
+        ["STAGE_07A_GATES_PASSED", { gates: envelope.gateResults }],
+        ["STAGE_07A_HP02_D5_REQUIRED", { candidateIds: envelope.candidates.map((value) => value.id) }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType, canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage07ATournament(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage07ATournament(bootstrap.run.id)), replayed: false };
+}
+
+export async function selectTrackGVideoOneStage07ATone(
+  user: ChatGPTUser,
+  input: SelectTrackGVideoOneStage07AToneInput,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const rationale = input.rationale.trim();
+  if (rationale.length < 20 || rationale.length > 500) throw new Error("RATIONALE_LENGTH_OUT_OF_RANGE");
+  if (input.ownerApprovalText !== STAGE_07A_SELECT_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_07A_SELECT_OWNER_APPROVAL_REQUIRED");
+  }
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage07ATournament(bootstrap.run.id);
+  const candidate = prepared.tournamentModel.candidates.find((value) => value.id === input.candidateId);
+  if (!candidate) throw new Error("TRACK_G_STAGE_07A_CANDIDATE_NOT_ELIGIBLE");
+  const expectedKey = stage07ASelectionIdempotencyKey(bootstrap.run.id,
+    prepared.tournamentSha256, candidate.id, rationale);
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage07A(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_07A_READY" || prepared.stage07A.controlState !== "RUNNING") {
+    throw new Error("TRACK_G_STAGE_07A_TONE_GATE_NOT_READY");
+  }
+  const actorIdentity = user.email.toLowerCase();
+  const rejectedCandidates = prepared.tournamentModel.candidates.filter((value) => value.id !== candidate.id);
+  const decisionEnvelope = { schemaVersion: 1, tournamentId: STAGE_07A_TOURNAMENT_ID,
+    tournamentSha256: prepared.tournamentSha256, selectedCandidateId: candidate.id,
+    actorIdentity, rationale };
+  const decisionBytes = new TextEncoder().encode(`${canonicalize(decisionEnvelope)}\n`);
+  const decisionSha256 = sha256(decisionBytes);
+  const decisionR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_07A_CODE, "human-decision-d5", `${decisionSha256}.json`].join("/");
+  await putImmutableProductionEvidence(decisionR2Key, decisionBytes, "application/json", decisionSha256);
+  const finalEnvelope = { schemaVersion: 1, runnerContractVersion: 1,
+    executorVersion: "stage-07a-voice-design-v1", operationRunId: bootstrap.run.id,
+    packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_07A_CODE,
+    artifactType: STAGE_07A_ARTIFACT_TYPE, selectedCandidate: candidate,
+    rejectedCandidates, segments: prepared.tournamentModel.segments,
+    voiceSettings: prepared.tournamentModel.settings,
+    voiceSettingsHash: prepared.tournamentModel.settingsHash,
+    humanDecision: { decisionType: "D5", actorIdentity, rationale, decisionR2Key, decisionSha256 },
+    provenance: [{ sourceType: "SEALED_STAGE_ARTIFACT", sourceId: STAGE_06_ARTIFACT_ID,
+      canonicalHash: prepared.stageArtifact.canonicalHash, authority: "PRODUCTION_STAGE_06_FINAL_SCRIPT" }],
+    gateResults: prepared.tournamentModel.gateResults,
+    controls: { preserveRejectedCandidates: true, humanGate: "SATISFIED:HP-02_D5_TONE_SELECTION",
+      providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+    budget: { reservedUsd: 0, actualUsd: 0 } };
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(finalEnvelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_07A_CODE, "voice-design-tts-segmentation-seal", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const humanDecisionId = "human_decision_track_g_video_1_stage_07a_d5_v1";
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE', ?, ?, ?,
+          'TRACK_G_VIDEO_1_STAGE_07A_AWAITING_TONE', 'TRACK_G_VIDEO_1_STAGE_07B_READY', ?, ?)`).bind(
+        crypto.randomUUID(), canonicalize({ operationRunId: bootstrap.run.id,
+          selectedCandidateId: candidate.id, rationale, decisionSha256, artifactSha256 }),
+        input.idempotencyKey, actorIdentity, crypto.randomUUID(), now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_07A_ARTIFACT_ID, STAGE_07A_INSTANCE_ID, STAGE_07A_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_07A_STANDARD_VERSION, now),
+      d1.prepare(`INSERT INTO human_decision
+        (id, package_id, decision_type, actor_identity, artifact_before_id, artifact_after_id,
+         diff_r2_key, rationale_text, created_at) VALUES (?, ?, 'D5', ?, ?, ?, ?, ?, ?)`).bind(
+        humanDecisionId, STAGE_00_PACKAGE_ID, actorIdentity, STAGE_07A_TOURNAMENT_ID,
+        STAGE_07A_ARTIFACT_ID, decisionR2Key, rationale, now),
+      d1.prepare(`UPDATE stage_instance SET control_state = 'FROZEN', frozen_at = ?
+        WHERE id = ? AND control_state = 'RUNNING'`).bind(now, STAGE_07A_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_07B_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_07A_READY'`).bind(now, bootstrap.run.id),
+      ...[
+        ["STAGE_07A_HP02_D5_RECORDED", { decisionId: humanDecisionId,
+          selectedCandidateId: candidate.id, decisionSha256 }],
+        ["STAGE_07A_ARTIFACT_SEALED", { artifactId: STAGE_07A_ARTIFACT_ID,
+          artifactR2Key, artifactSha256, rejectedCandidateCount: rejectedCandidates.length }],
+        ["STAGE_07A_FROZEN", { nextStep: "STAGE_07B_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType, canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage07A(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage07A(bootstrap.run.id)), replayed: false };
 }
 
 export async function prepareTrackGVideoOneStage04Tournament(
@@ -2682,6 +3026,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_06_CODE) {
     throw new Error("TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED");
+  }
+  if (input.stageCode === STAGE_07A_CODE) {
+    throw new Error("TRACK_G_STAGE_07A_HUMAN_GATE_COMMAND_REQUIRED");
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -3301,6 +3648,27 @@ function stage06EditorialIdempotencyKey(operationRunId: string, draftSha256: str
   ].join("\0")).digest("hex");
 }
 
+function stage07APrepareIdempotencyKey(operationRunId: string, predecessorSha256: string): string {
+  return createHash("sha256").update([
+    "PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT",
+    operationRunId,
+    predecessorSha256,
+    "stage-07a-voice-tournament-v1",
+  ].join("\0")).digest("hex");
+}
+
+function stage07ASelectionIdempotencyKey(operationRunId: string, tournamentSha256: string,
+  candidateId: string, rationale: string): string {
+  return createHash("sha256").update([
+    "SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE",
+    operationRunId,
+    tournamentSha256,
+    candidateId,
+    rationale.trim(),
+    "stage-07a-human-gate-v1",
+  ].join("\0")).digest("hex");
+}
+
 export async function trackGVideoOneStage06PrepareIdempotencyKey(): Promise<string> {
   const bootstrap = await readBackForStage00();
   const stage05 = await readBackStage05(bootstrap.run.id);
@@ -3317,6 +3685,22 @@ export async function trackGVideoOneStage06EditorialIdempotencyKey(
     ownerApprovalText: STAGE_06_APPLY_OWNER_APPROVAL_TEXT,
     idempotencyKey: "0".repeat(64),
   });
+}
+
+export async function trackGVideoOneStage07APrepareIdempotencyKey(): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const stage06 = await readBackStage06(bootstrap.run.id);
+  return stage07APrepareIdempotencyKey(bootstrap.run.id, stage06.stageArtifact.canonicalHash);
+}
+
+export async function trackGVideoOneStage07ASelectionIdempotencyKey(
+  candidateId: string,
+  rationale: string,
+): Promise<string> {
+  const bootstrap = await readBackForStage00();
+  const prepared = await readBackStage07ATournament(bootstrap.run.id);
+  return stage07ASelectionIdempotencyKey(bootstrap.run.id, prepared.tournamentSha256,
+    candidateId, rationale);
 }
 
 export async function trackGVideoOneStage04SelectionIdempotencyKey(
@@ -3358,6 +3742,9 @@ export async function trackGVideoOneStageIdempotencyKey(
   }
   if (stageCode === STAGE_06_CODE) {
     throw new Error("TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED");
+  }
+  if (stageCode === STAGE_07A_CODE) {
+    throw new Error("TRACK_G_STAGE_07A_HUMAN_GATE_COMMAND_REQUIRED");
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

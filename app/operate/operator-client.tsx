@@ -23,6 +23,19 @@ type Stage06 = {
   evidenceR2Key: string;
   decision: null | { decisionType: string; rationale: string; createdAt: string };
 };
+type Stage07A = {
+  reviewState: string;
+  tournamentId: string;
+  settingsHash: string;
+  segmentCount: number;
+  candidates: Array<{
+    candidateId: string; routeName: string; summary: string; deliveryDirection: string;
+    pauseProfile: { sentenceMs: number; beatMs: number; verificationBreakMs: number };
+    emphasis: string[]; machineScore: number; machineRecommended: boolean; selected: boolean;
+  }>;
+  gateResults: Array<{ gate: string; state: string; evidence: string }>;
+  decision: null | { decisionType: string; rationale: string; createdAt: string };
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -34,6 +47,7 @@ type Workbench = {
   };
   stage05Prediction: null | { modelVersion: string; ctrEstimate: number; canonicalHash: string; sealedAt: string };
   stage06: Stage06 | null;
+  stage07A: Stage07A | null;
   humanDecisionCount: number;
   allowedActions: string[];
 };
@@ -47,7 +61,7 @@ type Snapshot = {
   voiceBindingCount: number;
   trackGWorkbench: Workbench | null;
 };
-type Receipt = { currentStep: string; stageState: string; artifactSha256: string; decisionType: string; replayed: boolean };
+type Receipt = { currentStep: string; stageState: string; artifactSha256?: string; decisionType?: string; replayed: boolean };
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -63,6 +77,7 @@ export default function OperatorClient() {
   const [beatId, setBeatId] = useState("");
   const [revisedBeatNarration, setRevisedBeatNarration] = useState("");
   const [rationale, setRationale] = useState("");
+  const [toneCandidateId, setToneCandidateId] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -87,6 +102,7 @@ export default function OperatorClient() {
   }, []);
   const workbench = snapshot?.trackGWorkbench ?? null;
   const stage06 = workbench?.stage06 ?? null;
+  const stage07A = workbench?.stage07A ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
   const effectiveBeatId = beatId || stage06?.sections[0]?.beatId || "";
@@ -97,6 +113,10 @@ export default function OperatorClient() {
     : Boolean(selectedBeat && effectiveBeatNarration.trim() !== selectedBeat.narration);
   const canSubmit = workbench?.allowedActions.includes("APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION")
     && hasSubstantiveDiff && rationale.trim().length >= 20;
+  const selectedToneId = toneCandidateId || stage07A?.candidates.find((candidate) => candidate.machineRecommended)?.candidateId || "";
+  const canPrepareTone = workbench?.allowedActions.includes("PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT");
+  const canSelectTone = workbench?.allowedActions.includes("SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE")
+    && selectedToneId.length > 0 && rationale.trim().length >= 20;
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -135,6 +155,34 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
+  async function prepareVoiceTournament() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT",
+          confirm: true }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Voice tournament preparation failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function selectTone() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE",
+          confirm: true, candidateId: selectedToneId, rationale }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Tone selection failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
   if (!snapshot?.channel) {
     return <div className="operator-layout">
       <section className="operator-command-card operator-full-card">
@@ -162,12 +210,12 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
 
-    <section className="operator-command-card operator-full-card">
+    {workbench?.run.currentStep === "STAGE_06_READY" ? <section className="operator-command-card operator-full-card">
       <div className="operator-card-heading"><div><p className="eyebrow">HP-02 · OWNER REVIEW</p><h2>Stage 06 editorial review</h2></div><span className="write-badge">D2 / D4</span></div>
       {stage06 ? <>
         <div className="script-metadata"><div><span>Draft title</span><strong>{stage06.title}</strong></div><div><span>Hook</span><strong>{stage06.hook}</strong></div><div><span>Script</span><strong>{stage06.wordCount} words · {stage06.estimatedDurationSec}s</strong></div><div><span>Evidence</span><code>{stage06.draftSha256.slice(0, 16)}…</code></div></div>
@@ -186,12 +234,35 @@ export default function OperatorClient() {
         </div>
       </> : <p className="operator-empty">Stage 06 draft has not been prepared.</p>}
       {error ? <p className="operator-error" role="alert">{error}</p> : null}
-      {receipt ? <p className="decision-receipt" role="status">Accepted {receipt.decisionType} · Stage 06 {receipt.stageState} · next {receipt.currentStep} · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
-    </section>
+      {receipt?.artifactSha256 ? <p className="decision-receipt" role="status">Accepted {receipt.decisionType} · Stage 06 {receipt.stageState} · next {receipt.currentStep} · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
+    </section> : null}
+
+    {workbench?.run.currentStep === "STAGE_07A_READY" || stage07A ? <section className="operator-command-card operator-full-card">
+      <div className="operator-card-heading"><div><p className="eyebrow">HP-02 · OWNER REVIEW</p><h2>Stage 07A voice tone and TTS segmentation</h2></div><span className="write-badge">D5</span></div>
+      {!stage07A ? <>
+        <p className="operator-help">Prepare two bounded tone routes using the qualified voice. This validates six beat-aligned TTS segments and the existing voice-settings hash; it does not call the provider.</p>
+        <button type="button" disabled={busy || !canPrepareTone} onClick={prepareVoiceTournament}>{busy ? "Preparing…" : "Prepare two voice routes"}</button>
+      </> : <>
+        <div className="script-metadata"><div><span>Qualified settings</span><code>{stage07A.settingsHash.slice(0, 16)}…</code></div><div><span>Segmentation</span><strong>{stage07A.segmentCount} sealed beat boundaries</strong></div></div>
+        <div className="gate-strip">{stage07A.gateResults.map((gate) => <span key={gate.gate} className={gate.state === "PASS" ? "pass" : "waiting"}>{gate.gate.replaceAll("_", " ")} · {gate.state}</span>)}</div>
+        <div className="route-grid">{stage07A.candidates.map((candidate) => <article key={candidate.candidateId} className={candidate.selected ? "selected" : ""}>
+          <label><input type="radio" name="tone" checked={selectedToneId === candidate.candidateId} onChange={() => setToneCandidateId(candidate.candidateId)} disabled={stage07A.reviewState !== "AWAITING_HUMAN"} /> {candidate.machineRecommended ? "RECOMMENDED" : "ALTERNATIVE"}</label>
+          <strong>{candidate.routeName}</strong><p>{candidate.summary}</p><p>{candidate.deliveryDirection}</p>
+          <small>Score {candidate.machineScore} · sentence pause {candidate.pauseProfile.sentenceMs}ms · beat pause {candidate.pauseProfile.beatMs}ms</small>
+        </article>)}</div>
+        {stage07A.reviewState === "AWAITING_HUMAN" ? <div className="editorial-form">
+          <label className="rationale-field">Why this tone fits the audience (minimum 20 characters)<textarea rows={3} value={rationale} onChange={(event) => setRationale(event.target.value)} /></label>
+          <button type="button" disabled={busy || !canSelectTone} onClick={selectTone}>{busy ? "Applying…" : "Select tone and freeze Stage 07A"}</button>
+          <p className="operator-boundary">The rejected route remains sealed. Provider dispatch, release and auto-publish stay OFF.</p>
+        </div> : stage07A.decision ? <p className="decision-rationale">D5 accepted: {stage07A.decision.rationale}</p> : null}
+      </>}
+      {error ? <p className="operator-error" role="alert">{error}</p> : null}
+      {receipt ? <p className="decision-receipt" role="status">Stage 07A {receipt.stageState} · next {receipt.currentStep}{receipt.artifactSha256 ? ` · evidence ${receipt.artifactSha256.slice(0, 16)}…` : " · awaiting D5"}</p> : null}
+    </section> : null}
 
     <section className="operator-timeline-card operator-full-card">
       <div className="operator-card-heading"><div><p className="eyebrow">CONTROL STATE</p><h2>Video #1 production timeline</h2></div><span className="verified-badge">STAGE 00–14</span></div>
-      <div className="stage-grid">{workbench?.stages.map((stage) => <article key={stage.stageCode} className={`stage-${stage.controlState.toLowerCase()}`}><span>{stage.stageCode}</span><strong>{stage.controlState}</strong><small>{stage.artifact?.artifactType ?? "Awaiting executor"}</small></article>)}</div>
+      <div className="stage-grid">{workbench?.stages.map((stage) => <article key={stage.stageCode} className={`stage-${stage.controlState.toLowerCase()}`}><span>{stage.stageCode}</span><strong>{stage.controlState}</strong><small>{stage.artifact?.artifactType ?? (stage.controlState === "RUNNING" ? "Awaiting owner decision" : stage.controlState === "READY" ? "Ready for next action" : "Awaiting executor")}</small></article>)}</div>
     </section>
 
     <section className="operator-timeline-card">
