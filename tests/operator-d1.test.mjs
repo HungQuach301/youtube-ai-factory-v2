@@ -1295,17 +1295,65 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     assert.equal(stage07BArtifact.artifact_type, "VISUAL_GRAMMAR_ROUTING");
     assert.ok(await bucket.get(stage07BArtifact.r2_key));
 
-    const unsupportedStage08 = await client.callTool({
+    const stage08Workbench = await (await mf.dispatchFetch("http://localhost/api/operator",
+      { headers: ownerHeaders })).json();
+    assert.deepEqual(stage08Workbench.trackGWorkbench.allowedActions,
+      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_08"]);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.controlState, "READY");
+    const compiledShotCount = stage08Workbench.trackGWorkbench.stage08.shots.length;
+    assert.ok(compiledShotCount > 0);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.assertionCount, compiledShotCount * 3);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.targetFrames, 15300);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.shots[0].startFrame, 0);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.shots.at(-1).endFrame, 15300);
+    assert.ok(stage08Workbench.trackGWorkbench.stage08.shots.every((shot) => shot.assertions.length === 3));
+
+    const stage08Response = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_08", confirm: true }),
+    });
+    const stage08Api = await stage08Response.json();
+    assert.equal(stage08Response.status, 201, JSON.stringify(stage08Api));
+    assert.equal(stage08Api.currentStep, "STAGE_09_READY");
+    assert.equal(stage08Api.stageState, "FROZEN");
+    assert.equal(stage08Api.shotCount, compiledShotCount);
+    assert.equal(stage08Api.assertionCount, compiledShotCount * 3);
+    assert.deepEqual(stage08Api.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_TIMELINE_LINT", "PASS"],
+      ["M1_DURATION_MATCH", "PASS"],
+    ]);
+
+    const stage08Replay = await client.callTool({
       name: "advance_track_g_video_1_stage",
-      arguments: { stageCode: "08", objective: "Verify Stage 08 remains fail-closed until its executor exists.",
+      arguments: { stageCode: "08", objective: "Compile the frame-exact ShotCueProgram with three assertions per adaptive shot.",
         confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
     });
-    assert.equal(unsupportedStage08.isError, true);
-    assert.match(unsupportedStage08.content[0].text, /TRACK_G_STAGE_08_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(stage08Replay.isError, undefined, JSON.stringify(stage08Replay));
+    assert.equal(stage08Replay.structuredContent.replayed, true);
+    assert.equal(stage08Replay.structuredContent.currentStep, "STAGE_09_READY");
+    assert.equal(stage08Replay.structuredContent.artifactType, "SHOT_CUE_PROGRAM");
+    const stage08Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '08'").first();
+    const stage08Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage08Instance.id).first();
+    assert.equal(stage08Instance.control_state, "FROZEN");
+    assert.equal(stage08Artifact.artifact_type, "SHOT_CUE_PROGRAM");
+    const stage08Evidence = await bucket.get(stage08Artifact.r2_key);
+    assert.ok(stage08Evidence);
+    const stage08EvidenceJson = JSON.parse(Buffer.from(await stage08Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage08EvidenceJson.shotCueProgram.shots.length, compiledShotCount);
+    assert.ok(stage08EvidenceJson.shotCueProgram.shots.every((shot) => shot.assertions.length === 3));
+
+    const unsupportedStage09 = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: { stageCode: "09", objective: "Verify Stage 09 remains fail-closed until its executor exists.",
+        confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
+    });
+    assert.equal(unsupportedStage09.isError, true);
+    assert.match(unsupportedStage09.content[0].text, /TRACK_G_STAGE_09_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_08_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_09_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "782dee2572ce126f6af8ebb6a9d3351c6922bbcc4b85c479c0678a8a1e308c73",
+  "aggregate_sha256": "213b471d03709ede472bb542b7a226f20ce77455e3433faec5eb22f8f837013f",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -45,7 +45,7 @@
     },
     {
       "path": "app/api/operator/route.ts",
-      "sha256": "a5c7afa858971d5c4dfb7f71c27c81d87baf6c554f22f18f479c5a1f96f0efe7"
+      "sha256": "8a821f94bfdbcf2544580547e2433863969702ebc34caead581682fc05d490c6"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -89,7 +89,7 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "b3e20d5ab71f58ce71e698cc7ca4042cf7dfa76cef38f04908b1fd7adf7a8701"
+      "sha256": "8b809e807b51254fe72273b707e573996c55a52b94004ebbd4c0b67bd1c21359"
     },
     {
       "path": "app/operate/page.tsx",
@@ -97,7 +97,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "c99e858bf4e6e85bc583f1db166e0a40e4485090ae774c5be6006af7eec18cbf"
+      "sha256": "db9bc03faa1cbf2fd0f37425ef9323840a021e7a3ddfa6c644e8bae789afb681"
     },
     {
       "path": "app/page.tsx",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "34e657470e5bb55eafa66ecbd53c699bc1f6ccacda38c1dc8ed2604259fb2215"
+      "sha256": "a6d675b93b47d843058d3ac6a403a7b10980ab656d0888dae968ab2858e2d636"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -285,7 +285,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "eba99e8566959582384cdb3d9c5cd5a264ce66882ed4afcb4bd9851711cacacc"
+      "sha256": "8caa66a38033ec25ba2e34f21ce637a093f3c9f048d51c655b235ac82b33a0f6"
     },
     {
       "path": "tests/rendered-html.test.mjs",

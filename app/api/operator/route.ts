@@ -135,6 +135,27 @@ export async function POST(request: Request) {
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }
+    if (body.commandType === "ADVANCE_TRACK_G_VIDEO_1_STAGE_08") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_08_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await advanceTrackGVideoOneStage(user, {
+        stageCode: "08",
+        objective: body.objective
+          ?? "Compile the sealed Stage 08 ShotCueProgram with frame-exact timeline assertions.",
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+        idempotencyKey: await trackGVideoOneStageIdempotencyKey("08"),
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "08", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash,
+        gateResults: result.gateResults,
+        shotCount: result.shotCueProgramModel.shots.length,
+        assertionCount: result.shotCueProgramModel.assertionCount,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
     return Response.json({ error: "COMMAND_NOT_AVAILABLE_ON_OPERATOR_SURFACE" }, { status: 400 });
   } catch (error) {
     return errorResponse(error);
