@@ -192,10 +192,12 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
+      "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
+      "prepare_track_g_video_1_stage_06_script_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
       "start_track_g_video_1_qualification",
@@ -436,10 +438,12 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
+      "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
+      "prepare_track_g_video_1_stage_06_script_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
       "start_track_g_video_1_qualification",
@@ -1019,21 +1023,163 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
       /PREDICTED_PERFORMANCE_APPEND_ONLY/u,
     );
 
-    const unsupportedStage06 = await client.callTool({
+    const directStage06Blocked = await client.callTool({
       name: "advance_track_g_video_1_stage",
       arguments: {
         stageCode: "06",
-        objective: "Verify that Stage 06 remains fail-closed until its script and number-audit executor is implemented.",
+        objective: "Verify that Stage 06 cannot bypass its required HP-02 editorial decision command path.",
         confirm: true,
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
       },
     });
-    assert.equal(unsupportedStage06.isError, true);
-    assert.match(unsupportedStage06.content[0].text, /TRACK_G_STAGE_06_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(directStage06Blocked.isError, true);
+    assert.match(directStage06Blocked.content[0].text, /TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED/u);
+
+    const stage06Objective = "Prepare the complete claim-bound Stage 06 script, run the second advice lint, script lint and number trace, then stop for a substantive HP-02 editorial decision.";
+    const stage06Prepared = await client.callTool({
+      name: "prepare_track_g_video_1_stage_06_script_review",
+      arguments: {
+        objective: stage06Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 06 SCRIPT REVIEW",
+      },
+    });
+    assert.equal(stage06Prepared.isError, undefined, JSON.stringify(stage06Prepared));
+    assert.equal(stage06Prepared.structuredContent.accepted, true);
+    assert.equal(stage06Prepared.structuredContent.replayed, false);
+    assert.equal(stage06Prepared.structuredContent.currentStep, "STAGE_06_READY");
+    assert.equal(stage06Prepared.structuredContent.stageState, "RUNNING");
+    assert.equal(stage06Prepared.structuredContent.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage06Prepared.structuredContent.sections.length, 6);
+    assert.ok(stage06Prepared.structuredContent.wordCount >= 700);
+    assert.ok(stage06Prepared.structuredContent.estimatedDurationSec >= 420);
+    assert.deepEqual(stage06Prepared.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M0_ADVICE_LINT_SECOND_PASS", "PASS"],
+      ["M1_SCRIPT_LINT", "PASS"],
+      ["M1_NUMBER_TRACE", "PASS"],
+    ]);
+    assert.equal(stage06Prepared.structuredContent.humanGate, "REQUIRED:HP-02_D2_OR_D4_EDITORIAL_DECISION");
+    assert.equal(stage06Prepared.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage06Prepared.structuredContent.stageActualUsd, 0);
+
+    const stage06PrepareReplay = await client.callTool({
+      name: "prepare_track_g_video_1_stage_06_script_review",
+      arguments: {
+        objective: stage06Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 06 SCRIPT REVIEW",
+      },
+    });
+    assert.equal(stage06PrepareReplay.structuredContent.replayed, true);
+    assert.equal(stage06PrepareReplay.structuredContent.draftSha256,
+      stage06Prepared.structuredContent.draftSha256);
+
+    const stage06InstanceRunning = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '06'").first();
+    const scriptDraft = await d1.prepare("SELECT * FROM script_draft").first();
+    assert.equal(stage06InstanceRunning.control_state, "RUNNING");
+    assert.equal(scriptDraft.advice_lint_state, "PASS");
+    assert.equal(scriptDraft.script_lint_state, "PASS");
+    assert.equal(scriptDraft.number_trace_state, "PASS");
+    assert.equal(JSON.parse(scriptDraft.sections_json).length, 6);
+    assert.equal(JSON.parse(scriptDraft.number_trace_json).length, 2);
+    const scriptDraftEvidence = await bucket.get(scriptDraft.r2_key);
+    assert.ok(scriptDraftEvidence);
+    await assert.rejects(
+      d1.prepare("UPDATE script_draft SET title = 'mutated'").run(),
+      /SCRIPT_DRAFT_APPEND_ONLY/u,
+    );
+
+    const emptyEditorial = await client.callTool({
+      name: "apply_track_g_video_1_stage_06_editorial_decision",
+      arguments: {
+        decisionType: "D2",
+        revisedTitle: stage06Prepared.structuredContent.draftTitle,
+        revisedHook: stage06Prepared.structuredContent.draftHook,
+        rationale: "A substantive human-authored edit is required before the script may be sealed.",
+        confirm: true,
+        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
+      },
+    });
+    assert.equal(emptyEditorial.isError, true);
+    assert.match(emptyEditorial.content[0].text, /TRACK_G_STAGE_06_D2_SUBSTANTIVE_EDIT_REQUIRED/u);
+
+    const revisedTitle = "The Bank Fraud Alert Is the Trap — Break Its Control";
+    const revisedHook = "That fraud alert may not be protecting your account. It may be the first move in a process built to control your next decision.";
+    const editorialRationale = "Use a more direct opening and title so the audience immediately understands that the alert channel itself is the mechanism of control.";
+    const stage06Applied = await client.callTool({
+      name: "apply_track_g_video_1_stage_06_editorial_decision",
+      arguments: {
+        decisionType: "D2",
+        revisedTitle,
+        revisedHook,
+        rationale: editorialRationale,
+        confirm: true,
+        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
+      },
+    });
+    assert.equal(stage06Applied.isError, undefined, JSON.stringify(stage06Applied));
+    assert.equal(stage06Applied.structuredContent.accepted, true);
+    assert.equal(stage06Applied.structuredContent.replayed, false);
+    assert.equal(stage06Applied.structuredContent.currentStep, "STAGE_07A_READY");
+    assert.equal(stage06Applied.structuredContent.stageState, "FROZEN");
+    assert.equal(stage06Applied.structuredContent.artifactType, "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL");
+    assert.equal(stage06Applied.structuredContent.artifactState, "SEALED");
+    assert.equal(stage06Applied.structuredContent.decisionType, "D2");
+    assert.equal(stage06Applied.structuredContent.finalTitle, revisedTitle);
+    assert.equal(stage06Applied.structuredContent.finalHook, revisedHook);
+    assert.equal(stage06Applied.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage06Applied.structuredContent.stageActualUsd, 0);
+
+    const stage06ApplyReplay = await client.callTool({
+      name: "apply_track_g_video_1_stage_06_editorial_decision",
+      arguments: {
+        decisionType: "D2",
+        revisedTitle,
+        revisedHook,
+        rationale: editorialRationale,
+        confirm: true,
+        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
+      },
+    });
+    assert.equal(stage06ApplyReplay.structuredContent.replayed, true);
+    assert.equal(stage06ApplyReplay.structuredContent.artifactSha256,
+      stage06Applied.structuredContent.artifactSha256);
+
+    const stage06InstanceFrozen = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '06'").first();
+    const stage06Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage06InstanceFrozen.id).first();
+    const stage06Decision = await d1.prepare("SELECT * FROM human_decision WHERE artifact_after_id = ?")
+      .bind(stage06Artifact.id).first();
+    const allHumanDecisions = await d1.prepare("SELECT * FROM human_decision ORDER BY created_at").all();
+    assert.equal(stage06InstanceFrozen.control_state, "FROZEN");
+    assert.equal(stage06Artifact.artifact_type, "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL");
+    assert.equal(stage06Decision.decision_type, "D2");
+    assert.equal(stage06Decision.rationale_text, editorialRationale);
+    assert.equal(allHumanDecisions.results.length, 2);
+    const finalStage06Evidence = await bucket.get(stage06Artifact.r2_key);
+    const stage06DecisionEvidence = await bucket.get(stage06Decision.diff_r2_key);
+    assert.ok(finalStage06Evidence);
+    assert.ok(stage06DecisionEvidence);
+    const finalStage06Json = JSON.parse(Buffer.from(await finalStage06Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(finalStage06Json.finalScript.title, revisedTitle);
+    assert.equal(finalStage06Json.finalScript.hook, revisedHook);
+    assert.equal(finalStage06Json.editorialDecision.decisionType, "D2");
+
+    const unsupportedStage07A = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "07A",
+        objective: "Verify that Stage 07A remains fail-closed until its voice-design executor is implemented.",
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(unsupportedStage07A.isError, true);
+    assert.match(unsupportedStage07A.content[0].text, /TRACK_G_STAGE_07A_EXECUTOR_NOT_IMPLEMENTED/u);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_06_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_07A_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [

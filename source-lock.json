@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "d4a6796f83427e660083264152d745be2825288f710450ce647b39d7318ab3bd",
+  "aggregate_sha256": "81516597cd29b55e921656f9d1344b6d439b5d2db3c24eeebb85260df80a79c3",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "87656b7666d9e0e0ad674fd024f0a75bbe0cb903fd4eea6f12b2dd021dc714db"
+      "sha256": "40f535e50c74c5cd862a9d471b5290a0de87c525fbaa7977aa63e7d93307ac75"
     },
     {
       "path": "app/oauth-server.ts",
@@ -109,7 +109,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "4ed88a12afbac770246a2334f42c6edd68db05cc9c32b4b84e4ec8979f524412"
+      "sha256": "637de3145c1a91225f7d0ad89841418160a559cd038dd09b502b50cdfd770b6c"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +125,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "5a9d28126260acd0731a344967a0f1a1a8c9068c540289c5211fb388349e18ba"
+      "sha256": "bf74d2ed044ea610db94e733edb56d91e2aef7d8a0e12a7dc2e5176e35bcee04"
     },
     {
       "path": "drizzle.config.ts",
@@ -168,6 +168,10 @@
       "sha256": "2f74a999572378050b6a13f2b820965bc94e38d440341490c1d2989d250d4089"
     },
     {
+      "path": "drizzle/0009_stage06_script_editorial_review.sql",
+      "sha256": "34590bd756605afb226f84fd6bda88692e4c09b6159c19f3251fd14746dfc740"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -197,11 +201,15 @@
     },
     {
       "path": "drizzle/meta/0008_snapshot.json",
-      "sha256": "eed6426c367980bb95a061017f2cb28d9c6742cdf42fb77d687c55539f3b999f"
+      "sha256": "5223c62ac03fdfe957425af2bb295fc79dc6badaa47524f1918cafac83e8c14a"
+    },
+    {
+      "path": "drizzle/meta/0009_snapshot.json",
+      "sha256": "22c6b1746362d5706d441d2dacebbcf1950d2b275b3b401759cdd3e005f4dd8b"
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "9b7c6f36a954b04e53d694cf2fa55edf28697a9c6a8aefa017e36696a9f25c2f"
+      "sha256": "9b43c380431efbf24feae3309bbe2f5db3ddc371158e54d22563201850b6c6c1"
     },
     {
       "path": "eslint.config.mjs",
@@ -273,7 +281,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "7ddc6b3c33e206169cb6f13fcc196b6991321d61e317b6bef592013690eef379"
+      "sha256": "08aaaa6d5651fd41afe9ae42a4d870a9dfb80b128181814e9a58a95334daeb1b"
     },
     {
       "path": "tests/rendered-html.test.mjs",

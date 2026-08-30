@@ -283,6 +283,27 @@ export const predictedPerformances = sqliteTable("predicted_performance", {
   sealedAt: text("sealed_at").notNull(),
 }, (table) => [uniqueIndex("predicted_performance_package_unique").on(table.packageId)]);
 
+export const scriptDrafts = sqliteTable("script_draft", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  title: text("title").notNull(),
+  hook: text("hook").notNull(),
+  sectionsJson: text("sections_json").notNull(),
+  wordCount: integer("word_count").notNull(),
+  estimatedDurationSec: integer("estimated_duration_sec").notNull(),
+  numberTraceJson: text("number_trace_json").notNull(),
+  adviceLintState: text("advice_lint_state", { enum: ["PASS"] }).notNull(),
+  scriptLintState: text("script_lint_state", { enum: ["PASS"] }).notNull(),
+  numberTraceState: text("number_trace_state", { enum: ["PASS"] }).notNull(),
+  r2Key: text("r2_key").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("script_draft_package_unique").on(table.packageId),
+  uniqueIndex("script_draft_stage_unique").on(table.stageInstanceId),
+]);
+
 export const spendCeilings = sqliteTable("spend_ceiling", {
   scope: text("scope", { enum: ["PORTFOLIO", "CHANNEL", "PACKAGE", "STAGE"] }).notNull(),
   scopeRef: text("scope_ref").notNull(),

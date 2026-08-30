@@ -57,6 +57,13 @@
       "when": 1788054865450,
       "tag": "0008_story_architecture_prediction",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788061658433,
+      "tag": "0009_stage06_script_editorial_review",
+      "breakpoints": true
     }
   ]
 }
