@@ -8,6 +8,16 @@ import { Miniflare } from "miniflare";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /const TTS_BATCH_SIZE = 2\b/);
+  assert.match(source, /offset \+= TTS_BATCH_SIZE/);
+  assert.match(source, /slice\(offset, offset \+ TTS_BATCH_SIZE\)/);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
