@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,10 +12,37 @@ if (!IMAGE_DIGEST?.match(/^sha256:[a-f0-9]{64}$/u)) {
   throw new Error('MEDIA_IMAGE_DIGEST must be the immutable digest of the running image.')
 }
 const JOB_DISPATCH_ENABLED = process.env.MEDIA_JOB_DISPATCH_ENABLED === 'true'
+const STAGE10_ENABLED = process.env.MEDIA_STAGE10_ENABLED === 'true'
+const STAGE10_VERIFY_KEY = process.env.MEDIA_STAGE10_VERIFY_KEY
+const CALIBRATION_FLOOR = Number(process.env.MEDIA_CALIBRATION_ERROR_FLOOR)
+const CALIBRATION_THRESHOLD = Number(process.env.MEDIA_CALIBRATION_THRESHOLD)
+const CALIBRATION_SHA256 = process.env.MEDIA_CALIBRATION_EVIDENCE_SHA256
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
+const MAX_BODY_BYTES = 2 * 1024 * 1024
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+const SEAM_THRESHOLD = 0.005
 
-function run(executable, args, cwd, deadlineAt) {
+function stage10Ready() {
+  return STAGE10_ENABLED
+    && typeof STAGE10_VERIFY_KEY === 'string'
+    && typeof ELEVENLABS_API_KEY === 'string'
+    && Number.isFinite(CALIBRATION_FLOOR)
+    && Number.isFinite(CALIBRATION_THRESHOLD)
+    && CALIBRATION_THRESHOLD >= CALIBRATION_FLOOR
+    && /^sha256:[a-f0-9]{64}$/u.test(CALIBRATION_SHA256 ?? '')
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function run(executable, args, cwd, deadlineAt, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env: { PATH: process.env.PATH }, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(executable, args, {
+      cwd,
+      env: process.env,
+      stdio: [input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    })
     const stdout = []
     const stderr = []
     const remainingMs = Date.parse(deadlineAt) - Date.now()
@@ -24,6 +52,7 @@ function run(executable, args, cwd, deadlineAt) {
       return
     }
     const timer = setTimeout(() => child.kill('SIGKILL'), remainingMs)
+    if (input) child.stdin.end(input)
     child.stdout.on('data', (chunk) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => stderr.push(chunk))
     child.on('error', (error) => {
@@ -40,7 +69,9 @@ function run(executable, args, cwd, deadlineAt) {
         resolve(Buffer.concat(stdout))
         return
       }
-      reject(new Error(`${executable} exited ${code}: ${Buffer.concat(stderr).toString('utf8')}`))
+      reject(Object.assign(new Error(`${executable} exited ${code}: ${Buffer.concat(stderr).toString('utf8')}`), {
+        code: 'MEDIA_TOOL_FAILED',
+      }))
     })
   })
 }
@@ -94,10 +125,8 @@ async function processJob(message) {
     completionPublisher: {
       async publish(completion) {
         const response = await fetch(commandUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(completion),
-          redirect: 'error',
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(completion), redirect: 'error',
         })
         if (!response.ok) throw new Error(`Control-plane command failed with status ${response.status}`)
       },
@@ -110,13 +139,271 @@ async function processJob(message) {
   }
 }
 
+async function readBody(request) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of request) {
+    size += chunk.length
+    if (size > MAX_BODY_BYTES) throw Object.assign(new Error('Request body too large.'), { code: 'BODY_TOO_LARGE' })
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}
+
+function verifyStage10Request(request, body) {
+  const timestamp = request.headers['x-factory-timestamp']
+  const signature = request.headers['x-factory-signature']
+  if (typeof timestamp !== 'string' || typeof signature !== 'string') return false
+  const timestampMs = Date.parse(timestamp)
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > MAX_CLOCK_SKEW_MS) return false
+  const message = Buffer.from(`${timestamp}\n${sha256(body)}`, 'utf8')
+  const publicKey = createPublicKey({
+    key: Buffer.from(STAGE10_VERIFY_KEY, 'base64'), format: 'der', type: 'spki',
+  })
+  return verifySignature(null, message, publicKey, Buffer.from(signature, 'base64'))
+}
+
+function validateStage10Payload(value) {
+  if (!value || value.schemaVersion !== 1 || !/^[a-f0-9]{64}$/u.test(value.idempotencyKey ?? '')) {
+    throw Object.assign(new Error('Invalid Stage 10 envelope.'), { code: 'INVALID_STAGE10_ENVELOPE' })
+  }
+  if (value.candidatesPerSegment !== 2 || value.maxProviderCalls !== 12) {
+    throw Object.assign(new Error('Stage 10 must use the bounded REDUCED tournament.'), { code: 'INVALID_TOURNAMENT_WIDTH' })
+  }
+  if (!Array.isArray(value.segments) || value.segments.length !== 6) {
+    throw Object.assign(new Error('Exactly six sealed segments are required.'), { code: 'INVALID_SEGMENT_COUNT' })
+  }
+  const ids = new Set()
+  let charactersPerRoute = 0
+  for (const segment of value.segments) {
+    if (!/^beat-0[1-6]$/u.test(segment?.segmentId ?? '') || ids.has(segment.segmentId)
+      || typeof segment.text !== 'string' || segment.text.trim().length < 20 || segment.text.length > 4000
+      || !Number.isInteger(segment.pauseAfterMs) || segment.pauseAfterMs < 100 || segment.pauseAfterMs > 2000) {
+      throw Object.assign(new Error('Invalid sealed segment.'), { code: 'INVALID_SEGMENT' })
+    }
+    ids.add(segment.segmentId)
+    charactersPerRoute += segment.text.length
+  }
+  if (charactersPerRoute * 2 > value.maxTotalCharacters || value.maxTotalCharacters > 24000) {
+    throw Object.assign(new Error('Character ceiling exceeded.'), { code: 'CHARACTER_CEILING_EXCEEDED' })
+  }
+  const voice = value.voice
+  if (!voice || typeof voice.voiceId !== 'string' || typeof voice.modelId !== 'string'
+    || voice.outputFormat !== 'mp3_44100_128' || typeof voice.settings !== 'object') {
+    throw Object.assign(new Error('Invalid qualified voice binding.'), { code: 'INVALID_VOICE_BINDING' })
+  }
+  return value
+}
+
+function seedFor(idempotencyKey, segmentId, route) {
+  return createHash('sha256').update(`${idempotencyKey}\0${segmentId}\0${route}`).digest().readUInt32BE(0)
+}
+
+function editDistance(left, right) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row]
+    for (let column = 1; column <= right.length; column += 1) {
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1),
+      )
+    }
+    previous = current
+  }
+  return previous[right.length]
+}
+
+async function synthesizeCandidate(payload, segment, route, filePath) {
+  const seed = seedFor(payload.idempotencyKey, segment.segmentId, route)
+  const response = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(payload.voice.voiceId)}?output_format=${payload.voice.outputFormat}`,
+    {
+      method: 'POST', redirect: 'error',
+      headers: { 'content-type': 'application/json', 'xi-api-key': ELEVENLABS_API_KEY },
+      body: JSON.stringify({
+        text: segment.text,
+        model_id: payload.voice.modelId,
+        voice_settings: payload.voice.settings,
+        seed,
+        previous_text: segment.previousText,
+        next_text: segment.nextText,
+      }),
+    },
+  )
+  if (!response.ok) {
+    throw Object.assign(new Error(`ElevenLabs returned ${response.status}.`), { code: 'TTS_PROVIDER_FAILED' })
+  }
+  const bytes = Buffer.from(await response.arrayBuffer())
+  if (bytes.length < 512) throw Object.assign(new Error('TTS output was empty.'), { code: 'TTS_OUTPUT_EMPTY' })
+  await writeFile(filePath, bytes)
+  return {
+    route, seed, bytes,
+    providerRequestId: response.headers.get('request-id') ?? response.headers.get('x-request-id') ?? 'UNAVAILABLE',
+  }
+}
+
+function applyFade(pcm) {
+  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2))
+  const width = Math.min(882, Math.floor(samples.length / 2))
+  for (let index = 0; index < width; index += 1) {
+    const gain = index / width
+    samples[index] = Math.round(samples[index] * gain)
+    samples[samples.length - 1 - index] = Math.round(samples[samples.length - 1 - index] * gain)
+  }
+  return Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength)
+}
+
+async function buildNarration(workRoot, champions, segments, deadlineAt) {
+  const parts = []
+  let maxJump = 0
+  for (let index = 0; index < champions.length; index += 1) {
+    const candidate = champions[index]
+    const pcm = applyFade(await run('ffmpeg', [
+      '-v', 'error', '-i', candidate.filePath, '-f', 's16le', '-ac', '1', '-ar', '44100', 'pipe:1',
+    ], workRoot, deadlineAt))
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2))
+    maxJump = Math.max(maxJump, Math.abs(samples[0] ?? 0), Math.abs(samples[samples.length - 1] ?? 0))
+    parts.push(pcm)
+    if (index < champions.length - 1) {
+      parts.push(Buffer.alloc(Math.round(44100 * segments[index].pauseAfterMs / 1000) * 2))
+    }
+  }
+  const seamScore = maxJump / 32768
+  const rawPath = join(workRoot, 'narration.raw')
+  const outputPath = join(workRoot, 'narration.mp3')
+  await writeFile(rawPath, Buffer.concat(parts))
+  await run('ffmpeg', [
+    '-v', 'error', '-f', 's16le', '-ar', '44100', '-ac', '1', '-i', rawPath,
+    '-codec:a', 'libmp3lame', '-b:a', '128k', '-y', outputPath,
+  ], workRoot, deadlineAt)
+  const bytes = await readFile(outputPath)
+  return { bytes, seamScore }
+}
+
+async function processStage10(payload) {
+  if (!stage10Ready()) throw Object.assign(new Error('Stage 10 worker is not calibrated.'), { code: 'STAGE10_NOT_READY' })
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage10-'))
+  const deadlineAt = new Date(Date.now() + 40 * 60 * 1000).toISOString()
+  try {
+    const candidates = []
+    const observerItems = []
+    let totalCharacters = 0
+    for (const segment of payload.segments) {
+      for (const route of ['A', 'B']) {
+        const takeId = `${segment.segmentId}-take-${route.toLowerCase()}`
+        const filePath = join(workRoot, `${takeId}.mp3`)
+        const synthesized = await synthesizeCandidate(payload, segment, route, filePath)
+        totalCharacters += segment.text.length
+        candidates.push({ takeId, segmentId: segment.segmentId, filePath, ...synthesized })
+        observerItems.push({ id: takeId, audioPath: filePath, transcript: segment.text })
+      }
+    }
+    const observerInput = join(workRoot, 'observer-input.json')
+    const observerOutput = join(workRoot, 'observer-output.json')
+    await writeFile(observerInput, JSON.stringify({ items: observerItems }))
+    await run('python3', [
+      '/app/scripts/whisperx-phoneme-observer.py', '--input', observerInput,
+      '--output', observerOutput, '--model', 'small.en',
+    ], workRoot, deadlineAt)
+    const observed = JSON.parse(await readFile(observerOutput, 'utf8'))
+    const observedById = new Map(observed.items.map((item) => [item.id, item]))
+    for (const candidate of candidates) {
+      const item = observedById.get(candidate.takeId)
+      if (!item) throw Object.assign(new Error('Observer output incomplete.'), { code: 'OBSERVER_OUTPUT_INCOMPLETE' })
+      candidate.phonemeEdits = editDistance(item.referencePhonemes, item.observedPhonemes)
+      candidate.referencePhonemes = item.referencePhonemes.length
+      candidate.phonemeMismatchRate = candidate.phonemeEdits / item.referencePhonemes.length
+      candidate.observedTranscript = item.observedTranscript
+      candidate.eligible = candidate.phonemeMismatchRate <= CALIBRATION_THRESHOLD
+    }
+    const champions = []
+    const rejected = []
+    for (const segment of payload.segments) {
+      const pool = candidates.filter((candidate) => candidate.segmentId === segment.segmentId)
+      const eligible = pool.filter((candidate) => candidate.eligible)
+        .sort((left, right) => left.phonemeMismatchRate - right.phonemeMismatchRate || left.seed - right.seed)
+      if (!eligible.length) throw Object.assign(new Error(`No eligible take for ${segment.segmentId}.`), { code: 'PHONEME_MISMATCH_GATE_FAILED' })
+      champions.push(eligible[0])
+      rejected.push(...pool.filter((candidate) => candidate.takeId !== eligible[0].takeId))
+    }
+    const narration = await buildNarration(workRoot, champions, payload.segments, deadlineAt)
+    if (narration.seamScore > SEAM_THRESHOLD) {
+      throw Object.assign(new Error('Narration seam gate failed.'), { code: 'SEAM_SCORE_GATE_FAILED' })
+    }
+    const serializeCandidate = (candidate) => ({
+      takeId: candidate.takeId,
+      segmentId: candidate.segmentId,
+      route: candidate.route,
+      seed: candidate.seed,
+      audioBase64: candidate.bytes.toString('base64'),
+      audioSha256: sha256(candidate.bytes),
+      providerRequestId: candidate.providerRequestId,
+      phonemeEdits: candidate.phonemeEdits,
+      referencePhonemes: candidate.referencePhonemes,
+      phonemeMismatchRate: candidate.phonemeMismatchRate,
+      observedTranscript: candidate.observedTranscript,
+      eligible: candidate.eligible,
+    })
+    return {
+      accepted: true,
+      imageDigest: IMAGE_DIGEST,
+      calibration: {
+        observer: 'whisperx@3.4.2/small.en/cpu-int8',
+        errorFloor: CALIBRATION_FLOOR,
+        threshold: CALIBRATION_THRESHOLD,
+        evidenceSha256: CALIBRATION_SHA256,
+      },
+      champions: champions.map(serializeCandidate),
+      rejected: rejected.map(serializeCandidate),
+      narration: {
+        audioBase64: narration.bytes.toString('base64'),
+        audioSha256: sha256(narration.bytes),
+        seamScore: narration.seamScore,
+        seamThreshold: SEAM_THRESHOLD,
+      },
+      providerCallCount: candidates.length,
+      totalCharacters,
+      gateResults: [
+        { gate: 'M1_PHONEME_MISMATCH', state: 'PASS', evidence: `all champions <= ${CALIBRATION_THRESHOLD}` },
+        { gate: 'M1_SEAM_SCORE', state: 'PASS', evidence: `${narration.seamScore} <= ${SEAM_THRESHOLD}` },
+      ],
+    }
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
       ok: true,
       imageDigest: IMAGE_DIGEST,
       jobDispatchEnabled: JOB_DISPATCH_ENABLED,
+      stage10Enabled: STAGE10_ENABLED,
+      stage10Ready: stage10Ready(),
+      calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
     }))
+    return
+  }
+  if (request.method === 'POST' && request.url === '/stage10/narrate') {
+    if (!STAGE10_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"STAGE10_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const result = await processStage10(validateStage10Payload(JSON.parse(body.toString('utf8'))))
+      response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE10_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
+    }
     return
   }
   if (request.method !== 'POST' || request.url !== '/jobs') {

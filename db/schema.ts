@@ -312,6 +312,29 @@ export const spendCeilings = sqliteTable("spend_ceiling", {
   windowEnd: text("window_end"),
 }, (table) => [primaryKey({ columns: [table.scope, table.scopeRef] })]);
 
+export const stage10AudioProductions = sqliteTable("stage10_audio_production", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  provider: text("provider", { enum: ["ELEVENLABS"] }).notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  totalCharacters: integer("total_characters").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  calibrationEvidenceSha256: text("calibration_evidence_sha256").notNull(),
+  workerImageDigest: text("worker_image_digest").notNull(),
+  narrationR2Key: text("narration_r2_key").notNull(),
+  narrationSha256: text("narration_sha256").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage10_audio_production_package_unique").on(table.packageId),
+  uniqueIndex("stage10_audio_production_stage_unique").on(table.stageInstanceId),
+  uniqueIndex("stage10_audio_production_idempotency_unique").on(table.idempotencyKey),
+]);
+
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),
   channelId: text("channel_id").notNull().references(() => channels.id),

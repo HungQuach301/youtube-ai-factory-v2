@@ -1,5 +1,5 @@
 name: media-worker-deploy
-run-name: Media worker V2 production · ${{ github.sha }}
+run-name: Stage 10 calibrated media worker · ${{ github.sha }}
 
 on:
   push:
@@ -9,6 +9,9 @@ on:
       - "packages/media-worker/**"
       - "packages/contracts/**"
       - "packages/core-hash/**"
+      - "scripts/run-dual-calibration-live.py"
+      - "scripts/whisperx-phoneme-observer.py"
+      - "qualification-runs/dual-calibration-live.json"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/media-worker-deploy.yml"
@@ -24,108 +27,140 @@ concurrency:
 env:
   FLY_APP_NAME: youtube-ai-factory-v2-media-worker-prod
   FLY_CONFIG: packages/media-worker/fly.toml
+  CALIBRATION_OUTPUT: dual-calibration-live-output
+  MEDIA_STAGE10_VERIFY_KEY: MCowBQYDK2VwAyEArYGfR2yAFXqTXBUFzwf5Eyod9MfoE405MZUQ2qAULL8=
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+  calibrate-build-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      MDC_API_KEY: ${{ secrets.MDC_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require three scoped credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${FLY_API_TOKEN:-}" ]] || { echo "FLY_API_TOKEN is not configured" >&2; exit 1; }
+          [[ -n "${MDC_API_KEY:-}" ]] || { echo "MDC_API_KEY is not configured" >&2; exit 1; }
+          [[ -n "${ELEVENLABS_API_KEY:-}" ]] || { echo "ELEVENLABS_API_KEY is not configured" >&2; exit 1; }
+      - name: Install pinned calibration observer
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes ffmpeg
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0
+          python -m pip install whisperx==3.4.2 g2p-en==2.1.0
+          python -m nltk.downloader -q averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict
+      - name: Acquire real human floor and validate qualified voice
+        run: >-
+          python scripts/run-dual-calibration-live.py
+          --config qualification-runs/dual-calibration-live.json
+          --output "$CALIBRATION_OUTPUT"
+      - name: Seal calibrated Stage 10 environment
+        id: calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq --exit-status '.calibrated == true and .gateEvaluated == true
+            and (.errorFloor | type == "number") and (.threshold | type == "number")
+            and .threshold >= .errorFloor' "$CALIBRATION_OUTPUT/human-calibration.json" >/dev/null
+          jq --exit-status '.evaluated == true and .passed == true'             "$CALIBRATION_OUTPUT/production-validation.json" >/dev/null
+          floor="$(jq -r '.errorFloor' "$CALIBRATION_OUTPUT/human-calibration.json")"
+          threshold="$(jq -r '.threshold' "$CALIBRATION_OUTPUT/human-calibration.json")"
+          evidence="sha256:$(sha256sum "$CALIBRATION_OUTPUT/human-calibration.json" | awk '{print $1}')"
+          echo "floor=$floor" >> "$GITHUB_OUTPUT"
+          echo "threshold=$threshold" >> "$GITHUB_OUTPUT"
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
       - name: Install pinned flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: 0.4.93
-      - name: Require scoped Fly credential
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Stage provider credential without exposing it
+        shell: bash
         run: |
-          if [[ -z "${FLY_API_TOKEN:-}" ]]; then
-            echo "FLY_API_TOKEN is not configured" >&2
-            exit 1
-          fi
+          set -euo pipefail
+          printf 'ELEVENLABS_API_KEY=%s\n' "$ELEVENLABS_API_KEY" |             flyctl secrets import --app "$FLY_APP_NAME" --stage
       - name: Build and push immutable worker image
         id: image
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           image_label="git-${GITHUB_SHA}"
           image_tag="registry.fly.io/${FLY_APP_NAME}:${image_label}"
-          flyctl deploy . \
-            --app "$FLY_APP_NAME" \
-            --config "$FLY_CONFIG" \
-            --build-only \
-            --push \
-            --remote-only \
-            --image-label "$image_label" \
-            --yes
+          flyctl deploy . --app "$FLY_APP_NAME" --config "$FLY_CONFIG"             --build-only --push --remote-only --image-label "$image_label" --yes
           flyctl auth docker
           manifest_file="$(mktemp)"
           trap 'rm -f "$manifest_file"' EXIT
           for attempt in $(seq 1 30); do
-            if docker buildx imagetools inspect "$image_tag" --raw > "$manifest_file"; then
-              break
-            fi
-            if [[ "$attempt" -eq 30 ]]; then
-              echo "Registry did not expose the pushed image tag within 60 seconds" >&2
-              exit 1
-            fi
+            if docker buildx imagetools inspect "$image_tag" --raw > "$manifest_file"; then break; fi
+            [[ "$attempt" -lt 30 ]] || { echo "Image unavailable" >&2; exit 1; }
             sleep 2
           done
-          test -s "$manifest_file"
           digest="sha256:$(sha256sum "$manifest_file" | awk '{print $1}')"
-          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "Invalid image digest" >&2
-            exit 1
-          fi
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           docker buildx imagetools inspect "${image_tag}@${digest}" >/dev/null
           echo "image=${image_tag}@${digest}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-      - name: Deploy the exact image digest
+      - name: Deploy exact digest with measured calibration
+        shell: bash
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           IMAGE_REF: ${{ steps.image.outputs.image }}
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          ERROR_FLOOR: ${{ steps.calibration.outputs.floor }}
+          ERROR_THRESHOLD: ${{ steps.calibration.outputs.threshold }}
+          CALIBRATION_EVIDENCE: ${{ steps.calibration.outputs.evidence }}
         run: |
           set -euo pipefail
-          flyctl deploy . \
-            --app "$FLY_APP_NAME" \
-            --config "$FLY_CONFIG" \
-            --image "$IMAGE_REF" \
-            --env "MEDIA_IMAGE_DIGEST=${IMAGE_DIGEST}" \
-            --ha=false \
-            --strategy immediate \
-            --wait-timeout 10m \
-            --yes
-      - name: Read back live health and immutable digest
+          flyctl deploy . --app "$FLY_APP_NAME" --config "$FLY_CONFIG"             --image "$IMAGE_REF"             --env "MEDIA_IMAGE_DIGEST=${IMAGE_DIGEST}"             --env "MEDIA_CALIBRATION_ERROR_FLOOR=${ERROR_FLOOR}"             --env "MEDIA_CALIBRATION_THRESHOLD=${ERROR_THRESHOLD}"             --env "MEDIA_CALIBRATION_EVIDENCE_SHA256=${CALIBRATION_EVIDENCE}"             --env "MEDIA_STAGE10_VERIFY_KEY=${MEDIA_STAGE10_VERIFY_KEY}"             --ha=false --strategy immediate --wait-timeout 15m --yes
+      - name: Read back calibrated live health
+        shell: bash
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          CALIBRATION_EVIDENCE: ${{ steps.calibration.outputs.evidence }}
         run: |
           set -euo pipefail
           health_url="https://${FLY_APP_NAME}.fly.dev/health"
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 72); do
             health="$(curl --fail --silent --show-error "$health_url" || true)"
-            if echo "$health" | jq --exit-status --arg digest "$IMAGE_DIGEST" \
-              '.ok == true and .imageDigest == $digest and .jobDispatchEnabled == false' >/dev/null; then
-              echo "LIVE_HEALTH_OK ${FLY_APP_NAME} ${IMAGE_DIGEST}"
+            if echo "$health" | jq --exit-status --arg digest "$IMAGE_DIGEST"               --arg evidence "$CALIBRATION_EVIDENCE"               '.ok == true and .imageDigest == $digest and .jobDispatchEnabled == false
+               and .stage10Enabled == true and .stage10Ready == true
+               and .calibrationEvidenceSha256 == $evidence' >/dev/null; then
+              echo "LIVE_STAGE10_HEALTH_OK"
               exit 0
             fi
             sleep 5
           done
-          echo "Live health or digest read-back failed" >&2
+          echo "Calibrated health read-back failed" >&2
           exit 1
-      - name: Prove unauthenticated live dispatch remains disabled
+      - name: Prove generic unauthenticated dispatch remains disabled
+        shell: bash
         run: |
           set -euo pipefail
-          status="$(curl --silent --show-error --output /tmp/live-job-response.json --write-out '%{http_code}' \
-            --request POST --header 'content-type: application/json' --data '{}' \
-            "https://${FLY_APP_NAME}.fly.dev/jobs")"
+          status="$(curl --silent --show-error --output /tmp/live-job-response.json --write-out '%{http_code}'             --request POST --header 'content-type: application/json' --data '{}'             "https://${FLY_APP_NAME}.fly.dev/jobs")"
           test "$status" = "503"
-          jq --exit-status '.ok == false and .code == "JOB_DISPATCH_DISABLED"' \
-            /tmp/live-job-response.json >/dev/null
-      - name: Show Fly deployment status
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          jq --exit-status '.ok == false and .code == "JOB_DISPATCH_DISABLED"'             /tmp/live-job-response.json >/dev/null
+      - name: Prove unsigned Stage 10 is rejected
+        shell: bash
         run: |
-          flyctl status --app "$FLY_APP_NAME"
-          flyctl checks list --app "$FLY_APP_NAME"
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /tmp/stage10-response.json --write-out '%{http_code}'             --request POST --header 'content-type: application/json' --data '{}'             "https://${FLY_APP_NAME}.fly.dev/stage10/narrate")"
+          test "$status" = "401"
+          jq --exit-status '.ok == false and .code == "INVALID_SIGNATURE"'             /tmp/stage10-response.json >/dev/null
+      - name: Upload calibration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage10-calibration-${{ github.run_id }}
+          path: dual-calibration-live-output/
+          if-no-files-found: error
+          retention-days: 14
+

@@ -17,18 +17,19 @@ primary_region = "sin"
     hard_limit = 1
 
   [[http_service.checks]]
-    grace_period = "30s"
-    interval = "15s"
+    grace_period = "90s"
+    interval = "30s"
     method = "GET"
     path = "/health"
-    timeout = "5s"
+    timeout = "10s"
 
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 1
-  memory = "1024mb"
+  cpu_kind = "performance"
+  cpus = 2
+  memory = "4096mb"
 
 [env]
   MEDIA_GPU = "false"
   MEDIA_WORKER_MODE = "queue"
   MEDIA_JOB_DISPATCH_ENABLED = "false"
+  MEDIA_STAGE10_ENABLED = "true"

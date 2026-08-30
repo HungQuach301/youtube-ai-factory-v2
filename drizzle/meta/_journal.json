@@ -78,6 +78,13 @@
       "when": 1788080400000,
       "tag": "0011_stage09_visual_review",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788102123348,
+      "tag": "0012_stage10_audio_production",
+      "breakpoints": true
     }
   ]
 }

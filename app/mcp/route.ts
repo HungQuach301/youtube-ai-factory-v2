@@ -1019,6 +1019,12 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         ownerApprovalText,
         idempotencyKey: await trackGVideoOneStageIdempotencyKey(stageCode),
       });
+      const stage10Production = stageCode === "10" && "production" in result
+        ? result.production as { reservedUsd: number; actualUsd: number }
+        : null;
+      const stageSpend = stage10Production
+        ? { reservedUsd: stage10Production.reservedUsd, actualUsd: stage10Production.actualUsd }
+        : { reservedUsd: 0, actualUsd: 0 };
       const output = {
         accepted: true,
         replayed: result.replayed,
@@ -1033,8 +1039,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
         artifactSha256: result.stageArtifact.canonicalHash,
         gateResults: result.gateResults,
-        stageReservedUsd: 0,
-        stageActualUsd: 0,
+        stageReservedUsd: stageSpend.reservedUsd,
+        stageActualUsd: stageSpend.actualUsd,
         humanGate: "NOT_REQUIRED",
         providerDispatch: "OFF" as const,
         releaseEligible: false as const,
