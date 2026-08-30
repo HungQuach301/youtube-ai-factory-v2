@@ -14,6 +14,7 @@ if (!IMAGE_DIGEST?.match(/^sha256:[a-f0-9]{64}$/u)) {
 const JOB_DISPATCH_ENABLED = process.env.MEDIA_JOB_DISPATCH_ENABLED === 'true'
 const STAGE10_ENABLED = process.env.MEDIA_STAGE10_ENABLED === 'true'
 const STAGE10_VERIFY_KEY = process.env.MEDIA_STAGE10_VERIFY_KEY
+const TTS_BATCH_SIZE = 2
 const CALIBRATION_FLOOR = Number(process.env.MEDIA_CALIBRATION_ERROR_FLOOR)
 const CALIBRATION_THRESHOLD = Number(process.env.MEDIA_CALIBRATION_THRESHOLD)
 const CALIBRATION_SHA256 = process.env.MEDIA_CALIBRATION_EVIDENCE_SHA256
@@ -291,8 +292,8 @@ async function processStage10(payload) {
     const observerItems = []
     let totalCharacters = 0
     const plans = payload.segments.flatMap((segment) => ['A', 'B'].map((route) => ({ segment, route })))
-    for (let offset = 0; offset < plans.length; offset += 4) {
-      const batch = await Promise.all(plans.slice(offset, offset + 4).map(async ({ segment, route }) => {
+    for (let offset = 0; offset < plans.length; offset += TTS_BATCH_SIZE) {
+      const batch = await Promise.all(plans.slice(offset, offset + TTS_BATCH_SIZE).map(async ({ segment, route }) => {
         const takeId = `${segment.segmentId}-take-${route.toLowerCase()}`
         const filePath = join(workRoot, `${takeId}.mp3`)
         const synthesized = await synthesizeCandidate(payload, segment, route, filePath)
