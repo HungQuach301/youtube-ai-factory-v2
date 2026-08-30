@@ -18,6 +18,17 @@ test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
   assert.match(source, /slice\(offset, offset \+ TTS_BATCH_SIZE\)/);
 });
 
+test("Stage 10 observes all tournament takes in one WhisperX batch", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../scripts/whisperx-phoneme-observer.py", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /combined_audio = np\.concatenate\(clips\)/);
+  assert.match(source, /model\.transcribe\(combined_audio, batch_size=8/);
+  assert.equal(source.match(/model\.transcribe\(/g)?.length, 1);
+  assert.equal(source.match(/whisperx\.align\(/g)?.length, 1);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
