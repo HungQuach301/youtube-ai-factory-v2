@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "81516597cd29b55e921656f9d1344b6d439b5d2db3c24eeebb85260df80a79c3",
+  "aggregate_sha256": "2f57b76918c000de3e42c9fd72187dd67ed5c0db7a38e9223113206de5dfb864",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -33,7 +33,7 @@
     },
     {
       "path": "SSOT-CONTRACT.md",
-      "sha256": "0f4971bf559fdf2533ff0068945f1dabca83423b1c3ffb960fb164383e4c22d1"
+      "sha256": "1ea253878e5bcbf7bd0fe7c3222044e7e9909975633e51b9138020bd1d4a2adc"
     },
     {
       "path": "app/[...path]/route.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "app/api/operator/route.ts",
-      "sha256": "e0a1a2e190655a277b87589b3f681bafb10b908d43a6577bd71a4969dc8fb637"
+      "sha256": "5bb6b9b422bc9eb6c9b2b4317c1346ab56cbd7d75ef66834cc02db6f30fa1cdf"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -61,7 +61,7 @@
     },
     {
       "path": "app/globals.css",
-      "sha256": "d2d5dc2c94d82fff2f429f0543974727d71a165b25956c8f07bbc5b07e0932fd"
+      "sha256": "cdce3853f32dee51e6374a0040c58a88f9f36010c6857eca2fcfb9b101b4df31"
     },
     {
       "path": "app/layout.tsx",
@@ -69,7 +69,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "40f535e50c74c5cd862a9d471b5290a0de87c525fbaa7977aa63e7d93307ac75"
+      "sha256": "4eb085fbb4666ae46dbc94e9bd85192b396d74f97ec24166158140fd0f424a81"
     },
     {
       "path": "app/oauth-server.ts",
@@ -89,15 +89,15 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "b0b5df9fcf630370b1643ca317fff415d4bc4d79d9be540e228b5b42308e73d2"
+      "sha256": "2cec75a61407e4627986431f058e077f11a95ae300ee3a002e5e6d2ced163a54"
     },
     {
       "path": "app/operate/page.tsx",
-      "sha256": "e48dfbe72c4c5533ba9be5458b852e62fa735dc86da0d79b9a7be49d8a3ce4ca"
+      "sha256": "b37cde470b72f342b10e9b8b57b60a86b6f6f55de9fd97b94eed2989caa4416a"
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "bbbb6674d04295fb0b1c3bcdef6d4f1607afa250c948b293f2a9606d7061e6dc"
+      "sha256": "7ca528e690b8266bd3ef798be6fbc30542f089ce9ba7309fd61d4f51e67598ab"
     },
     {
       "path": "app/page.tsx",
@@ -281,11 +281,11 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "08aaaa6d5651fd41afe9ae42a4d870a9dfb80b128181814e9a58a95334daeb1b"
+      "sha256": "1f3f17401b61d0f02032b17f2777b7fd2fb00e699ed2e01e03953bf72c3fd138"
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "5d5cccc53e8d88e74a50beda25c4b9161be520c1decd1f9af552e17268631c7e"
+      "sha256": "8bcd32eb3674dd7d50e41a65abbb453ffc155bd5d6b5da81b7025883e5854cdf"
     },
     {
       "path": "tsconfig.json",
