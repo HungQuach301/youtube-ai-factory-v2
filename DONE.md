@@ -1307,3 +1307,28 @@ Deployment must stop after CI and live health PASS; replay requires a separate l
 | Không gọi provider hoặc tạo media job mới | FINALIZE chỉ xác minh receipt READY hiện hữu và seal evidence |
 | Không publish | `providerDispatch=OFF`, `autoPublish=OFF`; đích chỉ là `STAGE_11_READY` |
 | Replay FINALIZE đúng một lần | Chỉ thực hiện sau CI và Production health PASS với owner approval ngày 2026-08-31 |
+
+---
+
+## EVO-STAGE11-AMBIENCE-ONLY · Track G Video #1 sound-design plan
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Stage 11 chỉ chấp nhận `ambience_only`; không cue `MUSIC` | `buildTrackGVideoOneStage11AudioPlan`; D1 trigger `stage11_audio_plan_validate_insert` |
+| Ambience có nguồn gốc và quyền sử dụng kiểm toán được | Factory-original procedural recipe + `rights_evidence_sha256`; M0 license gate |
+| Loudness/ducking lấy từ hợp đồng AUDIO hiện hành | Import trực tiếp `packages/contracts/src/thresholds.ts`; two-pass loudnorm; M1 plan gate |
+| Không giả lập measured master trước render | Artifact ghi `renderDeferredToStage12=true`; measured master thuộc Stage 12 |
+| Không provider hoặc spend | D1 CHECK ép `provider_call_count=0`, `reserved_usd=0`, `actual_usd=0` |
+| Command idempotent và chỉ chuyển 11 → 12 | Canonical `ADVANCE_TRACK_G_VIDEO_1_STAGE`; predecessor hash Stage 10; đích `STAGE_12_READY` |
+| Operator và MCP dùng cùng domain executor | `/operate`, `/api/operator`, và generic MCP advance gọi cùng `advanceTrackGVideoOneStage` |
+| Không release hoặc publish | `releaseEligible=false`, `autoPublish=OFF`; Stage 15 không được gọi |
+| Migration append-only và fail-closed | `drizzle/0016_stage11_ambience_only.sql`; `tests/migrations/0016-stage11-ambience-only.test.ts` |
+| Repository và Sites đều xanh trước deploy | `pnpm run ci`; Sites lint/build và 14/14 integration tests |
+
+## Production boundary
+
+Owner phê duyệt build, PR, Production deployment và đúng một lần thực thi Stage 11
+ngày 2026-08-31. Command chỉ được gọi sau GitHub CI và Production health PASS;
+sau read-back phải dừng tại `STAGE_12_READY` và tuyệt đối không publish.

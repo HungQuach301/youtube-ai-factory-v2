@@ -20,6 +20,7 @@ import {
   spendCeilings,
   stage10AudioProductions,
   stage10MediaJobs,
+  stage11AudioPlans,
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
@@ -45,6 +46,7 @@ import {
   type Stage10MediaRequest,
   type Stage10MediaResult,
 } from "./stage10-media";
+import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 const OWNER_APPROVAL_TEXT = "START VIDEO 1 QUALIFICATION";
@@ -138,6 +140,12 @@ export const STAGE_10_RETRYABLE_ERROR_CODES = [
 const STAGE_10_RESERVED_USD = 4;
 const STAGE_10_START_OWNER_APPROVAL_TEXT = "START STAGE 10";
 const STAGE_10_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 10";
+const STAGE_11_CODE = "11";
+const STAGE_11_STANDARD_VERSION = 1;
+const STAGE_11_INSTANCE_ID = "stage_track_g_video_1_11_attempt_1";
+const STAGE_11_ARTIFACT_ID = "artifact_track_g_video_1_stage_11_ambience_plan_v1";
+const STAGE_11_ARTIFACT_TYPE = "AMBIENCE_ONLY_SOUND_DESIGN_PLAN";
+const STAGE_11_AUDIO_PLAN_ID = "audio_plan_track_g_video_1_stage_11_v1";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
   "08", "09", "10", "11", "12", "13", "14",
@@ -4465,6 +4473,195 @@ export async function finalizeTrackGVideoOneStage10(
   return { ...(await readBackStage10(bootstrap.run.id)), replayed: false };
 }
 
+function stage11Envelope(operationRunId: string, predecessorSha256: string,
+  durationSec: number, narrationSha256: string) {
+  const audioPlan = buildTrackGVideoOneStage11AudioPlan(durationSec, narrationSha256);
+  return {
+    schemaVersion: 1,
+    runnerContractVersion: 1,
+    executorVersion: "stage-11-ambience-only-sound-design-v1",
+    operationRunId,
+    packageId: STAGE_00_PACKAGE_ID,
+    stageCode: STAGE_11_CODE,
+    artifactType: STAGE_11_ARTIFACT_TYPE,
+    audioPlan,
+    provenance: [{
+      sourceType: "SEALED_STAGE_ARTIFACT",
+      sourceId: STAGE_10_ARTIFACT_ID,
+      canonicalHash: predecessorSha256,
+      narrationSha256,
+      authority: "SEALED_CALIBRATED_NARRATION",
+    }],
+    gateResults: audioPlan.gateResults,
+    controls: {
+      musicMode: "ambience_only",
+      renderDeferredToStage12: true,
+      providerDispatch: "OFF",
+      providerCallCount: 0,
+      releaseEligible: false,
+      autoPublish: "OFF",
+      humanGate: "NOT_REQUIRED",
+    },
+    budget: { reservedUsd: 0, actualUsd: 0 },
+  };
+}
+
+async function readBackStage11(operationRunId: string) {
+  const stage10 = await readBackStage10(operationRunId);
+  const db = getDb();
+  const [stage] = await db.select().from(stageInstances)
+    .where(eq(stageInstances.id, STAGE_11_INSTANCE_ID)).limit(1);
+  const [artifact] = await db.select().from(stageArtifacts)
+    .where(eq(stageArtifacts.id, STAGE_11_ARTIFACT_ID)).limit(1);
+  const [audioPlanRow] = await db.select().from(stage11AudioPlans)
+    .where(eq(stage11AudioPlans.id, STAGE_11_AUDIO_PLAN_ID)).limit(1);
+  const ceilings = await db.select().from(spendCeilings);
+  const stageCeiling = ceilings.find((value) => value.scope === "STAGE"
+    && value.scopeRef === STAGE_11_INSTANCE_ID)?.ceilingUsd;
+  const model = buildTrackGVideoOneStage11AudioPlan(
+    stage10.shotCueProgramModel.targetDurationSec,
+    stage10.production.narrationSha256,
+  );
+  if (!stage || !artifact || !audioPlanRow
+    || stage.packageId !== STAGE_00_PACKAGE_ID || stage.stageCode !== STAGE_11_CODE
+    || stage.controlState !== "FROZEN" || stage.standardVersion !== STAGE_11_STANDARD_VERSION
+    || artifact.stageInstanceId !== stage.id || artifact.artifactType !== STAGE_11_ARTIFACT_TYPE
+    || artifact.namespace !== "production" || artifact.immutabilityState !== "SEALED"
+    || artifact.eligibilityState !== "ELIGIBLE_FOR_STAGE"
+    || artifact.standardVersion !== STAGE_11_STANDARD_VERSION || stageCeiling !== 0
+    || audioPlanRow.packageId !== STAGE_00_PACKAGE_ID
+    || audioPlanRow.stageInstanceId !== stage.id || audioPlanRow.mode !== "ambience_only"
+    || audioPlanRow.narrationSha256 !== stage10.production.narrationSha256
+    || audioPlanRow.rightsEvidenceSha256 !== model.rightsEvidenceSha256
+    || audioPlanRow.providerCallCount !== 0 || audioPlanRow.reservedUsd !== 0
+    || audioPlanRow.actualUsd !== 0 || audioPlanRow.evidenceR2Key !== artifact.r2Key
+    || audioPlanRow.evidenceSha256 !== artifact.canonicalHash
+    || canonicalize(JSON.parse(audioPlanRow.cueProgramJson))
+      !== canonicalize({ cues: model.cues, proceduralRecipe: model.proceduralRecipe })
+    || canonicalize(JSON.parse(audioPlanRow.loudnormPlanJson))
+      !== canonicalize({ passes: model.loudnormPlan, target: model.loudnessTarget })
+    || audioPlanRow.duckingFilter !== model.ducking.filter
+    || !isAtOrAfterReadyStep(stage10.base.run.currentStep, "STAGE_12_READY")
+    || !await verifyImmutableEvidence(stage10.stage10Artifact.r2Key,
+      stage10.stage10Artifact.canonicalHash)
+    || !await verifyImmutableEvidence(artifact.r2Key, artifact.canonicalHash)) {
+    throw new Error("TRACK_G_STAGE_11_READ_BACK_FAILED");
+  }
+  return { ...stage10, stage11: stage, stage11Artifact: artifact,
+    stageArtifact: artifact, stage11AudioPlan: audioPlanRow,
+    audioPlanModel: model, gateResults: model.gateResults };
+}
+
+async function advanceTrackGVideoOneStage11(
+  user: ChatGPTUser,
+  input: AdvanceTrackGVideoOneStageInput,
+  objective: string,
+) {
+  const bootstrap = await readBackForStage00();
+  const stage10 = await readBackStage10(bootstrap.run.id);
+  const expectedKey = stageAdvanceIdempotencyKey(
+    bootstrap.run.id,
+    STAGE_11_CODE,
+    stage10.stage10Artifact.canonicalHash,
+  );
+  if (input.idempotencyKey.toLowerCase() !== expectedKey) {
+    throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  }
+  const db = getDb();
+  const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+  if (existingCommand) return { ...(await readBackStage11(bootstrap.run.id)), replayed: true };
+  if (bootstrap.run.currentStep !== "STAGE_11_READY") throw new Error("TRACK_G_STAGE_11_NOT_READY");
+  if (!await verifyImmutableEvidence(stage10.stage10Artifact.r2Key,
+    stage10.stage10Artifact.canonicalHash)
+    || !await verifyImmutableEvidence(stage10.production.narrationR2Key,
+      stage10.production.narrationSha256)) {
+    throw new Error("TRACK_G_STAGE_11_PREDECESSOR_PROVENANCE_FAILED");
+  }
+  const envelope = stage11Envelope(
+    bootstrap.run.id,
+    stage10.stage10Artifact.canonicalHash,
+    stage10.shotCueProgramModel.targetDurationSec,
+    stage10.production.narrationSha256,
+  );
+  const artifactBytes = new TextEncoder().encode(`${canonicalize(envelope)}\n`);
+  const artifactSha256 = sha256(artifactBytes);
+  const artifactR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_11_CODE, "ambience-only-sound-design", `${artifactSha256}.json`].join("/");
+  await putImmutableProductionEvidence(artifactR2Key, artifactBytes, "application/json", artifactSha256);
+  const [latestEvent] = await db.select({ ordinal: operationEvents.ordinal }).from(operationEvents)
+    .where(eq(operationEvents.runId, bootstrap.run.id)).orderBy(desc(operationEvents.ordinal)).limit(1);
+  const firstOrdinal = (latestEvent?.ordinal ?? 0) + 1;
+  const now = new Date().toISOString();
+  const commandId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const model = envelope.audioPlan;
+  const d1 = getD1();
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'ADVANCE_TRACK_G_VIDEO_1_STAGE', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_11_READY',
+          'TRACK_G_VIDEO_1_STAGE_12_READY', ?, ?)`).bind(
+        commandId, canonicalize({ objective, operationRunId: bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_11_CODE,
+          executorVersion: envelope.executorVersion, artifactSha256,
+          providerCallCount: 0, actualUsd: 0 }),
+        input.idempotencyKey, user.email.toLowerCase(), traceId, now),
+      d1.prepare(`INSERT INTO stage_instance
+        (id, package_id, stage_code, control_state, standard_version, attempt_ordinal, started_at, frozen_at)
+        VALUES (?, ?, '11', 'FROZEN', ?, 1, ?, ?)`).bind(
+        STAGE_11_INSTANCE_ID, STAGE_00_PACKAGE_ID, STAGE_11_STANDARD_VERSION, now, now),
+      d1.prepare(`INSERT INTO stage_artifact
+        (id, stage_instance_id, artifact_type, namespace, r2_key, canonical_hash,
+         immutability_state, eligibility_state, standard_version, created_at)
+        VALUES (?, ?, ?, 'production', ?, ?, 'SEALED', 'ELIGIBLE_FOR_STAGE', ?, ?)`).bind(
+        STAGE_11_ARTIFACT_ID, STAGE_11_INSTANCE_ID, STAGE_11_ARTIFACT_TYPE,
+        artifactR2Key, artifactSha256, STAGE_11_STANDARD_VERSION, now),
+      d1.prepare(`INSERT INTO stage11_audio_plan
+        (id, package_id, stage_instance_id, mode, narration_sha256, cue_program_json,
+         rights_evidence_sha256, loudnorm_plan_json, ducking_filter, provider_call_count,
+         reserved_usd, actual_usd, evidence_r2_key, evidence_sha256, created_at)
+        VALUES (?, ?, ?, 'ambience_only', ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?)`).bind(
+        STAGE_11_AUDIO_PLAN_ID, STAGE_00_PACKAGE_ID, STAGE_11_INSTANCE_ID,
+        model.narrationSha256,
+        canonicalize({ cues: model.cues, proceduralRecipe: model.proceduralRecipe }),
+        model.rightsEvidenceSha256,
+        canonicalize({ passes: model.loudnormPlan, target: model.loudnessTarget }),
+        model.ducking.filter, artifactR2Key, artifactSha256, now),
+      d1.prepare(`INSERT OR IGNORE INTO spend_ceiling
+        (scope, scope_ref, ceiling_usd) VALUES ('STAGE', ?, 0)`).bind(STAGE_11_INSTANCE_ID),
+      d1.prepare(`UPDATE operation_run SET current_step = 'STAGE_12_READY', updated_at = ?
+        WHERE id = ? AND status = 'RUNNING' AND current_step = 'STAGE_11_READY'`).bind(
+        now, bootstrap.run.id),
+      ...[
+        ["STAGE_11_DOR_PASSED", { predecessor: STAGE_10_ARTIFACT_ID,
+          predecessorSha256: stage10.stage10Artifact.canonicalHash,
+          narrationSha256: stage10.production.narrationSha256 }],
+        ["STAGE_ADVANCE_ACCEPTED", { commandId, stageCode: STAGE_11_CODE,
+          traceId, executorVersion: envelope.executorVersion }],
+        ["STAGE_11_M0_MUSIC_LICENSE_PASSED", { mode: model.mode,
+          cueCount: model.cues.length, rightsEvidenceSha256: model.rightsEvidenceSha256 }],
+        ["STAGE_11_M1_LOUDNESS_BALANCE_PLAN_PASSED", { target: model.loudnessTarget,
+          passCount: model.loudnormPlan.length, ducking: model.ducking }],
+        ["STAGE_11_ARTIFACT_SEALED", { artifactId: STAGE_11_ARTIFACT_ID,
+          artifactR2Key, artifactSha256 }],
+        ["STAGE_11_FROZEN", { nextStep: "STAGE_12_READY", reservedUsd: 0,
+          actualUsd: 0, providerDispatch: "OFF", autoPublish: "OFF" }],
+      ].map(([eventType, payload], index) => d1.prepare(`INSERT INTO operation_event
+        (id, run_id, ordinal, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+        crypto.randomUUID(), bootstrap.run.id, firstOrdinal + index, eventType,
+        canonicalize(payload), now)),
+    ]);
+  } catch (error) {
+    const [concurrent] = await db.select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrent) return { ...(await readBackStage11(bootstrap.run.id)), replayed: true };
+    throw error;
+  }
+  return { ...(await readBackStage11(bootstrap.run.id)), replayed: false };
+}
+
 export async function advanceTrackGVideoOneStage(
   user: ChatGPTUser,
   input: AdvanceTrackGVideoOneStageInput,
@@ -4504,6 +4701,9 @@ export async function advanceTrackGVideoOneStage(
   }
   if (input.stageCode === STAGE_10_CODE) {
     throw new Error("TRACK_G_STAGE_10_SPLIT_COMMAND_REQUIRED");
+  }
+  if (input.stageCode === STAGE_11_CODE) {
+    return advanceTrackGVideoOneStage11(user, input, objective);
   }
   if (input.stageCode !== STAGE_01_CODE) {
     throw new Error(`TRACK_G_STAGE_${input.stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
@@ -5296,6 +5496,11 @@ export async function trackGVideoOneStageIdempotencyKey(
     const stage09 = await readBackStage09(bootstrap.run.id);
     return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
       stage09.stage09Artifact.canonicalHash);
+  }
+  if (stageCode === STAGE_11_CODE) {
+    const stage10 = await readBackStage10(bootstrap.run.id);
+    return stageAdvanceIdempotencyKey(bootstrap.run.id, stageCode,
+      stage10.stage10Artifact.canonicalHash);
   }
   throw new Error(`TRACK_G_STAGE_${stageCode}_EXECUTOR_NOT_IMPLEMENTED`);
 }

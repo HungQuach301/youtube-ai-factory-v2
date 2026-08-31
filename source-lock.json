@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "c3459d0a1f419085182dddf6c769b58a969279cb9c25cecca83bb3b0b9f4a2d7",
+  "aggregate_sha256": "c49e52c7c63eda3bb8fa90ec7ea8a8a017b6ce8280050a92943df81125c23d08",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -49,7 +49,7 @@
     },
     {
       "path": "app/api/operator/route.ts",
-      "sha256": "28a3dac4201fc6d49f2b26565af6741ed6a98b0f966e1da6c075dc8df9799e58"
+      "sha256": "2f9eb794032f6e1b24f481de012b1b22973b4166e0e800396de6ff4cadc4bff7"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "00c003cb81e6484c2ee1ffee78bc5924405a19224d83fef1d7d33cee96f3cda3"
+      "sha256": "07117910e26098195f3aaf8b7b4488a496a48601e2005f3284162ade476cbda7"
     },
     {
       "path": "app/oauth-server.ts",
@@ -93,7 +93,7 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "f2df535f942aa77b5b18d484f3b3911b4c1d0dac8f0b1b016c3db0867c8c0603"
+      "sha256": "305c2dd4331347b0309b33fb01dda215e73cb61e796d247091660cf382a92b8b"
     },
     {
       "path": "app/operate/page.tsx",
@@ -101,7 +101,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "8f52c01e60ce1b1accfe1248535b2f18e1b8b526a89b5bd4933c4da2dc1d5b89"
+      "sha256": "8267a40e674fc6f8a41d49939d7b3b85332381411f98e035d6b9a6c614e848fa"
     },
     {
       "path": "app/page.tsx",
@@ -116,8 +116,12 @@
       "sha256": "44f6112ec6022f7a01fe9b725da561b7c3412b2c5e1f57a6ebb0096707df7e2d"
     },
     {
+      "path": "app/stage11-audio.ts",
+      "sha256": "13756bb8b6930646365126eda2869b8bb67040af2bced510381e48d92414edb6"
+    },
+    {
       "path": "app/track-g-video-one.ts",
-      "sha256": "88e569172a80823f2d517de3bc3bf698d00b2e0721f0dccf27fff630b92eee3c"
+      "sha256": "ee5c6f693109cc0b77b957210bd9d3b461c6f38ab25df5af35003a8e403eb684"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -133,7 +137,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "67abb55b3ccd9e976edc4c0a918d2b0a870f529d23d488fb38894a58aa3391e4"
+      "sha256": "8b8611886e36124c6f3f4e355ed8bd1dec5a2af091eebba8d1308ed02f33283e"
     },
     {
       "path": "drizzle.config.ts",
@@ -200,6 +204,14 @@
       "sha256": "a68f1f1586e455703514789f2077a1a7d9b9d79c6e65dbc57c5be3ee3025d2be"
     },
     {
+      "path": "drizzle/0015_stage10_failed_retry.sql",
+      "sha256": "a8c00a94e199ceb9cfd957a5c0b41c5d3862c595236b310aa5301263e8b5d7f9"
+    },
+    {
+      "path": "drizzle/0016_stage11_ambience_only.sql",
+      "sha256": "2f8c50dfa39f2c9bff69568fe5d040dde56cf45dceb4f7147662beaeba95108a"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -245,7 +257,7 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "ccbb457d067d788d618684638a80220a8c8c37f1166f3880394e3ab085e7fc43"
+      "sha256": "d023b936c0ec402504f2691511f04fabf52f7db9c8932cb21bd9c76c02794661"
     },
     {
       "path": "eslint.config.mjs",
@@ -270,6 +282,22 @@
     {
       "path": "package.json",
       "sha256": "3069a8b7730ef2d532aeef8a99ae9c846a495a2576324df707b605912c51b602"
+    },
+    {
+      "path": "packages/contracts/src/enums.ts",
+      "sha256": "291fdd696aec98227fafee5b5448b64fa09624a5e628ba943097b766f56a00f6"
+    },
+    {
+      "path": "packages/contracts/src/thresholds.ts",
+      "sha256": "049c6c5b6986d84db64029944fe6d100c91d6a508ec39538aacd7bcc3d03297f"
+    },
+    {
+      "path": "packages/media-worker/container-entry.mjs",
+      "sha256": "d3223c1b0c1a6dbd7c065c8a8126384146dcdd3b8b670e74692d7a5237a1b6b4"
+    },
+    {
+      "path": "packages/media-worker/fly.toml",
+      "sha256": "309787da02a64be08dcefd60769e9d81f543ad329214610f1180f660c97ebee0"
     },
     {
       "path": "postcss.config.mjs",
@@ -312,6 +340,10 @@
       "sha256": "6d7f244fa5456041eb1a5dd1131784b29a1c8b927bb0e1ec3a885929c461b032"
     },
     {
+      "path": "scripts/whisperx-phoneme-observer.py",
+      "sha256": "cec17ae51e7dafb9ce05687946edca886fa6158155b7d79f46ed97dfbd10347c"
+    },
+    {
       "path": "source-contract.json",
       "sha256": "260a49997db09019e6969804b3e865ca6d1ba8560e8b2c6462d5b88b8baa24e0"
     },
@@ -320,8 +352,12 @@
       "sha256": "130bdd2e6050eda61d6c825c1939637aa0b0f9058858e888daf662477983f591"
     },
     {
+      "path": "tests/migrations/0016-stage11-ambience-only.test.ts",
+      "sha256": "0a305401bff9f7a7e2f8e1767d7efdc6fee12b16c26d7e98af895440cf524cff"
+    },
+    {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "f0ea7eb3a65a4d98e6a02293d383937f8e045606bd593bfca1b1c8e746a89252"
+      "sha256": "9d0b4cc645bd0996551b5f73b16f20cc39302b47db531710cfc67b0c0f4b31f2"
     },
     {
       "path": "tests/rendered-html.test.mjs",
