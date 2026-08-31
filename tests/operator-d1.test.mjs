@@ -68,6 +68,11 @@ test("Stage 10 separates bounded start from durable receipt finalization", async
   assert.match(domain, /START_TRACK_G_VIDEO_1_STAGE_10/);
   assert.match(domain, /FINALIZE_TRACK_G_VIDEO_1_STAGE_10/);
   assert.match(domain, /TRACK_G_STAGE_10_JOB_PENDING/);
+  assert.match(domain, /STAGE_10_RETRYABLE_ERROR_CODES/);
+  assert.match(domain, /attemptOrdinal/);
+  assert.match(domain, /retryOfJobId/);
+  assert.match(domain, /orderBy\(desc\(stage10MediaJobs\.attemptOrdinal\)\)/);
+  assert.match(domain, /TRACK_G_STAGE_10_JOB_RETRY_NOT_ALLOWED/);
   assert.match(callback, /putImmutableProductionEvidence/);
   assert.match(callback, /state = 'READY'/);
 });

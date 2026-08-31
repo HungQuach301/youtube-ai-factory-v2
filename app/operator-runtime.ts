@@ -28,6 +28,7 @@ import { activationBlockers, approvedChannel, trackGVideoOneContract } from "./f
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
 import {
+  isStage10RetryableErrorCode,
   trackGVideoOneStage07AVoiceModel,
   trackGVideoOneStage07BVisualGrammarModel,
   trackGVideoOneStage08ShotCueProgramModel,
@@ -243,7 +244,8 @@ async function getTrackGVideoOneWorkbench() {
   const [stage10Production] = await db.select().from(stage10AudioProductions)
     .where(eq(stage10AudioProductions.packageId, productionPackage.id)).limit(1);
   const [stage10Job] = await db.select().from(stage10MediaJobs)
-    .where(eq(stage10MediaJobs.packageId, productionPackage.id)).limit(1);
+    .where(eq(stage10MediaJobs.packageId, productionPackage.id))
+    .orderBy(desc(stage10MediaJobs.attemptOrdinal)).limit(1);
   const stage10 = stage10Instance && stage10Production ? {
     controlState: stage10Instance.controlState,
     artifactSha256: stage10Artifact?.canonicalHash ?? null,
@@ -323,6 +325,8 @@ async function getTrackGVideoOneWorkbench() {
     stage08,
     stage09,
     stage10Job: stage10Job ? {
+      attemptOrdinal: stage10Job.attemptOrdinal,
+      retryOfJobId: stage10Job.retryOfJobId,
       state: stage10Job.state,
       receiptSha256: stage10Job.receiptSha256,
       workerImageDigest: stage10Job.workerImageDigest,
@@ -346,6 +350,9 @@ async function getTrackGVideoOneWorkbench() {
           : run.currentStep === "STAGE_09_READY" && stage09?.reviewState === "AWAITING_HUMAN"
             ? ["SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL"]
           : run.currentStep === "STAGE_10_READY" && !stage10Job
+            ? ["START_TRACK_G_VIDEO_1_STAGE_10"]
+          : run.currentStep === "STAGE_10_READY" && stage10Job?.state === "FAILED"
+            && stage10Job.attemptOrdinal === 1 && isStage10RetryableErrorCode(stage10Job.errorCode)
             ? ["START_TRACK_G_VIDEO_1_STAGE_10"]
           : run.currentStep === "STAGE_10_READY" && stage10Job?.state === "READY"
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_10"]

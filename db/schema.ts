@@ -317,6 +317,8 @@ export const stage10MediaJobs = sqliteTable("stage10_media_job", {
   packageId: text("package_id").notNull().references(() => productionPackages.id),
   operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
   stageInstanceId: text("stage_instance_id").notNull(),
+  attemptOrdinal: integer("attempt_ordinal").notNull().default(1),
+  retryOfJobId: text("retry_of_job_id"),
   providerIdempotencyKey: text("provider_idempotency_key").notNull(),
   callbackTokenHash: text("callback_token_hash").notNull(),
   state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
@@ -327,7 +329,8 @@ export const stage10MediaJobs = sqliteTable("stage10_media_job", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
-  uniqueIndex("stage10_media_job_package_unique").on(table.packageId),
+  uniqueIndex("stage10_media_job_package_attempt_unique").on(table.packageId, table.attemptOrdinal),
+  uniqueIndex("stage10_media_job_retry_of_unique").on(table.retryOfJobId),
   uniqueIndex("stage10_media_job_provider_key_unique").on(table.providerIdempotencyKey),
 ]);
 
