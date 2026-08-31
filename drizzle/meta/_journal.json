@@ -99,6 +99,13 @@
       "when": 1788150370167,
       "tag": "0014_stage10_command_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788163200000,
+      "tag": "0015_stage10_failed_retry",
+      "breakpoints": true
     }
   ]
 }

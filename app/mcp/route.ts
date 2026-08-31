@@ -975,7 +975,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     {
       title: "Start durable Track G Video #1 Stage 10",
       description:
-        "Create one durable Stage 10 job and return quickly. The calibrated media worker runs the bounded 12-call narration tournament asynchronously and posts an immutable receipt back to Production object storage. This command never freezes Stage 10.",
+        "Create one durable Stage 10 job and return quickly. A later explicit owner command may append one new attempt only after an eligible runtime failure; terminal quality, rights, policy and budget failures never retry. Each attempt is bounded to 12 calls and posts an immutable receipt. This command never freezes Stage 10.",
       inputSchema: {
         objective: z.string().min(12).max(500),
         confirm: z.literal(true),

@@ -97,6 +97,8 @@ type Stage10 = {
   narrationSha256: string;
 };
 type Stage10Job = {
+  attemptOrdinal: number;
+  retryOfJobId: string | null;
   state: "PENDING" | "READY" | "FAILED";
   receiptSha256: string | null;
   workerImageDigest: string | null;
@@ -500,11 +502,11 @@ export default function OperatorClient() {
       <div className="operator-card-heading"><div><p className="eyebrow">PRODUCTION MEDIA · BOUNDED</p><h2>Stage 10 calibrated narration tournament</h2></div><span className="write-badge">M1 × 2</span></div>
       {!stage10 ? <>
         <p className="operator-help">Create two real ElevenLabs takes for each of the six sealed beats, measure every take with the independently calibrated WhisperX observer, select one eligible take per beat, and seal the joined narration.</p>
-        <div className="script-metadata"><div><span>Maximum provider calls</span><strong>12 · no retry</strong></div><div><span>Stage reservation</span><strong>$4.00 maximum</strong></div><div><span>Required gates</span><strong>Phoneme mismatch + seam score</strong></div><div><span>Publishing</span><strong>Release OFF · auto-publish OFF</strong></div></div>
+        <div className="script-metadata"><div><span>Maximum provider calls</span><strong>12 per attempt · no automatic retry</strong></div><div><span>Stage reservation</span><strong>$4.00 maximum</strong></div><div><span>Required gates</span><strong>Phoneme mismatch + seam score</strong></div><div><span>Publishing</span><strong>Release OFF · auto-publish OFF</strong></div></div>
         {!stage10Job ? <button type="button" disabled={busy || !canStartNarration} onClick={startNarration}>{busy ? "Starting…" : "Start durable Stage 10 job"}</button> : null}
-        {stage10Job?.state === "PENDING" ? <p className="decision-receipt" role="status">Stage 10 job PENDING · the worker is producing and measuring asynchronously · refresh to read the durable receipt.</p> : null}
+        {stage10Job?.state === "PENDING" ? <p className="decision-receipt" role="status">Stage 10 attempt {stage10Job.attemptOrdinal} PENDING · the worker is producing and measuring asynchronously · refresh to read the durable receipt.</p> : null}
         {stage10Job?.state === "READY" ? <button type="button" disabled={busy || !canFinalizeNarration} onClick={finalizeNarration}>{busy ? "Verifying receipt…" : "Verify receipt and freeze Stage 10"}</button> : null}
-        {stage10Job?.state === "FAILED" ? <p className="operator-error" role="alert">Stage 10 job failed closed: {stage10Job.errorCode}</p> : null}
+        {stage10Job?.state === "FAILED" ? <><p className="operator-error" role="alert">Stage 10 attempt {stage10Job.attemptOrdinal} failed closed: {stage10Job.errorCode}</p>{canStartNarration ? <button type="button" disabled={busy} onClick={startNarration}>{busy ? "Retrying…" : "Retry failed Stage 10 job once"}</button> : null}</> : null}
         <p className="operator-boundary">The start command returns quickly and may incur bounded TTS spend. Only the separate finalize command can verify immutable R2 receipt bytes, seal Stage 10 and advance to Stage 11.</p>
       </> : <>
         <div className="script-metadata"><div><span>Provider calls</span><strong>{stage10.providerCallCount}</strong></div><div><span>Spend</span><strong>${stage10.actualUsd.toFixed(4)} / ${stage10.reservedUsd.toFixed(2)} reserved</strong></div><div><span>Calibration</span><code>{stage10.calibrationEvidenceSha256.slice(0, 18)}…</code></div><div><span>Narration</span><code>{stage10.narrationSha256.slice(0, 16)}…</code></div></div>

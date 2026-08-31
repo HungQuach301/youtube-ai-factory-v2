@@ -1269,6 +1269,26 @@ không tạo Stage 10 job, không provider dispatch và không spend.
 | A future subprocess failure identifies its phase without persisting stderr | `WHISPERX_OBSERVER_FAILED`, `FFMPEG_DECODE_FAILED`, `FFMPEG_ENCODE_FAILED`; container contract regression test |
 | Existing quality, cost and publication controls remain unchanged | No threshold, calibration, provider width, budget, schema, release or auto-publish change; no Stage 10 replay in this evolution |
 
+---
+
+## EVO-STAGE10-FAILED-RETRY · Bounded append-only Stage 10 retry
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Job `FAILED` hợp lệ không bị tái sử dụng | Attempt 2 có job ID, provider idempotency key và callback token riêng |
+| Lịch sử attempt 1 được giữ nguyên | Migration append-only `drizzle/0015_stage10_failed_retry.sql`; không UPDATE/DELETE attempt cũ |
+| Chỉ lỗi runtime trong allowlist được retry | Trigger DB và `STAGE_10_RETRYABLE_ERROR_CODES` cùng fail closed với lỗi quality/policy/budget |
+| Chỉ đúng một retry | `attempt_ordinal` bị giới hạn `1..2`; test từ chối attempt 3 |
+| Retry không thể chéo package/run/stage hoặc bỏ qua predecessor | Trigger `stage10_media_job_retry_insert` xác minh toàn bộ lineage và ordinal liền kề |
+| Concurrency không tạo hai retry | UNIQUE `(package_id, attempt_ordinal)`, UNIQUE `retry_of_job_id` và command idempotency |
+| Không tự động retry, freeze hay publish | Retry cần owner START mới; FINALIZE tách riêng; release và auto-publish vẫn OFF |
+
+## Xác minh
+
+`tests/migrations/0015-stage10-failed-retry.test.mjs` · `tests/operator-d1.test.mjs` · full CI · Sites Production health read-back.
+
 ## Production boundary
 
 Owner approved diagnosis, PR and deployment of this correction on 2026-08-31.

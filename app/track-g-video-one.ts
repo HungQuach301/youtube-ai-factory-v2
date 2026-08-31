@@ -127,6 +127,14 @@ const STAGE_10_ARTIFACT_ID = "artifact_track_g_video_1_stage_10_narration_v1";
 const STAGE_10_ARTIFACT_TYPE = "NARRATION_TOURNAMENT_CALIBRATION_SEAL";
 const STAGE_10_PRODUCTION_ID = "audio_production_track_g_video_1_stage_10_v1";
 const STAGE_10_JOB_ID = "media_job_track_g_video_1_stage_10_v1";
+export const STAGE_10_RETRYABLE_ERROR_CODES = [
+  "MEDIA_TOOL_FAILED",
+  "WHISPERX_OBSERVER_FAILED",
+  "FFMPEG_DECODE_FAILED",
+  "FFMPEG_ENCODE_FAILED",
+  "DEADLINE_EXCEEDED",
+  "OBSERVER_OUTPUT_INCOMPLETE",
+] as const;
 const STAGE_10_RESERVED_USD = 4;
 const STAGE_10_START_OWNER_APPROVAL_TEXT = "START STAGE 10";
 const STAGE_10_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 10";
@@ -3994,7 +4002,26 @@ async function prepareStage10MediaRequest(): Promise<{
   providerIdempotencyKey: string;
   totalCharacters: number;
   payload: Stage10MediaRequest;
+}>;
+async function prepareStage10MediaRequest(attemptOrdinal: number): Promise<{
+  bootstrap: Awaited<ReturnType<typeof readBackForStage00>>;
+  stage09: Awaited<ReturnType<typeof readBackStage09>>;
+  tone: ReturnType<typeof trackGVideoOneStage07AVoiceModel>["candidates"][number];
+  providerIdempotencyKey: string;
+  totalCharacters: number;
+  payload: Stage10MediaRequest;
+}>;
+async function prepareStage10MediaRequest(attemptOrdinal = 1): Promise<{
+  bootstrap: Awaited<ReturnType<typeof readBackForStage00>>;
+  stage09: Awaited<ReturnType<typeof readBackStage09>>;
+  tone: ReturnType<typeof trackGVideoOneStage07AVoiceModel>["candidates"][number];
+  providerIdempotencyKey: string;
+  totalCharacters: number;
+  payload: Stage10MediaRequest;
 }> {
+  if (!Number.isSafeInteger(attemptOrdinal) || attemptOrdinal < 1) {
+    throw new Error("TRACK_G_STAGE_10_ATTEMPT_ORDINAL_INVALID");
+  }
   const bootstrap = await readBackForStage00();
   const stage09 = await readBackStage09(bootstrap.run.id);
   if (bootstrap.run.currentStep !== "STAGE_10_READY") {
@@ -4026,9 +4053,14 @@ async function prepareStage10MediaRequest(): Promise<{
   const texts = sections.map((section) => section.narration as string);
   const totalCharacters = texts.reduce((sum, text) => sum + text.length, 0) * 2;
   if (totalCharacters > 24000) throw new Error("TRACK_G_STAGE_10_CHARACTER_CEILING_EXCEEDED");
-  const providerIdempotencyKey = stageAdvanceIdempotencyKey(
+  const baseProviderIdempotencyKey = stageAdvanceIdempotencyKey(
     bootstrap.run.id, STAGE_10_CODE, stage09.stage09Artifact.canonicalHash,
   );
+  const providerIdempotencyKey = attemptOrdinal === 1
+    ? baseProviderIdempotencyKey
+    : createHash("sha256").update(
+      `${baseProviderIdempotencyKey}\0stage10-failed-retry\0${attemptOrdinal}`,
+    ).digest("hex");
   return {
     bootstrap,
     stage09,
@@ -4068,6 +4100,25 @@ async function prepareStage10MediaRequest(): Promise<{
   };
 }
 
+export function isStage10RetryableErrorCode(errorCode: string | null): boolean {
+  return STAGE_10_RETRYABLE_ERROR_CODES.includes(
+    errorCode as (typeof STAGE_10_RETRYABLE_ERROR_CODES)[number],
+  );
+}
+
+function stage10JobId(attemptOrdinal: number): string {
+  return attemptOrdinal === 1
+    ? STAGE_10_JOB_ID
+    : `media_job_track_g_video_1_stage_10_attempt_${attemptOrdinal}`;
+}
+
+async function latestStage10Job() {
+  const [job] = await getDb().select().from(stage10MediaJobs)
+    .where(eq(stage10MediaJobs.packageId, STAGE_00_PACKAGE_ID))
+    .orderBy(desc(stage10MediaJobs.attemptOrdinal)).limit(1);
+  return job ?? null;
+}
+
 function stage10StartIdempotencyKey(providerIdempotencyKey: string): string {
   return createHash("sha256").update(
     `START_TRACK_G_VIDEO_1_STAGE_10\0${providerIdempotencyKey}\0durable-job-v1`,
@@ -4089,9 +4140,9 @@ function stage10CallbackToken(providerIdempotencyKey: string): string {
 }
 
 async function readBackStage10Job() {
-  const prepared = await prepareStage10MediaRequest();
-  const [job] = await getDb().select().from(stage10MediaJobs)
-    .where(eq(stage10MediaJobs.id, STAGE_10_JOB_ID)).limit(1);
+  const job = await latestStage10Job();
+  if (!job) throw new Error("TRACK_G_STAGE_10_JOB_READ_BACK_FAILED");
+  const prepared = await prepareStage10MediaRequest(job.attemptOrdinal);
   if (!job || job.packageId !== STAGE_00_PACKAGE_ID
     || job.operationRunId !== prepared.bootstrap.run.id
     || job.stageInstanceId !== STAGE_10_INSTANCE_ID
@@ -4120,19 +4171,26 @@ export async function startTrackGVideoOneStage10(
     throw new Error("TRACK_G_STAGE_10_CALLBACK_URL_INVALID");
   }
   const prepared = await prepareStage10MediaRequest();
-  const expectedKey = stage10StartIdempotencyKey(prepared.providerIdempotencyKey);
+  const existingJob = await latestStage10Job();
+  const attemptOrdinal = existingJob?.state === "FAILED"
+    ? existingJob.attemptOrdinal + 1
+    : existingJob?.attemptOrdinal ?? 1;
+  if (existingJob?.state === "FAILED" && (existingJob.attemptOrdinal >= 2
+    || !isStage10RetryableErrorCode(existingJob.errorCode))) {
+    throw new Error(`TRACK_G_STAGE_10_JOB_RETRY_NOT_ALLOWED:${existingJob.errorCode ?? "UNKNOWN"}`);
+  }
+  const attempt = attemptOrdinal === 1 ? prepared : await prepareStage10MediaRequest(attemptOrdinal);
+  const expectedKey = stage10StartIdempotencyKey(attempt.providerIdempotencyKey);
   if (input.idempotencyKey.toLowerCase() !== expectedKey) {
     throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
   }
-  const [existingJob] = await getDb().select().from(stage10MediaJobs)
-    .where(eq(stage10MediaJobs.id, STAGE_10_JOB_ID)).limit(1);
   const workerUrl = getFactoryEnv().MEDIA_WORKER_URL?.replace(/\/$/u, "");
   if (!workerUrl?.startsWith("https://")) throw new Error("MEDIA_WORKER_URL_UNAVAILABLE");
-  const callbackToken = stage10CallbackToken(prepared.providerIdempotencyKey);
-  if (existingJob) {
+  const callbackToken = stage10CallbackToken(attempt.providerIdempotencyKey);
+  if (existingJob && existingJob.state !== "FAILED") {
     if (existingJob.state === "PENDING") {
       await dispatchStage10MediaStart({
-        ...prepared.payload,
+        ...attempt.payload,
         callback: { url: input.callbackUrl, token: callbackToken },
       });
     }
@@ -4140,33 +4198,43 @@ export async function startTrackGVideoOneStage10(
   }
   const callbackTokenHash = sha256(new TextEncoder().encode(callbackToken));
   const commandId = crypto.randomUUID();
+  const jobId = stage10JobId(attemptOrdinal);
   const now = new Date().toISOString();
   const d1 = getD1();
-  await d1.batch([
-    d1.prepare(`INSERT INTO command_log
-      (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
-      VALUES (?, 'START_TRACK_G_VIDEO_1_STAGE_10', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_10_READY',
-        'TRACK_G_VIDEO_1_STAGE_10_PENDING', ?, ?)`).bind(
-      commandId, canonicalize({ objective, operationRunId: prepared.bootstrap.run.id,
-        packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_10_CODE,
-        providerIdempotencyKey: prepared.providerIdempotencyKey }), input.idempotencyKey,
-      user.email.toLowerCase(), crypto.randomUUID(), now),
-    d1.prepare(`INSERT INTO stage10_media_job
-      (id, package_id, operation_run_id, stage_instance_id, provider_idempotency_key,
-       callback_token_hash, state, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`).bind(
-      STAGE_10_JOB_ID, STAGE_00_PACKAGE_ID, prepared.bootstrap.run.id,
-      STAGE_10_INSTANCE_ID, prepared.providerIdempotencyKey, callbackTokenHash, now, now),
-  ]);
+  try {
+    await d1.batch([
+      d1.prepare(`INSERT INTO command_log
+        (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
+        VALUES (?, 'START_TRACK_G_VIDEO_1_STAGE_10', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_10_READY',
+          'TRACK_G_VIDEO_1_STAGE_10_PENDING', ?, ?)`).bind(
+        commandId, canonicalize({ objective, operationRunId: attempt.bootstrap.run.id,
+          packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_10_CODE,
+          attemptOrdinal, retryOfJobId: existingJob?.state === "FAILED" ? existingJob.id : null,
+          providerIdempotencyKey: attempt.providerIdempotencyKey }), input.idempotencyKey,
+        user.email.toLowerCase(), crypto.randomUUID(), now),
+      d1.prepare(`INSERT INTO stage10_media_job
+        (id, package_id, operation_run_id, stage_instance_id, attempt_ordinal, retry_of_job_id,
+         provider_idempotency_key, callback_token_hash, state, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)`).bind(
+        jobId, STAGE_00_PACKAGE_ID, attempt.bootstrap.run.id, STAGE_10_INSTANCE_ID,
+        attemptOrdinal, existingJob?.state === "FAILED" ? existingJob.id : null,
+        attempt.providerIdempotencyKey, callbackTokenHash, now, now),
+    ]);
+  } catch (error) {
+    const [concurrentCommand] = await getDb().select({ id: commandLog.id }).from(commandLog)
+      .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
+    if (concurrentCommand) return { ...(await readBackStage10Job()), replayed: true };
+    throw error;
+  }
   try {
     await dispatchStage10MediaStart({
-      ...prepared.payload,
+      ...attempt.payload,
       callback: { url: input.callbackUrl, token: callbackToken },
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : "TRACK_G_STAGE_10_START_FAILED";
     await d1.prepare(`UPDATE stage10_media_job SET state = 'FAILED', error_code = ?, updated_at = ?
-      WHERE id = ? AND state = 'PENDING'`).bind(code, new Date().toISOString(), STAGE_10_JOB_ID).run();
+      WHERE id = ? AND state = 'PENDING'`).bind(code, new Date().toISOString(), jobId).run();
     throw error;
   }
   return { ...(await readBackStage10Job()), replayed: false };
@@ -4225,8 +4293,8 @@ export async function finalizeTrackGVideoOneStage10(
   }
   const objective = input.objective.trim();
   if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
-  const prepared = await prepareStage10MediaRequest();
-  const { bootstrap, stage09, tone, totalCharacters, providerIdempotencyKey } = prepared;
+  const prepared = await readBackStage10Job();
+  const { bootstrap, stage09, tone, totalCharacters, providerIdempotencyKey, job } = prepared;
   const expectedKey = stage10FinalizeIdempotencyKey(providerIdempotencyKey);
   if (input.idempotencyKey.toLowerCase() !== expectedKey) {
     throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
@@ -4235,7 +4303,6 @@ export async function finalizeTrackGVideoOneStage10(
   const [existingCommand] = await db.select({ id: commandLog.id }).from(commandLog)
     .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
   if (existingCommand) return { ...(await readBackStage10(bootstrap.run.id)), replayed: true };
-  const { job } = await readBackStage10Job();
   if (job.state === "PENDING") throw new Error("TRACK_G_STAGE_10_JOB_PENDING");
   if (job.state === "FAILED") {
     throw new Error(`TRACK_G_STAGE_10_JOB_FAILED:${job.errorCode ?? "UNKNOWN"}`);
@@ -5151,13 +5218,22 @@ export async function trackGVideoOneStage09SelectionIdempotencyKey(
 }
 
 export async function trackGVideoOneStage10StartIdempotencyKey(): Promise<string> {
-  const providerIdempotencyKey = await trackGVideoOneStageIdempotencyKey(STAGE_10_CODE);
-  return stage10StartIdempotencyKey(providerIdempotencyKey);
+  const latestJob = await latestStage10Job();
+  if (latestJob?.state === "FAILED" && (latestJob.attemptOrdinal >= 2
+    || !isStage10RetryableErrorCode(latestJob.errorCode))) {
+    throw new Error(`TRACK_G_STAGE_10_JOB_RETRY_NOT_ALLOWED:${latestJob.errorCode ?? "UNKNOWN"}`);
+  }
+  const attemptOrdinal = latestJob?.state === "FAILED"
+    ? latestJob.attemptOrdinal + 1
+    : latestJob?.attemptOrdinal ?? 1;
+  const prepared = await prepareStage10MediaRequest(attemptOrdinal);
+  return stage10StartIdempotencyKey(prepared.providerIdempotencyKey);
 }
 
 export async function trackGVideoOneStage10FinalizeIdempotencyKey(): Promise<string> {
-  const providerIdempotencyKey = await trackGVideoOneStageIdempotencyKey(STAGE_10_CODE);
-  return stage10FinalizeIdempotencyKey(providerIdempotencyKey);
+  const job = await latestStage10Job();
+  if (!job) throw new Error("TRACK_G_STAGE_10_JOB_READ_BACK_FAILED");
+  return stage10FinalizeIdempotencyKey(job.providerIdempotencyKey);
 }
 
 export async function trackGVideoOneStage04SelectionIdempotencyKey(

@@ -24,3 +24,13 @@
   proof bit and phase-specific sanitized subprocess error codes.
 - Evidence: package regression test, full CI, image build/preflight and Fly live-health read-back.
 - Boundary: no threshold, provider width, spend ceiling, schema, release, publish or replay change.
+
+## EVO-STAGE10-FAILED-RETRY
+
+- Status: `OWNER_PROMOTION_APPROVED`; Production deploy and exactly one replay authorized after CI and health PASS.
+- Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_EXECUTION_LINEAGE`.
+- Source: Production attempt 1 remained terminal `FAILED:MEDIA_TOOL_FAILED`; the previous START idempotency path returned that row instead of creating a corrected execution.
+- Diff: append-only migration `0015_stage10_failed_retry`, attempt-specific provider keys, latest-attempt read-back and an explicit owner-only retry action.
+- Retry boundary: only attempt 1 → attempt 2; only allowlisted runtime/infrastructure errors; terminal quality, rights, policy, content and budget errors remain non-retryable.
+- Evidence: migration tests preserve attempt 1 and reject duplicates, gaps, attempt 3, cross-run lineage and terminal failures; CI and Production health must PASS before replay.
+- Operations: replay START exactly once for Track G Video #1; do not auto-finalize Stage 10 and do not auto-publish.
