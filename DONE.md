@@ -1232,3 +1232,24 @@ MODE: BUILD. This work package adds the Production control-plane command surface
 | Seal/read back bootstrap receipt in qualification R2 | Miniflare D1/R2 end-to-end test |
 | Replay command idempotently | MCP replay assertion |
 | Keep contract append-only | D1 update/delete trigger assertions |
+
+---
+
+## EVO-STAGE10-COMMAND-CONTRACT · Durable Stage 10 trigger hotfix
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Không sửa migration `0013` đã seal | Migration append-only `drizzle/0014_stage10_command_contract.sql` |
+| START chỉ hợp lệ từ `STAGE_10_READY` sang `STAGE_10_PENDING` | `tests/migrations/0014-stage10-command-contract.test.mjs` |
+| FINALIZE chỉ hợp lệ từ `STAGE_10_READY` sang `STAGE_11_READY` | Cùng regression test; transition từ `PENDING` bị ABORT |
+| Command lạ vẫn fail-closed | Test `UNREGISTERED_COMMAND` → `COMMAND_CONTRACT_VIOLATION` |
+| Các command hiện hữu không bị phá | Test `PREPARE_CHANNEL` vẫn được chấp nhận |
+| Migration có thể apply lại an toàn trong shadow fixture | Test apply migration hai lần liên tiếp PASS |
+| Không thay đổi provider, spend, threshold, gate hoặc publish | Source diff chỉ gồm trigger contract, journal và evidence/test |
+
+## Production boundary
+
+Hotfix chỉ được kích hoạt sau owner `PROMOTE_EVOLUTION`. Việc chuẩn bị và kiểm thử
+không tạo Stage 10 job, không provider dispatch và không spend.
