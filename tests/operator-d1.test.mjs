@@ -41,6 +41,28 @@ test("Stage 10 replays one bounded worker execution per idempotency key", async 
   assert.match(source, /processStage10Idempotent\(validateStage10Payload/);
 });
 
+test("Stage 10 separates bounded start from durable receipt finalization", async () => {
+  const worker = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  const domain = await readFile(
+    fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)),
+    "utf8",
+  );
+  const callback = await readFile(
+    fileURLToPath(new URL("../app/api/media-worker/stage10/route.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(worker, /request\.url === '\/stage10\/start'/);
+  assert.match(worker, /publishStage10Callback/);
+  assert.match(domain, /START_TRACK_G_VIDEO_1_STAGE_10/);
+  assert.match(domain, /FINALIZE_TRACK_G_VIDEO_1_STAGE_10/);
+  assert.match(domain, /TRACK_G_STAGE_10_JOB_PENDING/);
+  assert.match(callback, /putImmutableProductionEvidence/);
+  assert.match(callback, /state = 'READY'/);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
@@ -227,6 +249,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
+      "finalize_track_g_video_1_stage_10",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
@@ -238,6 +261,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "select_track_g_video_1_stage_07a_tone",
       "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
+      "start_track_g_video_1_stage_10",
     ]);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -477,6 +501,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
+      "finalize_track_g_video_1_stage_10",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
@@ -488,6 +513,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "select_track_g_video_1_stage_07a_tone",
       "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
+      "start_track_g_video_1_stage_10",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);
@@ -1464,12 +1490,12 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
     });
     const stage10Workbench = await stage10WorkbenchResponse.json();
     assert.deepEqual(stage10Workbench.trackGWorkbench.allowedActions,
-      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_10"]);
+      ["START_TRACK_G_VIDEO_1_STAGE_10"]);
 
     const unavailableStage10 = await client.callTool({
-      name: "advance_track_g_video_1_stage",
-      arguments: { stageCode: "10", objective: "Verify Stage 10 remains fail-closed without its signed calibrated media worker.",
-        confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
+      name: "start_track_g_video_1_stage_10",
+      arguments: { objective: "Verify Stage 10 remains fail-closed without its signed calibrated media worker.",
+        confirm: true, ownerApprovalText: "START STAGE 10" },
     });
     assert.equal(unavailableStage10.isError, true);
     assert.match(unavailableStage10.content[0].text, /MEDIA_WORKER_URL_UNAVAILABLE/u);
@@ -1477,6 +1503,8 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
       "SELECT count(*) AS count FROM stage_instance WHERE stage_code = '10'",
     ).first();
     assert.equal(stage10Rows.count, 0);
+    const stage10Jobs = await d1.prepare("SELECT count(*) AS count FROM stage10_media_job").first();
+    assert.equal(stage10Jobs.count, 0);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");

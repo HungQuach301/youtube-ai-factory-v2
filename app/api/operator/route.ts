@@ -3,15 +3,19 @@ import { getOperatorSnapshot, prepareApprovedChannel } from "../../operator-runt
 import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
+  finalizeTrackGVideoOneStage10,
   prepareTrackGVideoOneStage09VisualReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
   selectTrackGVideoOneStage09Thumbnail,
   selectTrackGVideoOneStage07ATone,
+  startTrackGVideoOneStage10,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
   trackGVideoOneStage09PrepareIdempotencyKey,
   trackGVideoOneStage09SelectionIdempotencyKey,
+  trackGVideoOneStage10FinalizeIdempotencyKey,
+  trackGVideoOneStage10StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
 } from "../../track-g-video-one";
 
@@ -209,33 +213,42 @@ export async function POST(request: Request) {
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }
-    if (body.commandType === "ADVANCE_TRACK_G_VIDEO_1_STAGE_10") {
+    if (body.commandType === "START_TRACK_G_VIDEO_1_STAGE_10") {
       if (body.confirm !== true) {
         return Response.json({ error: "STAGE_10_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
       }
-      const result = await advanceTrackGVideoOneStage(user, {
-        stageCode: "10",
+      const result = await startTrackGVideoOneStage10(user, {
         objective: body.objective
-          ?? "Produce the bounded calibrated narration tournament and freeze eligible Stage 10 audio.",
-        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
-        idempotencyKey: await trackGVideoOneStageIdempotencyKey("10"),
+          ?? "Start the bounded calibrated Stage 10 narration job and persist its durable receipt.",
+        ownerApprovalText: "START STAGE 10",
+        idempotencyKey: await trackGVideoOneStage10StartIdempotencyKey(),
+        callbackUrl: new URL("/api/media-worker/stage10", request.url).toString(),
       });
-      if (!("production" in result)) {
-        throw new Error("TRACK_G_STAGE_10_EXECUTOR_RECEIPT_INVALID");
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.bootstrap.run.id, currentStep: result.bootstrap.run.currentStep,
+        stageCode: "10", jobStatus: result.job.state,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "FINALIZE_TRACK_G_VIDEO_1_STAGE_10") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_10_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
       }
-      const production = result.production as {
-        narrationSha256: string; reservedUsd: number; actualUsd: number;
-        providerCallCount: number;
-      };
+      const result = await finalizeTrackGVideoOneStage10(user, {
+        objective: body.objective
+          ?? "Verify the durable Stage 10 receipt, seal eligible narration, and advance to Stage 11.",
+        ownerApprovalText: "FINALIZE STAGE 10",
+        idempotencyKey: await trackGVideoOneStage10FinalizeIdempotencyKey(),
+      });
       return Response.json({ accepted: true, replayed: result.replayed,
         runId: result.base.run.id, currentStep: result.base.run.currentStep,
         stageCode: "10", stageState: "FROZEN",
         artifactSha256: result.stageArtifact.canonicalHash,
-        narrationSha256: production.narrationSha256,
+        narrationSha256: result.production.narrationSha256,
         gateResults: result.gateResults,
-        stageReservedUsd: production.reservedUsd,
-        stageActualUsd: production.actualUsd,
-        providerCallCount: production.providerCallCount,
+        stageReservedUsd: result.production.reservedUsd,
+        stageActualUsd: result.production.actualUsd,
+        providerCallCount: result.production.providerCallCount,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }

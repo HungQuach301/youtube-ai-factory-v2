@@ -312,6 +312,25 @@ export const spendCeilings = sqliteTable("spend_ceiling", {
   windowEnd: text("window_end"),
 }, (table) => [primaryKey({ columns: [table.scope, table.scopeRef] })]);
 
+export const stage10MediaJobs = sqliteTable("stage10_media_job", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
+  stageInstanceId: text("stage_instance_id").notNull(),
+  providerIdempotencyKey: text("provider_idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage10_media_job_package_unique").on(table.packageId),
+  uniqueIndex("stage10_media_job_provider_key_unique").on(table.providerIdempotencyKey),
+]);
+
 export const stage10AudioProductions = sqliteTable("stage10_audio_production", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

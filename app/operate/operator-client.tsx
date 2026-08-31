@@ -96,6 +96,13 @@ type Stage10 = {
   calibrationEvidenceSha256: string;
   narrationSha256: string;
 };
+type Stage10Job = {
+  state: "PENDING" | "READY" | "FAILED";
+  receiptSha256: string | null;
+  workerImageDigest: string | null;
+  errorCode: string | null;
+  updatedAt: string;
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -111,6 +118,7 @@ type Workbench = {
   stage07B: Stage07B | null;
   stage08: Stage08 | null;
   stage09: Stage09 | null;
+  stage10Job: Stage10Job | null;
   stage10: Stage10 | null;
   humanDecisionCount: number;
   allowedActions: string[];
@@ -125,7 +133,7 @@ type Snapshot = {
   voiceBindingCount: number;
   trackGWorkbench: Workbench | null;
 };
-type Receipt = { currentStep: string; stageState: string; artifactSha256?: string; decisionType?: string; replayed: boolean; stageReservedUsd?: number; stageActualUsd?: number; providerCallCount?: number };
+type Receipt = { currentStep: string; stageState: string; artifactSha256?: string; decisionType?: string; replayed: boolean; stageReservedUsd?: number; stageActualUsd?: number; providerCallCount?: number; jobStatus?: string };
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -172,6 +180,7 @@ export default function OperatorClient() {
   const stage07B = workbench?.stage07B ?? null;
   const stage08 = workbench?.stage08 ?? null;
   const stage09 = workbench?.stage09 ?? null;
+  const stage10Job = workbench?.stage10Job ?? null;
   const stage10 = workbench?.stage10 ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
@@ -202,8 +211,10 @@ export default function OperatorClient() {
     && effectiveThumbnailText.trim().length >= 6
     && effectiveThumbnailText.trim().length <= 48
     && rationale.trim().length >= 20;
-  const canAdvanceNarration = workbench?.allowedActions
-    .includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_10");
+  const canStartNarration = workbench?.allowedActions
+    .includes("START_TRACK_G_VIDEO_1_STAGE_10");
+  const canFinalizeNarration = workbench?.allowedActions
+    .includes("FINALIZE_TRACK_G_VIDEO_1_STAGE_10");
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -325,15 +336,29 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
-  async function advanceNarration() {
+  async function startNarration() {
     setBusy(true); setError(""); setReceipt(null);
     try {
       const response = await fetch("/api/operator", { method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_10",
+        body: JSON.stringify({ commandType: "START_TRACK_G_VIDEO_1_STAGE_10",
           confirm: true }) });
       const body = await response.json() as Receipt & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Stage 10 narration production failed");
+      if (!response.ok) throw new Error(body.error ?? "Stage 10 durable job start failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function finalizeNarration() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "FINALIZE_TRACK_G_VIDEO_1_STAGE_10",
+          confirm: true }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 10 durable receipt finalization failed");
       setReceipt(body); await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(false); }
@@ -366,7 +391,7 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canAdvanceNarration ? "Produce calibrated Stage 10 narration" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canStartNarration ? "Start durable Stage 10 job" : canFinalizeNarration ? "Finalize Stage 10 receipt" : stage10Job?.state === "PENDING" ? "Stage 10 worker is running" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
@@ -476,8 +501,11 @@ export default function OperatorClient() {
       {!stage10 ? <>
         <p className="operator-help">Create two real ElevenLabs takes for each of the six sealed beats, measure every take with the independently calibrated WhisperX observer, select one eligible take per beat, and seal the joined narration.</p>
         <div className="script-metadata"><div><span>Maximum provider calls</span><strong>12 · no retry</strong></div><div><span>Stage reservation</span><strong>$4.00 maximum</strong></div><div><span>Required gates</span><strong>Phoneme mismatch + seam score</strong></div><div><span>Publishing</span><strong>Release OFF · auto-publish OFF</strong></div></div>
-        <button type="button" disabled={busy || !canAdvanceNarration} onClick={advanceNarration}>{busy ? "Producing and measuring…" : "Produce, verify and freeze Stage 10"}</button>
-        <p className="operator-boundary">This explicit owner command may incur bounded TTS spend. Generic provider dispatch remains OFF; failed calibration or either failed M1 gate leaves Stage 10 unfrozen.</p>
+        {!stage10Job ? <button type="button" disabled={busy || !canStartNarration} onClick={startNarration}>{busy ? "Starting…" : "Start durable Stage 10 job"}</button> : null}
+        {stage10Job?.state === "PENDING" ? <p className="decision-receipt" role="status">Stage 10 job PENDING · the worker is producing and measuring asynchronously · refresh to read the durable receipt.</p> : null}
+        {stage10Job?.state === "READY" ? <button type="button" disabled={busy || !canFinalizeNarration} onClick={finalizeNarration}>{busy ? "Verifying receipt…" : "Verify receipt and freeze Stage 10"}</button> : null}
+        {stage10Job?.state === "FAILED" ? <p className="operator-error" role="alert">Stage 10 job failed closed: {stage10Job.errorCode}</p> : null}
+        <p className="operator-boundary">The start command returns quickly and may incur bounded TTS spend. Only the separate finalize command can verify immutable R2 receipt bytes, seal Stage 10 and advance to Stage 11.</p>
       </> : <>
         <div className="script-metadata"><div><span>Provider calls</span><strong>{stage10.providerCallCount}</strong></div><div><span>Spend</span><strong>${stage10.actualUsd.toFixed(4)} / ${stage10.reservedUsd.toFixed(2)} reserved</strong></div><div><span>Calibration</span><code>{stage10.calibrationEvidenceSha256.slice(0, 18)}…</code></div><div><span>Narration</span><code>{stage10.narrationSha256.slice(0, 16)}…</code></div></div>
         <div className="gate-strip"><span className="pass">M1 PHONEME MISMATCH · PASS</span><span className="pass">M1 SEAM SCORE · PASS</span></div>
