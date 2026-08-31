@@ -15,6 +15,8 @@ const JOB_DISPATCH_ENABLED = process.env.MEDIA_JOB_DISPATCH_ENABLED === 'true'
 const STAGE10_ENABLED = process.env.MEDIA_STAGE10_ENABLED === 'true'
 const STAGE10_VERIFY_KEY = process.env.MEDIA_STAGE10_VERIFY_KEY
 const TTS_BATCH_SIZE = 2
+const TTS_REQUEST_TIMEOUT_MS = 120_000
+const CALLBACK_REQUEST_TIMEOUT_MS = 30_000
 const CALIBRATION_FLOOR = Number(process.env.MEDIA_CALIBRATION_ERROR_FLOOR)
 const CALIBRATION_THRESHOLD = Number(process.env.MEDIA_CALIBRATION_THRESHOLD)
 const CALIBRATION_SHA256 = process.env.MEDIA_CALIBRATION_EVIDENCE_SHA256
@@ -230,6 +232,7 @@ async function synthesizeCandidate(payload, segment, route, filePath) {
     `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(payload.voice.voiceId)}?output_format=${payload.voice.outputFormat}`,
     {
       method: 'POST', redirect: 'error',
+      signal: AbortSignal.timeout(TTS_REQUEST_TIMEOUT_MS),
       headers: { 'content-type': 'application/json', 'xi-api-key': ELEVENLABS_API_KEY },
       body: JSON.stringify({
         text: segment.text,
@@ -413,6 +416,7 @@ async function publishStage10Callback(callback, idempotencyKey, result) {
   const response = await fetch(callback.url, {
     method: 'POST',
     redirect: 'error',
+    signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
     headers: {
       'authorization': `Bearer ${callback.token}`,
       'content-type': 'application/json',
@@ -422,6 +426,31 @@ async function publishStage10Callback(callback, idempotencyKey, result) {
   if (!response.ok) {
     throw Object.assign(new Error(`Stage 10 callback returned ${response.status}.`), {
       code: 'STAGE10_CALLBACK_FAILED',
+    })
+  }
+}
+
+function stage10ErrorCode(error) {
+  const candidate = typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : 'STAGE10_FAILED'
+  return /^[A-Z0-9_:.-]{1,160}$/u.test(candidate) ? candidate : 'STAGE10_FAILED'
+}
+
+async function publishStage10Failure(callback, idempotencyKey, error) {
+  const response = await fetch(callback.url, {
+    method: 'POST',
+    redirect: 'error',
+    signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
+    headers: {
+      'authorization': `Bearer ${callback.token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ idempotencyKey, errorCode: stage10ErrorCode(error) }),
+  })
+  if (!response.ok) {
+    throw Object.assign(new Error(`Stage 10 failure callback returned ${response.status}.`), {
+      code: 'STAGE10_FAILURE_CALLBACK_FAILED',
     })
   }
 }
@@ -439,8 +468,13 @@ function startStage10Job(payload) {
       await publishStage10Callback(payload.callback, payload.idempotencyKey, result)
       job.status = 'READY'
     })
-    .catch(() => {
+    .catch(async (error) => {
       job.status = 'FAILED'
+      try {
+        await publishStage10Failure(payload.callback, payload.idempotencyKey, error)
+      } catch (callbackError) {
+        console.error('STAGE10_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
+      }
     })
   return job.status
 }
