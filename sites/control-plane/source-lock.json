@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "b7cd8baa02bb0d78b3bb78df1f54afff044d3a14ffefb83d6b14d1e9546afdee",
+  "aggregate_sha256": "6eb10aed0f61a454452e2186debd7800544d3422872e4a87ea6a2a2dd9c124ff",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -44,8 +44,16 @@
       "sha256": "01dabcce16ecc3f55a593eebbb99cec85cac39fa8e3b2ea4d1bfb9b77ebf8bf9"
     },
     {
+      "path": "app/api/media-worker/stage10/route.ts",
+      "sha256": "830d585f3c17a5ad49865768917b8dabefffae807668513a0d230b5aaa69edb3"
+    },
+    {
+      "path": "app/api/media-worker/stage12/route.ts",
+      "sha256": "19d6a6935c11d093fa7dd22676a17eb2b64892fc3ff6bbc10c2e0d82c5f833dd"
+    },
+    {
       "path": "app/api/operator/route.ts",
-      "sha256": "e0a1a2e190655a277b87589b3f681bafb10b908d43a6577bd71a4969dc8fb637"
+      "sha256": "0df3e9dd701a62fc0fc716f3e726bae7618a37569ea037452202dfadb7c9601e"
     },
     {
       "path": "app/chatgpt-auth.ts",
@@ -53,7 +61,7 @@
     },
     {
       "path": "app/evidence-storage.ts",
-      "sha256": "44dcc1dff18a056cd5ee04c3e11b22326e624547fff8d9962b98b76bddc311bf"
+      "sha256": "457eb05d9a4872729439ef5295171a1e2f9c9039a954fd266949905cd7554b95"
     },
     {
       "path": "app/factory-contract.ts",
@@ -61,7 +69,7 @@
     },
     {
       "path": "app/globals.css",
-      "sha256": "d2d5dc2c94d82fff2f429f0543974727d71a165b25956c8f07bbc5b07e0932fd"
+      "sha256": "cdce3853f32dee51e6374a0040c58a88f9f36010c6857eca2fcfb9b101b4df31"
     },
     {
       "path": "app/layout.tsx",
@@ -69,7 +77,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "87656b7666d9e0e0ad674fd024f0a75bbe0cb903fd4eea6f12b2dd021dc714db"
+      "sha256": "57a5e9e859c62d646fe9b7b188321982015b0f1e012f863e4b20eb53959946dc"
     },
     {
       "path": "app/oauth-server.ts",
@@ -89,15 +97,15 @@
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "b0b5df9fcf630370b1643ca317fff415d4bc4d79d9be540e228b5b42308e73d2"
+      "sha256": "0509d1507103957e8892bb1b9ef6ea9ba711280f4d650b7a3a07ac5baa4b3f61"
     },
     {
       "path": "app/operate/page.tsx",
-      "sha256": "e48dfbe72c4c5533ba9be5458b852e62fa735dc86da0d79b9a7be49d8a3ce4ca"
+      "sha256": "b37cde470b72f342b10e9b8b57b60a86b6f6f55de9fd97b94eed2989caa4416a"
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "bbbb6674d04295fb0b1c3bcdef6d4f1607afa250c948b293f2a9606d7061e6dc"
+      "sha256": "c2874f35f06c9c3cdc0e1848cf766c15666e5831d756c54155e2f5864a47f4f5"
     },
     {
       "path": "app/page.tsx",
@@ -105,11 +113,27 @@
     },
     {
       "path": "app/runtime-env.ts",
-      "sha256": "810e3378899275ce80fc62a9f83da55ab31bff0a0448308d219ec7d56550a8e8"
+      "sha256": "eed2388fb9014ac8ab330b1f42195d3117f18434680fa0ae3733cd02a5b8e929"
+    },
+    {
+      "path": "app/stage10-media.ts",
+      "sha256": "44f6112ec6022f7a01fe9b725da561b7c3412b2c5e1f57a6ebb0096707df7e2d"
+    },
+    {
+      "path": "app/stage11-audio.ts",
+      "sha256": "13756bb8b6930646365126eda2869b8bb67040af2bced510381e48d92414edb6"
+    },
+    {
+      "path": "app/stage12-media.ts",
+      "sha256": "57ab1b1902da21638094c8e303d1c757f9965ceb1ef63c7f382a31a16f1161be"
+    },
+    {
+      "path": "app/stage12-pre-master.ts",
+      "sha256": "814dfed384675e1909c917c94e053f315b4b2b7bb549c2bd190bd0ea77d8ef16"
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "5148f70fde726c9c0cd0b3e8ad93d3806f71bf181bf62f4fa1e4b58fd507fa13"
+      "sha256": "ba0c0ad330f3ad821375baa738ce94ac00dc422570723e6c1ae74255273fd2f7"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -125,7 +149,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "1f8e7d6645bb242fd18e91c2af63c7330efb65bd73e84c0614b3fa36fe0cbd6c"
+      "sha256": "5ad44a241d2bc6dde81ebe06e672fa7e6bd4ae236a2d1d3eeae2df51c73ffa63"
     },
     {
       "path": "drizzle.config.ts",
@@ -164,6 +188,46 @@
       "sha256": "ef7870e57a7abbaf8d752096de6d3675aef50bbe1cb6653f47d79c28906bf07d"
     },
     {
+      "path": "drizzle/0008_story_architecture_prediction.sql",
+      "sha256": "2f74a999572378050b6a13f2b820965bc94e38d440341490c1d2989d250d4089"
+    },
+    {
+      "path": "drizzle/0009_stage06_script_editorial_review.sql",
+      "sha256": "34590bd756605afb226f84fd6bda88692e4c09b6159c19f3251fd14746dfc740"
+    },
+    {
+      "path": "drizzle/0010_stage07a_voice_tournament.sql",
+      "sha256": "130d3fcf14ff90d31cba188049d98dbcaa10dc382d0f22ddd4fe0aa724388577"
+    },
+    {
+      "path": "drizzle/0011_stage09_visual_review.sql",
+      "sha256": "043fd72f6fb0ededaaf59832ae6e2d94cf5bb6b16935f7e78912438a6f4487db"
+    },
+    {
+      "path": "drizzle/0012_stage10_audio_production.sql",
+      "sha256": "8cf4c991d9229a90d77c391a34596a5cef04fd31fea10bc9d3bce7ec66603dd2"
+    },
+    {
+      "path": "drizzle/0013_stage10_durable_jobs.sql",
+      "sha256": "ead34c09b82db27c9cd5a79414bd481e4ee5fa3fe019a517baaeb899f99eebdf"
+    },
+    {
+      "path": "drizzle/0014_stage10_command_contract.sql",
+      "sha256": "a68f1f1586e455703514789f2077a1a7d9b9d79c6e65dbc57c5be3ee3025d2be"
+    },
+    {
+      "path": "drizzle/0015_stage10_failed_retry.sql",
+      "sha256": "a8c00a94e199ceb9cfd957a5c0b41c5d3862c595236b310aa5301263e8b5d7f9"
+    },
+    {
+      "path": "drizzle/0016_stage11_ambience_only.sql",
+      "sha256": "2f8c50dfa39f2c9bff69568fe5d040dde56cf45dceb4f7147662beaeba95108a"
+    },
+    {
+      "path": "drizzle/0017_stage12_pre_master_qa.sql",
+      "sha256": "66b38f3cac9d4f84b5d17e3223ed712c5d84e2bcbe89e815ab2a64df2a6eeed4"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -193,7 +257,7 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "ccbb457d067d788d618684638a80220a8c8c37f1166f3880394e3ab085e7fc43"
+      "sha256": "fcd711c3e2697e81b2139eda9f89041dbecbcffcaa2faabf2c7e648f082d928a"
     },
     {
       "path": "eslint.config.mjs",
@@ -218,6 +282,26 @@
     {
       "path": "package.json",
       "sha256": "3069a8b7730ef2d532aeef8a99ae9c846a495a2576324df707b605912c51b602"
+    },
+    {
+      "path": "packages/contracts/src/enums.ts",
+      "sha256": "291fdd696aec98227fafee5b5448b64fa09624a5e628ba943097b766f56a00f6"
+    },
+    {
+      "path": "packages/contracts/src/thresholds.ts",
+      "sha256": "049c6c5b6986d84db64029944fe6d100c91d6a508ec39538aacd7bcc3d03297f"
+    },
+    {
+      "path": "packages/media-worker/container-entry.mjs",
+      "sha256": "9e37d3bc00d2a61a05fb4d7a08fa4439262db6ca076800b3da5b6ab39d8e8248"
+    },
+    {
+      "path": "packages/media-worker/fly.toml",
+      "sha256": "649965e6d9f49963a8c35fc1d48dd817228a6fd9e110dad45c1c695e57f8fcc3"
+    },
+    {
+      "path": "packages/media-worker/stage12-runtime.mjs",
+      "sha256": "baa3433c5d1a6f55bbdb6d0647b3a83d1e19c6ee3f564a898d90c13ff9615f78"
     },
     {
       "path": "postcss.config.mjs",
@@ -260,16 +344,32 @@
       "sha256": "6d7f244fa5456041eb1a5dd1131784b29a1c8b927bb0e1ec3a885929c461b032"
     },
     {
+      "path": "scripts/whisperx-phoneme-observer.py",
+      "sha256": "cec17ae51e7dafb9ce05687946edca886fa6158155b7d79f46ed97dfbd10347c"
+    },
+    {
       "path": "source-contract.json",
       "sha256": "260a49997db09019e6969804b3e865ca6d1ba8560e8b2c6462d5b88b8baa24e0"
     },
     {
+      "path": "tests/guardrails/stage10-edge-fetch.test.ts",
+      "sha256": "130bdd2e6050eda61d6c825c1939637aa0b0f9058858e888daf662477983f591"
+    },
+    {
+      "path": "tests/migrations/0016-stage11-ambience-only.test.ts",
+      "sha256": "0a305401bff9f7a7e2f8e1767d7efdc6fee12b16c26d7e98af895440cf524cff"
+    },
+    {
+      "path": "tests/migrations/0017-stage12-pre-master-qa.test.ts",
+      "sha256": "8c662081fc2fe4fcb9ffad4be98806ebafbdb41f28c0adf70f80d5fe1f229d89"
+    },
+    {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "c8c7ebad6d99eca88020148aa76d188c424443639963064a35d11be172fd9e34"
+      "sha256": "024d793f8b54bd651792284a73b666038419a27c04e849309590bd6d85c3f89b"
     },
     {
       "path": "tests/rendered-html.test.mjs",
-      "sha256": "5d5cccc53e8d88e74a50beda25c4b9161be520c1decd1f9af552e17268631c7e"
+      "sha256": "8bcd32eb3674dd7d50e41a65abbb453ffc155bd5d6b5da81b7025883e5854cdf"
     },
     {
       "path": "tsconfig.json",

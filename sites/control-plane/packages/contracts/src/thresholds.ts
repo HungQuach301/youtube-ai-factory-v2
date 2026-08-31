@@ -1,0 +1,253 @@
+import type { ProfileName, SourceTier } from './enums.js'
+
+export const SCRIPT = {
+  DURATION_SEC: { min: 480, max: 720 },
+  WPM_OVERALL: { min: 140, max: 160 },
+  WPM_HOOK: { min: 150, max: 170 },
+  WPM_DENSE_MECHANISM: { min: 125, max: 150 },
+  WPM_PAYOFF: { min: 135, max: 155 },
+  SYLLABLES_PER_SEC: { min: 3.3, max: 3.8 },
+  SYLLABLES_PER_SEC_HOOK: { min: 3.5, max: 4.0 },
+  SYLLABLES_PER_SEC_DENSE_MECHANISM: { min: 2.9, max: 3.5 },
+  SYLLABLES_PER_SEC_PAYOFF: { min: 3.2, max: 3.6 },
+  SENTENCE_WORDS_MEDIAN: { min: 10, max: 18 },
+  SENTENCE_WORDS_REVIEW: 24,
+  BREATH_GROUP_WORDS: { min: 5, max: 12 },
+  BREATH_GROUP_SEC: { min: 2.5, max: 5 },
+  NEW_ENTITY_PER_15S: 2,
+  ENTITY_WINDOW_SEC: 15
+} as const
+
+export const STORY = {
+  HOOK_END_SEC: 15,
+  PROMISE_END_SEC: 30,
+  MIDPOINT_REHOOK_PCT: { min: 0.40, max: 0.60 },
+  PAYOFF_START_PCT: 0.80,
+  LOOP_MAX_SPAN_PCT: 0.40
+} as const
+
+export const CREATIVE = {
+  ROUTE_COUNT: 4,
+  CHAMPION_MIN_SCORE: 95,
+  CRITIC_COUNT_STAGE_04: 7,
+  GENERATE_TEMPERATURE: { min: 0.9, max: 1.1 },
+  JUDGE_TEMPERATURE: 0,
+  JUDGE_SCORE: { min: 0, max: 100 }
+} as const
+
+export const PREDICTION = {
+  BASELINE_SOURCE: 'flat',
+  BASELINE_FLAT_CURVE: {
+    0: 1.00,
+    5: 0.75,
+    10: 0.62,
+    25: 0.48,
+    50: 0.38,
+    75: 0.31,
+    100: 0.26,
+  },
+  MODEL_VERSION: 'v0-flat',
+  RECALIBRATE_AFTER_VIDEOS: 6,
+  CURVE_STEP_PCT: 5,
+} as const
+
+export const ANTICOPY = {
+  MAX_SHARED_NGRAM: 7,
+  JACCARD_5GRAM_MAX: 0.15,
+  BEAT_SEQUENCE_DIFF_MIN: 0.40,
+  THUMBNAIL_PHASH_HAMMING_MIN: 20,
+  TITLE_COSINE_MAX: 0.85,
+  DIFFERENTIATION_MIN: null
+} as const
+
+export const SHOT = {
+  DURATION_SEC: { min: 3, max: 20 },
+  MEDIAN_DURATION_SEC: { min: 6, max: 12 },
+  MAX_CONSECUTIVE_SAME_ARCHETYPE: 2,
+  MAX_NO_ARCHETYPE_CHANGE_SEC: 25,
+  DURATION_TOLERANCE_FRAMES: 1
+} as const
+
+export const VISUAL = {
+  CAMERA_ONLY_MAX_PCT: 0.35,
+  LAYERED_SEMANTIC_MIN_PCT: 0.45,
+  SOURCE_VIDEO_MIN_PCT: 0.20,
+  TREATMENTS_MIN: 3,
+  TREATMENTS_TARGET: { min: 5, max: 7 },
+  COMPOSITIONS_PER_CRITICAL_UNIT_MIN: 3,
+  SOURCE_CANDIDATES: { min: 6, max: 12 },
+  DUPLICATE_MAX_PCT: 0.02,
+  PHASH_HAMMING_DUPLICATE: 10,
+  SEMANTIC_FIT_CRITICAL: 94,
+  SEMANTIC_FIT_NORMAL: 90,
+  SEMANTIC_FIT_SUPPORTING: 86,
+  NEAR_STATIC_MAX_SEC: 7,
+  NEAR_STATIC_SSIM: 0.98
+} as const
+
+export const AUDIO = {
+  LUFS_I: { target: -14, tolerance: 1 },
+  TRUE_PEAK_MAX_DBTP: -1,
+  LRA: { min: 4, max: 8 },
+  NARRATION_OVER_MUSIC_LU: { min: 10, target_min: 12, target_max: 16 },
+  DUCK_DB: { min: 6, max: 12 },
+  DUCK_ATTACK_MS: { min: 80, max: 250 },
+  DUCK_RELEASE_MS: { min: 300, max: 800 },
+  SAMPLE_RATE_HZ: 48000,
+  PROVIDER_SPEED: { min: 0.95, max: 1.08 },
+  PAUSE_MICRO_MS: { min: 80, max: 200 },
+  PAUSE_CLAUSE_MS: { min: 150, max: 300 },
+  PAUSE_SENTENCE_MS: { min: 250, max: 500 },
+  PAUSE_BEAT_RESET_MS: { min: 500, max: 900 },
+  PAUSE_DRAMATIC_MAX_MS: 1200,
+  TTS_SECTION_CHARS: { min: 300, max: 800 },
+  TTS_CONTEXT_CHARS: { min: 200, max: 300 },
+  VOICE_FINGERPRINT_SEC: 30,
+  SEAM_F0_MAX_SEMITONE: 2,
+  PHONEME_MISMATCH_BASE: 0.01,
+  PHONEME_MISMATCH_FLOOR_MULTIPLIER: 2
+} as const
+
+export const AV_SYNC_MS: Readonly<Record<string, number>> = {
+  documentary_live_action: 45,
+  source_authored_hybrid: 80,
+  DEFAULT: 120
+} as const
+
+export const MASTER = {
+  WIDTH: 1920, HEIGHT: 1080, FPS: 30, COLOR: 'bt709',
+  ARCHIVAL_VIDEO_CODEC: 'ffv1', ARCHIVAL_AUDIO_CODEC: 'pcm_s24le',
+  DISTRIBUTION_VIDEO_CODEC: 'libvpx-vp9', DISTRIBUTION_AUDIO_CODEC: 'libopus',
+  AV_DURATION_TOLERANCE_FRAMES: 1
+} as const
+
+export const ASSURANCE = {
+  CRITIC_COUNT: 9,
+  TEMPORAL_SAMPLES_PER_SHOT: 3,
+  FLOORS: {
+    FACTUAL_SAFETY: 94, SEMANTIC_ALIGNMENT: 94, VOICE_INTELLIGIBILITY: 94,
+    STORY_PAYOFF: 90, VISUAL_DIRECTION: 90, MUSIC_SOUND_DESIGN: 90,
+    RETENTION: 90, MOBILE_LEGIBILITY: 90, PACKAGING_CTR: 90,
+    EXECUTIVE_PRODUCER: 90, COMPETITIVE_EDITOR: 90, OVERALL: 92
+  },
+  P0_MAX: 0, CRITICAL_P1_MAX: 0, BORDERLINE_BAND: 3, RERUN_N: 3, MAX_VARIANCE: 3
+} as const
+
+export const QUALIFICATION = {
+  RUNS_CRITICAL: 10, RUNS_HIGH: 8, YIELD_ASSURANCE: 1.00, YIELD_AUDIO: 0.97,
+  YIELD_VISUAL: 0.95, YIELD_CONTROL: 0.95, GOLD_SET_MIN_SAMPLES: 30,
+  GOLD_RECALL_P0: 1.00, GOLD_RECALL_P1: 0.90, GOLD_PRECISION_MIN: 0.80
+} as const
+
+export const ALIGNER_CALIBRATION = {
+  MIN_SAMPLES: 10,
+  MAX_SAMPLES: 15,
+  MIN_THRESHOLD: 0.01,
+  FLOOR_MULTIPLIER: 2,
+} as const
+
+export const MOBILE = {
+  QA_SCALE: 0.25, MIN_X_HEIGHT_PX: 10, MIN_CONTRAST_NORMAL: 4.5,
+  MIN_CONTRAST_LARGE: 3.0, CAPTION_MAX_WORDS: 5
+} as const
+
+export const LEASE = { HEARTBEAT_SEC: 30, TTL_SEC: 90 } as const
+export const DOR = {
+  CONDITION_COUNT: 11,
+  HUMAN_DECISION_STAGE_ORDINAL: 14,
+  CACHE_MAX_SEC: 10,
+  P95_MAX_MS: 200
+} as const
+export const EVIDENCE = { PROVIDER_RETENTION_MONTHS: 12 } as const
+export const RETRY = { MAX_ATTEMPTS: 3, BASE_BACKOFF_MS: 1000, JITTER_RATIO: 0.3 } as const
+export const SPEND = {
+  CEILING_PER_VIDEO_USD: 30,
+  CEILING_PER_CHANNEL_WEEK_USD: 70,
+  CEILING_PORTFOLIO_MONTH_USD: 900,
+  QUALIFICATION_BUDGET_USD: 400,
+  TRACK_G_BUDGET_USD: 350,
+  SCALED_TARGET_COST_PER_VIDEO_USD: 18,
+} as const
+
+export const LEARNING = {
+  ANALYTICS_WINDOW_DAYS: { min: 14, max: 28 },
+  MIN_CONSISTENT_VIDEOS: 2,
+  PORTFOLIO_MIN_CHANNELS: 2
+} as const
+
+export const SOURCE_QUALITY = {
+  CRITICAL_CLAIM_MIN_TIER: 2 as SourceTier,
+  FRESHNESS_DAYS: { DEMAND_SIGNAL: 90, COMPETITIVE: 180, INDUSTRY_QUANTITATIVE: 365 }
+} as const
+
+export const OPS = {
+  DAILY_SESSION_MAX_MIN: 30, SPEND_ALERT_PCT: 0.80, GATE_FAIL_REPEAT_TO_LRN04: 2,
+  OPSLOG_AUDIT_INTERVAL_DAYS: 7, BUILD_AUDIT_INTERVAL_WP: 3
+} as const
+
+export const ATTENTION = {
+  HP02_MIN_PER_VIDEO: { min: 10, max: 20 },
+  HP03_MIN_PER_VIDEO: { min: 5, max: 10 },
+  HP04_MIN_PER_REJECT: { min: 10, max: 15 },
+  HP05_MIN_PER_WEEK: { min: 15, max: 30 },
+  OWNER_WEEKLY_CEILING_MIN: 300,
+  QUEUE_AGE_ALERT_HOURS: 48,
+  RATIONALE_MIN_CHARS: 20
+} as const
+
+export const POLICY = {
+  MIN_HUMAN_DECISIONS: 2, MIN_DISTINCT_DECISION_TYPES: 2,
+  DECISION_TYPE_DIVERSITY_WINDOW: 5, SELF_SIMILARITY_WINDOW_VIDEOS: 10,
+  SELF_BEAT_SEQUENCE_DIFF_MIN: 0.30, SELF_THUMBNAIL_PHASH_HAMMING_MIN: 16,
+  INCIDENT_CLEAN_DAYS_FOR_SAMPLING: 90, ESCAPED_P0_CLEAN_DAYS_FOR_SAMPLING: 90,
+  POLICY_WATCH_INTERVAL_DAYS: 7, POLICY_CHECK_COUNT: 8,
+  SAMPLING_MIN_CLEAN_STREAK: 15, KILL_CRITERIA_VIDEO_COUNT: 12,
+  POLICY_SNAPSHOT_SOURCES: ['ypp_monetization', 'inauthentic_content', 'synthetic_disclosure', 'advertiser_friendly'],
+  DISCLOSURE_DEFAULT: true,
+  OPERATOR_EMERGENCY_FREEZE: true,
+  FREEZE_OWNER_CONFIRM_HOURS: 24
+} as const
+
+export const EVOLUTION = {
+  SHADOW_MIN_ARTIFACTS: 10, SHADOW_GOLD_REGRESSION_REQUIRED: true,
+  PROPOSAL_EXPIRY_DAYS: 30, ESCAPED_P0_PROPOSAL_SLA_HOURS: 48,
+  REJECTED_MASTER_TO_GOLD_SLA_DAYS: 7, QUARANTINE_CLUSTER_PROPOSAL_PCT: 0.20
+} as const
+
+export const PROFILE: Readonly<Record<ProfileName, {
+  readonly routeCount: number
+  readonly compositionsPerCriticalUnit: number
+  readonly criticCountStage04: number
+  readonly criticCountAssurance: number
+  readonly sourceCandidates: number
+  readonly temporalSamplesPerShot: number
+  readonly treatmentsMin: number
+}>> = {
+  FULL: {
+    routeCount: 4, compositionsPerCriticalUnit: 3, criticCountStage04: 7,
+    criticCountAssurance: 9, sourceCandidates: 8, temporalSamplesPerShot: 3,
+    treatmentsMin: 3
+  },
+  REDUCED: {
+    routeCount: 2, compositionsPerCriticalUnit: 1, criticCountStage04: 3,
+    criticCountAssurance: 4, sourceCandidates: 6, temporalSamplesPerShot: 1,
+    treatmentsMin: 3
+  }
+} as const
+
+export const UNDECIDED = {
+  TARGET_VIDEOS_PER_CHANNEL_PER_WEEK: null,
+  IDENTITY_SCOPE: null,
+  PRODUCTION_AUDIO_PROVIDER: null,
+  ALIGNER_ERROR_FLOOR: null,
+  SAMPLING_THRESHOLD_N: null,
+  BASELINE_RETENTION_SOURCE: null,
+  MEDIA_INFRA: null,
+} as const
+
+export const UNCALIBRATED: readonly string[] = [
+  'ANTICOPY.DIFFERENTIATION_MIN',
+  'POLICY.SELF_BEAT_SEQUENCE_DIFF_MIN',
+  'POLICY.SELF_THUMBNAIL_PHASH_HAMMING_MIN',
+  'AUDIO.PHONEME_MISMATCH_BASE'
+] as const

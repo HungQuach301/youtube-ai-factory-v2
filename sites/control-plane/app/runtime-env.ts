@@ -5,6 +5,8 @@ export type FactoryRuntimeEnv = {
   DB?: D1Database;
   BUCKET?: R2Bucket;
   FACTORY_OWNER_EMAIL?: string;
+  MEDIA_WORKER_URL?: string;
+  MEDIA_REQUEST_SIGNING_KEY?: string;
   IMAGES?: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {

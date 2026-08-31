@@ -8,6 +8,75 @@ import { Miniflare } from "miniflare";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /const TTS_BATCH_SIZE = 2\b/);
+  assert.match(source, /offset \+= TTS_BATCH_SIZE/);
+  assert.match(source, /slice\(offset, offset \+ TTS_BATCH_SIZE\)/);
+});
+
+test("Stage 10 observes all tournament takes in one WhisperX batch", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../scripts/whisperx-phoneme-observer.py", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /combined_audio = np\.concatenate\(clips\)/);
+  assert.match(source, /model\.transcribe\(combined_audio, batch_size=8/);
+  assert.equal(source.match(/model\.transcribe\(/g)?.length, 1);
+  assert.equal(source.match(/whisperx\.align\(/g)?.length, 1);
+});
+
+test("Stage 10 replays one bounded worker execution per idempotency key", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  assert.match(source, /const STAGE10_EXECUTION_CACHE_LIMIT = 8/);
+  assert.match(source, /stage10Executions\.get\(payload\.idempotencyKey\)/);
+  assert.match(source, /stage10Executions\.set\(payload\.idempotencyKey, execution\)/);
+  assert.match(source, /stage10Executions\.delete\(payload\.idempotencyKey\)/);
+  assert.match(source, /processStage10Idempotent\(validateStage10Payload/);
+});
+
+test("Stage 10 separates bounded start from durable receipt finalization", async () => {
+  const worker = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
+    "utf8",
+  );
+  const domain = await readFile(
+    fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)),
+    "utf8",
+  );
+  const callback = await readFile(
+    fileURLToPath(new URL("../app/api/media-worker/stage10/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const flyConfig = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/fly.toml", import.meta.url)),
+    "utf8",
+  );
+  assert.match(worker, /request\.url === '\/stage10\/start'/);
+  assert.match(worker, /publishStage10Callback/);
+  assert.match(worker, /publishStage10Failure/);
+  assert.match(worker, /AbortSignal\.timeout\(TTS_REQUEST_TIMEOUT_MS\)/);
+  assert.match(callback, /errorCode\?: string/);
+  assert.match(callback, /jobStatus: "FAILED"/);
+  assert.match(flyConfig, /min_machines_running = 1/);
+  assert.match(domain, /START_TRACK_G_VIDEO_1_STAGE_10/);
+  assert.match(domain, /FINALIZE_TRACK_G_VIDEO_1_STAGE_10/);
+  assert.match(domain, /TRACK_G_STAGE_10_JOB_PENDING/);
+  assert.match(domain, /STAGE_10_RETRYABLE_ERROR_CODES/);
+  assert.match(domain, /attemptOrdinal/);
+  assert.match(domain, /retryOfJobId/);
+  assert.match(domain, /orderBy\(desc\(stage10MediaJobs\.attemptOrdinal\)\)/);
+  assert.match(domain, /TRACK_G_STAGE_10_JOB_RETRY_NOT_ALLOWED/);
+  assert.match(callback, /putImmutableProductionEvidence/);
+  assert.match(callback, /state = 'READY'/);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
@@ -192,13 +261,23 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
+      "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
+      "finalize_track_g_video_1_stage_10",
+      "finalize_track_g_video_1_stage_12",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
+      "prepare_track_g_video_1_stage_06_script_review",
+      "prepare_track_g_video_1_stage_07a_voice_tournament",
+      "prepare_track_g_video_1_stage_09_visual_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
+      "select_track_g_video_1_stage_07a_tone",
+      "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
+      "start_track_g_video_1_stage_10",
+      "start_track_g_video_1_stage_12",
     ]);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -436,13 +515,23 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
+      "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
+      "finalize_track_g_video_1_stage_10",
+      "finalize_track_g_video_1_stage_12",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
+      "prepare_track_g_video_1_stage_06_script_review",
+      "prepare_track_g_video_1_stage_07a_voice_tournament",
+      "prepare_track_g_video_1_stage_09_visual_review",
       "register_qualified_voice",
       "select_track_g_video_1_stage_04_champion",
+      "select_track_g_video_1_stage_07a_tone",
+      "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
+      "start_track_g_video_1_stage_10",
+      "start_track_g_video_1_stage_12",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);
@@ -956,21 +1045,488 @@ test("opens Video #1 in the bounded Track G qualification lane and replays idemp
       /HUMAN_DECISION_APPEND_ONLY/u,
     );
 
-    const unsupportedStage05 = await client.callTool({
+    const stage05Objective = "Seal the selected route's story architecture, assert a knowledge-state change for every beat, and persist the mandatory uncalibrated P9 prediction before Stage 06.";
+    const stage05 = await client.callTool({
       name: "advance_track_g_video_1_stage",
       arguments: {
         stageCode: "05",
-        objective: "Verify that Stage 05 remains fail-closed until its story architecture executor is implemented.",
+        objective: stage05Objective,
         confirm: true,
         ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
       },
     });
-    assert.equal(unsupportedStage05.isError, true);
-    assert.match(unsupportedStage05.content[0].text, /TRACK_G_STAGE_05_EXECUTOR_NOT_IMPLEMENTED/u);
+    assert.equal(stage05.isError, undefined, JSON.stringify(stage05));
+    assert.equal(stage05.structuredContent.accepted, true);
+    assert.equal(stage05.structuredContent.replayed, false);
+    assert.equal(stage05.structuredContent.currentStep, "STAGE_06_READY");
+    assert.equal(stage05.structuredContent.stageCode, "05");
+    assert.equal(stage05.structuredContent.stageState, "FROZEN");
+    assert.equal(stage05.structuredContent.artifactType, "STORY_ARCHITECTURE_PREDICTION_SEAL");
+    assert.equal(stage05.structuredContent.artifactState, "SEALED");
+    assert.equal(stage05.structuredContent.artifactEligibility, "ELIGIBLE_FOR_STAGE");
+    assert.deepEqual(stage05.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_BEAT_STATE_ASSERTION", "PASS"],
+      ["M1_PREDICTION_SEALED", "PASS"],
+    ]);
+    assert.equal(stage05.structuredContent.stageReservedUsd, 0);
+    assert.equal(stage05.structuredContent.stageActualUsd, 0);
+    assert.equal(stage05.structuredContent.providerDispatch, "OFF");
+
+    const stage05Replay = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "05",
+        objective: stage05Objective,
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(stage05Replay.structuredContent.replayed, true);
+    assert.equal(stage05Replay.structuredContent.artifactSha256, stage05.structuredContent.artifactSha256);
+
+    const stage05Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '05'").first();
+    const stage05Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage05Instance.id).first();
+    const prediction = await d1.prepare("SELECT * FROM predicted_performance").first();
+    assert.equal(stage05Instance.control_state, "FROZEN");
+    assert.equal(stage05Artifact.artifact_type, "STORY_ARCHITECTURE_PREDICTION_SEAL");
+    assert.equal(prediction.package_id, "package_track_g_video_1_v1");
+    assert.equal(prediction.model_version, "qualification-prior-v1-uncalibrated");
+    assert.equal(prediction.canonical_hash, stage05.structuredContent.artifactSha256);
+    assert.equal(JSON.parse(prediction.retention_curve_json).length, 7);
+    assert.equal(JSON.parse(prediction.beat_risk_json).length, 6);
+    const stage05Evidence = await bucket.get(stage05Artifact.r2_key);
+    assert.ok(stage05Evidence);
+    const stage05Json = JSON.parse(Buffer.from(await stage05Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage05Json.champion.candidateId, selectedCandidate.candidateId);
+    assert.equal(stage05Json.storyArchitecture.beats.length, 6);
+    assert.ok(stage05Json.storyArchitecture.beats.every((beat) => beat.knowledgeBefore !== beat.knowledgeAfter));
+    assert.equal(stage05Json.predictedPerformance.calibrationState, "UNCALIBRATED_VIDEO_1_PRIOR");
+    assert.equal(stage05Json.predictedPerformance.gatingUse, "STRUCTURAL_SEAL_ONLY");
+    await assert.rejects(
+      d1.prepare("UPDATE predicted_performance SET ctr_estimate = 0.99").run(),
+      /PREDICTED_PERFORMANCE_APPEND_ONLY/u,
+    );
+
+    const directStage06Blocked = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "06",
+        objective: "Verify that Stage 06 cannot bypass its required HP-02 editorial decision command path.",
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(directStage06Blocked.isError, true);
+    assert.match(directStage06Blocked.content[0].text, /TRACK_G_STAGE_06_HUMAN_GATE_COMMAND_REQUIRED/u);
+
+    const stage06Objective = "Prepare the complete claim-bound Stage 06 script, run the second advice lint, script lint and number trace, then stop for a substantive HP-02 editorial decision.";
+    const stage06Prepared = await client.callTool({
+      name: "prepare_track_g_video_1_stage_06_script_review",
+      arguments: {
+        objective: stage06Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 06 SCRIPT REVIEW",
+      },
+    });
+    assert.equal(stage06Prepared.isError, undefined, JSON.stringify(stage06Prepared));
+    assert.equal(stage06Prepared.structuredContent.accepted, true);
+    assert.equal(stage06Prepared.structuredContent.replayed, false);
+    assert.equal(stage06Prepared.structuredContent.currentStep, "STAGE_06_READY");
+    assert.equal(stage06Prepared.structuredContent.stageState, "RUNNING");
+    assert.equal(stage06Prepared.structuredContent.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage06Prepared.structuredContent.sections.length, 6);
+    assert.ok(stage06Prepared.structuredContent.wordCount >= 700);
+    assert.ok(stage06Prepared.structuredContent.estimatedDurationSec >= 420);
+    assert.deepEqual(stage06Prepared.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M0_ADVICE_LINT_SECOND_PASS", "PASS"],
+      ["M1_SCRIPT_LINT", "PASS"],
+      ["M1_NUMBER_TRACE", "PASS"],
+    ]);
+    assert.equal(stage06Prepared.structuredContent.humanGate, "REQUIRED:HP-02_D2_OR_D4_EDITORIAL_DECISION");
+    assert.equal(stage06Prepared.structuredContent.providerDispatch, "OFF");
+    assert.equal(stage06Prepared.structuredContent.stageActualUsd, 0);
+
+    const stage06PrepareReplay = await client.callTool({
+      name: "prepare_track_g_video_1_stage_06_script_review",
+      arguments: {
+        objective: stage06Objective,
+        confirm: true,
+        ownerApprovalText: "PREPARE STAGE 06 SCRIPT REVIEW",
+      },
+    });
+    assert.equal(stage06PrepareReplay.structuredContent.replayed, true);
+    assert.equal(stage06PrepareReplay.structuredContent.draftSha256,
+      stage06Prepared.structuredContent.draftSha256);
+
+    const stage06InstanceRunning = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '06'").first();
+    const scriptDraft = await d1.prepare("SELECT * FROM script_draft").first();
+    assert.equal(stage06InstanceRunning.control_state, "RUNNING");
+    assert.equal(scriptDraft.advice_lint_state, "PASS");
+    assert.equal(scriptDraft.script_lint_state, "PASS");
+    assert.equal(scriptDraft.number_trace_state, "PASS");
+    assert.equal(JSON.parse(scriptDraft.sections_json).length, 6);
+    assert.equal(JSON.parse(scriptDraft.number_trace_json).length, 2);
+    const workbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", { headers: ownerHeaders });
+    const workbenchSnapshot = await workbenchResponse.json();
+    assert.equal(workbenchResponse.status, 200, JSON.stringify(workbenchSnapshot));
+    assert.equal(workbenchSnapshot.trackGWorkbench.run.currentStep, "STAGE_06_READY");
+    assert.equal(workbenchSnapshot.trackGWorkbench.stage06.reviewState, "AWAITING_HUMAN");
+    assert.equal(workbenchSnapshot.trackGWorkbench.stage06.sections.length, 6);
+    assert.deepEqual(workbenchSnapshot.trackGWorkbench.allowedActions,
+      ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]);
+    assert.equal(workbenchSnapshot.latestRunEvents[0].runId, workbenchSnapshot.trackGWorkbench.run.id);
+    const scriptDraftEvidence = await bucket.get(scriptDraft.r2_key);
+    assert.ok(scriptDraftEvidence);
+    await assert.rejects(
+      d1.prepare("UPDATE script_draft SET title = 'mutated'").run(),
+      /SCRIPT_DRAFT_APPEND_ONLY/u,
+    );
+
+    const emptyEditorial = await client.callTool({
+      name: "apply_track_g_video_1_stage_06_editorial_decision",
+      arguments: {
+        decisionType: "D2",
+        revisedTitle: stage06Prepared.structuredContent.draftTitle,
+        revisedHook: stage06Prepared.structuredContent.draftHook,
+        rationale: "A substantive human-authored edit is required before the script may be sealed.",
+        confirm: true,
+        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
+      },
+    });
+    assert.equal(emptyEditorial.isError, true);
+    assert.match(emptyEditorial.content[0].text, /TRACK_G_STAGE_06_D2_SUBSTANTIVE_EDIT_REQUIRED/u);
+
+    const revisedTitle = "The Bank Fraud Alert Is the Trap — Break Its Control";
+    const revisedHook = "That fraud alert may not be protecting your account. It may be the first move in a process built to control your next decision.";
+    const editorialRationale = "Use a more direct opening and title so the audience immediately understands that the alert channel itself is the mechanism of control.";
+    const stage06ApiResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST",
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        commandType: "APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION",
+        decisionType: "D2",
+        revisedTitle,
+        revisedHook,
+        rationale: editorialRationale,
+        confirm: true,
+      }),
+    });
+    const stage06ApiApplied = await stage06ApiResponse.json();
+    assert.equal(stage06ApiResponse.status, 201);
+    assert.equal(stage06ApiApplied.accepted, true);
+    assert.equal(stage06ApiApplied.replayed, false);
+    assert.equal(stage06ApiApplied.currentStep, "STAGE_07A_READY");
+    assert.equal(stage06ApiApplied.stageState, "FROZEN");
+    assert.equal(stage06ApiApplied.decisionType, "D2");
+    assert.equal(stage06ApiApplied.providerDispatch, "OFF");
+
+    const stage06Applied = await client.callTool({
+      name: "apply_track_g_video_1_stage_06_editorial_decision",
+      arguments: {
+        decisionType: "D2",
+        revisedTitle,
+        revisedHook,
+        rationale: editorialRationale,
+        confirm: true,
+        ownerApprovalText: "APPLY STAGE 06 EDITORIAL DECISION",
+      },
+    });
+    assert.equal(stage06Applied.isError, undefined, JSON.stringify(stage06Applied));
+    assert.equal(stage06Applied.structuredContent.replayed, true);
+    assert.equal(stage06Applied.structuredContent.currentStep, "STAGE_07A_READY");
+    assert.equal(stage06Applied.structuredContent.artifactType, "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL");
+    assert.equal(stage06Applied.structuredContent.artifactState, "SEALED");
+    assert.equal(stage06Applied.structuredContent.finalTitle, revisedTitle);
+    assert.equal(stage06Applied.structuredContent.finalHook, revisedHook);
+    assert.equal(stage06Applied.structuredContent.artifactSha256, stage06ApiApplied.artifactSha256);
+
+    const stage06InstanceFrozen = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '06'").first();
+    const stage06Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage06InstanceFrozen.id).first();
+    const stage06Decision = await d1.prepare("SELECT * FROM human_decision WHERE artifact_after_id = ?")
+      .bind(stage06Artifact.id).first();
+    const allHumanDecisions = await d1.prepare("SELECT * FROM human_decision ORDER BY created_at").all();
+    assert.equal(stage06InstanceFrozen.control_state, "FROZEN");
+    assert.equal(stage06Artifact.artifact_type, "SCRIPT_NUMBER_AUDIT_EDITORIAL_SEAL");
+    assert.equal(stage06Decision.decision_type, "D2");
+    assert.equal(stage06Decision.rationale_text, editorialRationale);
+    assert.equal(allHumanDecisions.results.length, 2);
+    const finalStage06Evidence = await bucket.get(stage06Artifact.r2_key);
+    const stage06DecisionEvidence = await bucket.get(stage06Decision.diff_r2_key);
+    assert.ok(finalStage06Evidence);
+    assert.ok(stage06DecisionEvidence);
+    const finalStage06Json = JSON.parse(Buffer.from(await finalStage06Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(finalStage06Json.finalScript.title, revisedTitle);
+    assert.equal(finalStage06Json.finalScript.hook, revisedHook);
+    assert.equal(finalStage06Json.editorialDecision.decisionType, "D2");
+
+    const directStage07ABlocked = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: {
+        stageCode: "07A",
+        objective: "Verify that Stage 07A cannot bypass its required HP-02 D5 tone selection command path.",
+        confirm: true,
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+      },
+    });
+    assert.equal(directStage07ABlocked.isError, true);
+    assert.match(directStage07ABlocked.content[0].text, /TRACK_G_STAGE_07A_HUMAN_GATE_COMMAND_REQUIRED/u);
+
+    const stage07APrepareResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "PREPARE_TRACK_G_VIDEO_1_STAGE_07A_VOICE_TOURNAMENT",
+        confirm: true }),
+    });
+    const stage07APreparedApi = await stage07APrepareResponse.json();
+    assert.equal(stage07APrepareResponse.status, 201, JSON.stringify(stage07APreparedApi));
+    assert.equal(stage07APreparedApi.currentStep, "STAGE_07A_READY");
+    assert.equal(stage07APreparedApi.stageState, "RUNNING");
+    assert.equal(stage07APreparedApi.candidateCount, 2);
+
+    const stage07APrepared = await client.callTool({
+      name: "prepare_track_g_video_1_stage_07a_voice_tournament",
+      arguments: { objective: "Prepare two qualified voice routes and stop for the owner D5 tone decision.",
+        confirm: true, ownerApprovalText: "PREPARE STAGE 07A VOICE TOURNAMENT" },
+    });
+    assert.equal(stage07APrepared.isError, undefined, JSON.stringify(stage07APrepared));
+    assert.equal(stage07APrepared.structuredContent.replayed, true);
+    assert.equal(stage07APrepared.structuredContent.candidates.length, 2);
+    assert.equal(stage07APrepared.structuredContent.segmentCount, 6);
+    assert.deepEqual(stage07APrepared.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_SEGMENTATION_BOUNDARY", "PASS"],
+      ["M1_VOICE_SETTINGS_HASH", "PASS"],
+    ]);
+    const stage07AWorkbench = await (await mf.dispatchFetch("http://localhost/api/operator",
+      { headers: ownerHeaders })).json();
+    assert.equal(stage07AWorkbench.trackGWorkbench.stage07A.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage07AWorkbench.trackGWorkbench.stage07A.candidates.length, 2);
+    assert.deepEqual(stage07AWorkbench.trackGWorkbench.allowedActions,
+      ["SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE"]);
+
+    const toneCandidate = stage07APrepared.structuredContent.candidates[0];
+    const toneRationale = "Use controlled urgency because this audience needs the danger and the stop action to be unmistakable without sounding alarmist.";
+    const stage07ASelectResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "SELECT_TRACK_G_VIDEO_1_STAGE_07A_TONE",
+        candidateId: toneCandidate.candidateId, rationale: toneRationale, confirm: true }),
+    });
+    const stage07ASelectedApi = await stage07ASelectResponse.json();
+    assert.equal(stage07ASelectResponse.status, 201, JSON.stringify(stage07ASelectedApi));
+    assert.equal(stage07ASelectedApi.currentStep, "STAGE_07B_READY");
+    assert.equal(stage07ASelectedApi.stageState, "FROZEN");
+    assert.equal(stage07ASelectedApi.decisionType, "D5");
+
+    const stage07ASelected = await client.callTool({
+      name: "select_track_g_video_1_stage_07a_tone",
+      arguments: { candidateId: toneCandidate.candidateId, rationale: toneRationale,
+        confirm: true, ownerApprovalText: "SELECT STAGE 07A TONE" },
+    });
+    assert.equal(stage07ASelected.isError, undefined, JSON.stringify(stage07ASelected));
+    assert.equal(stage07ASelected.structuredContent.replayed, true);
+    assert.equal(stage07ASelected.structuredContent.currentStep, "STAGE_07B_READY");
+    assert.equal(stage07ASelected.structuredContent.artifactType, "VOICE_DESIGN_TTS_SEGMENTATION_SEAL");
+    assert.equal(stage07ASelected.structuredContent.preservedCandidateCount, 2);
+    const stage07AInstance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '07A'").first();
+    const stage07AArtifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage07AInstance.id).first();
+    const stage07ADecision = await d1.prepare("SELECT * FROM human_decision WHERE artifact_after_id = ?")
+      .bind(stage07AArtifact.id).first();
+    assert.equal(stage07AInstance.control_state, "FROZEN");
+    assert.equal(stage07ADecision.decision_type, "D5");
+    assert.ok(await bucket.get(stage07AArtifact.r2_key));
+    assert.ok(await bucket.get(stage07ADecision.diff_r2_key));
+
+    const stage07BWorkbench = await (await mf.dispatchFetch("http://localhost/api/operator",
+      { headers: ownerHeaders })).json();
+    assert.deepEqual(stage07BWorkbench.trackGWorkbench.allowedActions,
+      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_07B"]);
+    assert.equal(stage07BWorkbench.trackGWorkbench.stage07B.controlState, "READY");
+    assert.equal(stage07BWorkbench.trackGWorkbench.stage07B.assignments.length, 6);
+    assert.deepEqual(stage07BWorkbench.trackGWorkbench.stage07B.distribution.map((entry) => entry.count),
+      [2, 2, 2]);
+
+    const stage07BResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_07B", confirm: true }),
+    });
+    const stage07BApi = await stage07BResponse.json();
+    assert.equal(stage07BResponse.status, 201, JSON.stringify(stage07BApi));
+    assert.equal(stage07BApi.currentStep, "STAGE_08_READY");
+    assert.equal(stage07BApi.stageState, "FROZEN");
+    assert.equal(stage07BApi.gateResults.length, 2);
+
+    const stage07BReplay = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: { stageCode: "07B", objective: "Compile the sealed visual grammar and deterministic routing for all six beats.",
+        confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
+    });
+    assert.equal(stage07BReplay.isError, undefined, JSON.stringify(stage07BReplay));
+    assert.equal(stage07BReplay.structuredContent.replayed, true);
+    assert.equal(stage07BReplay.structuredContent.currentStep, "STAGE_08_READY");
+    assert.equal(stage07BReplay.structuredContent.artifactType, "VISUAL_GRAMMAR_ROUTING");
+    assert.deepEqual(stage07BReplay.structuredContent.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_MOTION_CLASS_TOTAL", "PASS"],
+      ["M1_ROUTE_DISTRIBUTION", "PASS"],
+    ]);
+    const stage07BInstance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '07B'").first();
+    const stage07BArtifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage07BInstance.id).first();
+    assert.equal(stage07BInstance.control_state, "FROZEN");
+    assert.equal(stage07BArtifact.artifact_type, "VISUAL_GRAMMAR_ROUTING");
+    assert.ok(await bucket.get(stage07BArtifact.r2_key));
+
+    const stage08Workbench = await (await mf.dispatchFetch("http://localhost/api/operator",
+      { headers: ownerHeaders })).json();
+    assert.deepEqual(stage08Workbench.trackGWorkbench.allowedActions,
+      ["ADVANCE_TRACK_G_VIDEO_1_STAGE_08"]);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.controlState, "READY");
+    const compiledShotCount = stage08Workbench.trackGWorkbench.stage08.shots.length;
+    assert.ok(compiledShotCount > 0);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.assertionCount, compiledShotCount * 3);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.targetFrames, 15300);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.shots[0].startFrame, 0);
+    assert.equal(stage08Workbench.trackGWorkbench.stage08.shots.at(-1).endFrame, 15300);
+    assert.ok(stage08Workbench.trackGWorkbench.stage08.shots.every((shot) => shot.assertions.length === 3));
+
+    const stage08Response = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_08", confirm: true }),
+    });
+    const stage08Api = await stage08Response.json();
+    assert.equal(stage08Response.status, 201, JSON.stringify(stage08Api));
+    assert.equal(stage08Api.currentStep, "STAGE_09_READY");
+    assert.equal(stage08Api.stageState, "FROZEN");
+    assert.equal(stage08Api.shotCount, compiledShotCount);
+    assert.equal(stage08Api.assertionCount, compiledShotCount * 3);
+    assert.deepEqual(stage08Api.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M1_TIMELINE_LINT", "PASS"],
+      ["M1_DURATION_MATCH", "PASS"],
+    ]);
+
+    const stage08Replay = await client.callTool({
+      name: "advance_track_g_video_1_stage",
+      arguments: { stageCode: "08", objective: "Compile the frame-exact ShotCueProgram with three assertions per adaptive shot.",
+        confirm: true, ownerApprovalText: "ADVANCE TRACK G VIDEO 1" },
+    });
+    assert.equal(stage08Replay.isError, undefined, JSON.stringify(stage08Replay));
+    assert.equal(stage08Replay.structuredContent.replayed, true);
+    assert.equal(stage08Replay.structuredContent.currentStep, "STAGE_09_READY");
+    assert.equal(stage08Replay.structuredContent.artifactType, "SHOT_CUE_PROGRAM");
+    const stage08Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '08'").first();
+    const stage08Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage08Instance.id).first();
+    assert.equal(stage08Instance.control_state, "FROZEN");
+    assert.equal(stage08Artifact.artifact_type, "SHOT_CUE_PROGRAM");
+    const stage08Evidence = await bucket.get(stage08Artifact.r2_key);
+    assert.ok(stage08Evidence);
+    const stage08EvidenceJson = JSON.parse(Buffer.from(await stage08Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage08EvidenceJson.shotCueProgram.shots.length, compiledShotCount);
+    assert.ok(stage08EvidenceJson.shotCueProgram.shots.every((shot) => shot.assertions.length === 3));
+
+    const stage09BeforeResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage09Before = await stage09BeforeResponse.json();
+    assert.equal(stage09Before.trackGWorkbench.stage09.reviewState, "NOT_PREPARED");
+    assert.deepEqual(stage09Before.trackGWorkbench.allowedActions,
+      ["PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW"]);
+
+    const stage09PrepareResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "PREPARE_TRACK_G_VIDEO_1_STAGE_09_VISUAL_REVIEW", confirm: true }),
+    });
+    const stage09Prepare = await stage09PrepareResponse.json();
+    assert.equal(stage09PrepareResponse.status, 201, JSON.stringify(stage09Prepare));
+    assert.equal(stage09Prepare.currentStep, "STAGE_09_READY");
+    assert.equal(stage09Prepare.stageState, "RUNNING");
+    assert.equal(stage09Prepare.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage09Prepare.assetCount, compiledShotCount);
+    assert.equal(stage09Prepare.candidateCount, 2);
+    assert.deepEqual(stage09Prepare.gateResults.map((gate) => [gate.gate, gate.state]), [
+      ["M0_RIGHTS_LINEAGE", "PASS"],
+      ["M1_SEMANTIC_FIT", "PASS"],
+      ["M1_DUPLICATE_RATE", "PASS"],
+    ]);
+
+    const stage09WorkbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage09Workbench = await stage09WorkbenchResponse.json();
+    const stage09Model = stage09Workbench.trackGWorkbench.stage09;
+    assert.equal(stage09Model.reviewState, "AWAITING_HUMAN");
+    assert.equal(stage09Model.assetCount, compiledShotCount);
+    assert.equal(stage09Model.sourceCandidatesPerShot, 6);
+    assert.equal(stage09Model.compositionsPerShot, 1);
+    assert.equal(stage09Model.duplicateRate, 0);
+    assert.ok(stage09Model.assets.every((asset) => asset.rightsLineage.state === "PASS"));
+    assert.ok(stage09Model.assets.every((asset) => asset.semanticFit.state === "PASS"));
+    assert.equal(new Set(stage09Model.assets.map((asset) => asset.visualFingerprint)).size,
+      compiledShotCount);
+    const selectedThumbnail = stage09Model.candidates.find((candidate) => candidate.machineRecommended);
+    const thumbnailRationale = "This direct warning exposes the trust trap immediately while preserving a clear protective action.";
+    const revisedThumbnailText = "THE WARNING IS THE TRAP";
+    const stage09SelectResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      method: "POST", headers: ownerHeaders,
+      body: JSON.stringify({ commandType: "SELECT_TRACK_G_VIDEO_1_STAGE_09_THUMBNAIL",
+        confirm: true, candidateId: selectedThumbnail.candidateId,
+        revisedThumbnailText, rationale: thumbnailRationale }),
+    });
+    const stage09Select = await stage09SelectResponse.json();
+    assert.equal(stage09SelectResponse.status, 201, JSON.stringify(stage09Select));
+    assert.equal(stage09Select.currentStep, "STAGE_10_READY");
+    assert.equal(stage09Select.stageState, "FROZEN");
+    assert.equal(stage09Select.decisionType, "D3");
+    assert.equal(stage09Select.revisedThumbnailText, revisedThumbnailText);
+
+    const stage09Replay = await client.callTool({
+      name: "select_track_g_video_1_stage_09_thumbnail",
+      arguments: { candidateId: selectedThumbnail.candidateId, revisedThumbnailText,
+        rationale: thumbnailRationale, confirm: true,
+        ownerApprovalText: "SELECT STAGE 09 THUMBNAIL" },
+    });
+    assert.equal(stage09Replay.isError, undefined, JSON.stringify(stage09Replay));
+    assert.equal(stage09Replay.structuredContent.replayed, true);
+    assert.equal(stage09Replay.structuredContent.currentStep, "STAGE_10_READY");
+    assert.equal(stage09Replay.structuredContent.artifactType,
+      "VISUAL_ACQUISITION_COMPOSITION_SEAL");
+    const stage09Instance = await d1.prepare("SELECT * FROM stage_instance WHERE stage_code = '09'").first();
+    const stage09Artifact = await d1.prepare("SELECT * FROM stage_artifact WHERE stage_instance_id = ?")
+      .bind(stage09Instance.id).first();
+    assert.equal(stage09Instance.control_state, "FROZEN");
+    assert.equal(stage09Artifact.artifact_type, "VISUAL_ACQUISITION_COMPOSITION_SEAL");
+    const stage09Evidence = await bucket.get(stage09Artifact.r2_key);
+    assert.ok(stage09Evidence);
+    const stage09EvidenceJson = JSON.parse(Buffer.from(await stage09Evidence.arrayBuffer()).toString("utf8"));
+    assert.equal(stage09EvidenceJson.visualAcquisition.assets.length, compiledShotCount);
+    assert.equal(stage09EvidenceJson.selectedThumbnail.thumbnailText, revisedThumbnailText);
+    assert.equal(stage09EvidenceJson.controls.humanGate,
+      "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION");
+
+    const stage10WorkbenchResponse = await mf.dispatchFetch("http://localhost/api/operator", {
+      headers: ownerHeaders,
+    });
+    const stage10Workbench = await stage10WorkbenchResponse.json();
+    assert.deepEqual(stage10Workbench.trackGWorkbench.allowedActions,
+      ["START_TRACK_G_VIDEO_1_STAGE_10"]);
+
+    const unavailableStage10 = await client.callTool({
+      name: "start_track_g_video_1_stage_10",
+      arguments: { objective: "Verify Stage 10 remains fail-closed without its signed calibrated media worker.",
+        confirm: true, ownerApprovalText: "START STAGE 10" },
+    });
+    assert.equal(unavailableStage10.isError, true);
+    assert.match(unavailableStage10.content[0].text, /MEDIA_WORKER_URL_UNAVAILABLE/u);
+    const stage10Rows = await d1.prepare(
+      "SELECT count(*) AS count FROM stage_instance WHERE stage_code = '10'",
+    ).first();
+    assert.equal(stage10Rows.count, 0);
+    const stage10Jobs = await d1.prepare("SELECT count(*) AS count FROM stage10_media_job").first();
+    assert.equal(stage10Jobs.count, 0);
 
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.trackGVideo1Status, "RUNNING");
-    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_05_READY");
+    assert.equal(state.structuredContent.trackGVideo1CurrentStep, "STAGE_10_READY");
     assert.equal(state.structuredContent.providerDispatch, "OFF");
     assert.equal(state.structuredContent.autoPublish, "OFF");
     assert.deepEqual(state.structuredContent.activationBlockers, [

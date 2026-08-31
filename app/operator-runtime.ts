@@ -21,6 +21,8 @@ import {
   stage10AudioProductions,
   stage10MediaJobs,
   stage11AudioPlans,
+  stage12MediaJobs,
+  stage12PreMasterQa,
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
@@ -283,6 +285,27 @@ async function getTrackGVideoOneWorkbench() {
     loudnessTarget: stage11Model.loudnessTarget,
     gateResults: stage11Model.gateResults,
   } : null;
+  const stage12Instance = instances.find((instance) => instance.stageCode === "12") ?? null;
+  const stage12Artifact = stage12Instance
+    ? artifactByStageInstance.get(stage12Instance.id) ?? null
+    : null;
+  const [stage12Job] = await db.select().from(stage12MediaJobs)
+    .where(eq(stage12MediaJobs.packageId, productionPackage.id)).limit(1);
+  const [stage12Qa] = await db.select().from(stage12PreMasterQa)
+    .where(eq(stage12PreMasterQa.packageId, productionPackage.id)).limit(1);
+  const stage12 = stage12Qa ? {
+    controlState: stage12Instance?.controlState ?? "READY",
+    artifactSha256: stage12Artifact?.canonicalHash ?? null,
+    preMasterSha256: stage12Qa.preMasterSha256,
+    frameMd5Sha256: stage12Qa.frameMd5Sha256,
+    measurements: parseJson<Record<string, number | boolean | string>>(
+      stage12Qa.measurementsJson, {},
+    ),
+    renderAuthorized: Boolean(stage12Qa.renderAuthorized),
+    providerCallCount: stage12Qa.providerCallCount,
+    reservedUsd: stage12Qa.reservedUsd,
+    actualUsd: stage12Qa.actualUsd,
+  } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
@@ -361,6 +384,14 @@ async function getTrackGVideoOneWorkbench() {
     } : null,
     stage10,
     stage11,
+    stage12Job: stage12Job ? {
+      state: stage12Job.state,
+      receiptSha256: stage12Job.receiptSha256,
+      workerImageDigest: stage12Job.workerImageDigest,
+      errorCode: stage12Job.errorCode,
+      updatedAt: stage12Job.updatedAt,
+    } : null,
+    stage12,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -385,6 +416,10 @@ async function getTrackGVideoOneWorkbench() {
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_10"]
           : run.currentStep === "STAGE_11_READY"
             ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_11"]
+          : run.currentStep === "STAGE_12_READY" && !stage12Job
+            ? ["START_TRACK_G_VIDEO_1_STAGE_12"]
+          : run.currentStep === "STAGE_12_READY" && stage12Job?.state === "READY"
+            ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_12"]
           : [],
   };
 }

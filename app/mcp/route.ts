@@ -19,6 +19,7 @@ import {
   applyTrackGVideoOneStage06EditorialDecision,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
+  finalizeTrackGVideoOneStage12,
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
@@ -27,6 +28,7 @@ import {
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
   startTrackGVideoOneStage10,
+  startTrackGVideoOneStage12,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -40,6 +42,8 @@ import {
   trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStage10FinalizeIdempotencyKey,
   trackGVideoOneStage10StartIdempotencyKey,
+  trackGVideoOneStage12FinalizeIdempotencyKey,
+  trackGVideoOneStage12StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -1072,6 +1076,91 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         providerDispatch: "OFF" as const, releaseEligible: false as const,
         autoPublish: "OFF" as const,
       };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "start_track_g_video_1_stage_12",
+    {
+      title: "Start durable Track G Video #1 Stage 12",
+      description:
+        "Start exactly one durable pre-master render and full-timeline deterministic QA job from sealed Stage 09-11 inputs. This does not call a content provider, seal Stage 12, release, or publish.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("START STAGE 12"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_12_READY"), stageCode: z.literal("12"),
+        jobStatus: z.enum(["PENDING", "READY"]),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
+      const result = await startTrackGVideoOneStage12(user, {
+        objective, ownerApprovalText: "START STAGE 12",
+        idempotencyKey: await trackGVideoOneStage12StartIdempotencyKey(),
+        callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+      });
+      const output = { accepted: true, replayed: result.replayed,
+        runId: result.bootstrap.run.id, currentStep: "STAGE_12_READY" as const,
+        stageCode: "12" as const, jobStatus: result.job.state as "PENDING" | "READY",
+        providerDispatch: "OFF" as const, releaseEligible: false as const,
+        autoPublish: "OFF" as const };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "finalize_track_g_video_1_stage_12",
+    {
+      title: "Finalize durable Track G Video #1 Stage 12",
+      description:
+        "Read and verify the immutable pre-master and deterministic QA receipt, require every M0/M1 gate to pass, seal Stage 12 and advance exactly to STAGE_13_READY. This does not call a provider, release, or publish.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("FINALIZE STAGE 12"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_13_READY"), stageCode: z.literal("12"),
+        stageState: z.literal("FROZEN"), artifactState: z.literal("SEALED"),
+        artifactEligibility: z.literal("ELIGIBLE_FOR_STAGE"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        preMasterSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        renderAuthorized: z.literal(true), providerCallCount: z.literal(0),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await finalizeTrackGVideoOneStage12(user, {
+        objective, ownerApprovalText: "FINALIZE STAGE 12",
+        idempotencyKey: await trackGVideoOneStage12FinalizeIdempotencyKey(),
+      });
+      const output = { accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: "STAGE_13_READY" as const,
+        stageCode: "12" as const, stageState: "FROZEN" as const,
+        artifactState: "SEALED" as const, artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
+        artifactSha256: result.stageArtifact.canonicalHash,
+        preMasterSha256: result.stage12Qa.preMasterSha256,
+        gateResults: result.gateResults, renderAuthorized: true as const,
+        providerCallCount: 0 as const, providerDispatch: "OFF" as const,
+        releaseEligible: false as const, autoPublish: "OFF" as const };
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     },
   );

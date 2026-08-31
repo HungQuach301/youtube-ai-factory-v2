@@ -63,3 +63,19 @@ export async function verifyImmutableEvidence(key: string, expectedSha256: strin
   if (!object) return false;
   return sha256(new Uint8Array(await object.arrayBuffer())) === expectedSha256;
 }
+
+export async function readVerifiedProductionEvidence(
+  key: string,
+  expectedSha256: string,
+): Promise<Uint8Array> {
+  if (!key.startsWith("prod/") || key.includes("..") || key.includes("\\")) {
+    throw new Error("PRODUCTION_EVIDENCE_R2_KEY_INVALID");
+  }
+  const object = await bucket().get(key);
+  if (!object) throw new Error("PRODUCTION_EVIDENCE_R2_READ_BACK_MISSING");
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  if (sha256(bytes) !== expectedSha256) {
+    throw new Error("PRODUCTION_EVIDENCE_R2_READ_BACK_MISMATCH");
+  }
+  return bytes;
+}
