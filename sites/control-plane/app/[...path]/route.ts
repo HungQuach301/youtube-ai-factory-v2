@@ -9,7 +9,7 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
   if (route === "/.well-known/oauth-protected-resource") {
     return Response.json(protectedResourceMetadata(request), { headers });
   }
-  if (route === "/.well-known/oauth-authorization-server") {
+  if (route === "/.well-known/oauth-authorization-server" || route === "/.well-known/openid-configuration") {
     return Response.json(authorizationServerMetadata(request), { headers });
   }
   return new Response("Not Found", { status: 404 });
