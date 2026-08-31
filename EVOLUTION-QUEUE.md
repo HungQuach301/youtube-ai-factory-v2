@@ -34,3 +34,12 @@
 - Retry boundary: only attempt 1 → attempt 2; only allowlisted runtime/infrastructure errors; terminal quality, rights, policy, content and budget errors remain non-retryable.
 - Evidence: migration tests preserve attempt 1 and reject duplicates, gaps, attempt 3, cross-run lineage and terminal failures; CI and Production health must PASS before replay.
 - Operations: replay START exactly once for Track G Video #1; do not auto-finalize Stage 10 and do not auto-publish.
+
+## EVO-STAGE10-FINALIZE-CONTRACT
+
+- Status: `OWNER_PROMOTION_APPROVED`; deploy correction and replay FINALIZE exactly once after CI and health PASS.
+- Kind: `PIPELINE_CODE`; strictness direction: `CONTRACT_ALIGNMENT`.
+- Source: Production FINALIZE failed closed with `COMMAND_CONTRACT_VIOLATION` while attempt 2 remained `READY`.
+- Root cause: application emitted legacy `TRACK_G_VIDEO_1_STAGE_10_RECEIPT_READY`; sealed D1 contract requires canonical `TRACK_G_VIDEO_1_STAGE_10_READY`.
+- Diff: one application state literal plus regression evidence; no migration, provider, threshold, budget or media-worker change.
+- Operations: no START replay, no provider call, no new media job and no publish; FINALIZE advances only to `STAGE_11_READY`.

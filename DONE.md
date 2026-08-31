@@ -1293,3 +1293,17 @@ không tạo Stage 10 job, không provider dispatch và không spend.
 
 Owner approved diagnosis, PR and deployment of this correction on 2026-08-31.
 Deployment must stop after CI and live health PASS; replay requires a separate later command.
+
+---
+
+## EVO-STAGE10-FINALIZE-CONTRACT · Canonical Stage 10 finalize transition
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| FINALIZE ghi đúng trạng thái hiện tại đã seal trong D1 | `TRACK_G_VIDEO_1_STAGE_10_READY` khớp migration `0014`; source regression test |
+| Không sửa migration hoặc receipt attempt 2 | Diff ứng dụng một literal; dữ liệu Production chỉ được đọc trước deploy |
+| Không gọi provider hoặc tạo media job mới | FINALIZE chỉ xác minh receipt READY hiện hữu và seal evidence |
+| Không publish | `providerDispatch=OFF`, `autoPublish=OFF`; đích chỉ là `STAGE_11_READY` |
+| Replay FINALIZE đúng một lần | Chỉ thực hiện sau CI và Production health PASS với owner approval ngày 2026-08-31 |
