@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto'
 import { createServer } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,9 +28,26 @@ const SEAM_THRESHOLD = 0.005
 const STAGE10_EXECUTION_CACHE_LIMIT = 8
 const stage10Executions = new Map()
 const stage10Jobs = new Map()
+const PYTHON_RUNTIME_MARKER = '/app/runtime-verification/stage10-python.json'
+
+function pythonRuntimeVerified() {
+  try {
+    const marker = JSON.parse(readFileSync(PYTHON_RUNTIME_MARKER, 'utf8'))
+    return marker?.schemaVersion === 1
+      && marker?.runtimeUser === 'node'
+      && marker?.nltkData === '/usr/local/share/nltk_data'
+      && Number.isInteger(marker?.phonemeCount)
+      && marker.phonemeCount > 0
+  } catch {
+    return false
+  }
+}
+
+const PYTHON_RUNTIME_VERIFIED = pythonRuntimeVerified()
 
 function stage10Ready() {
   return STAGE10_ENABLED
+    && PYTHON_RUNTIME_VERIFIED
     && typeof STAGE10_VERIFY_KEY === 'string'
     && typeof ELEVENLABS_API_KEY === 'string'
     && Number.isFinite(CALIBRATION_FLOOR)
@@ -42,7 +60,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function run(executable, args, cwd, deadlineAt, input) {
+function run(executable, args, cwd, deadlineAt, input, failureCode = 'MEDIA_TOOL_FAILED') {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd,
@@ -61,9 +79,9 @@ function run(executable, args, cwd, deadlineAt, input) {
     if (input) child.stdin.end(input)
     child.stdout.on('data', (chunk) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => stderr.push(chunk))
-    child.on('error', (error) => {
+    child.on('error', () => {
       clearTimeout(timer)
-      reject(error)
+      reject(Object.assign(new Error(`${executable} failed to start.`), { code: failureCode }))
     })
     child.on('close', (code, signal) => {
       clearTimeout(timer)
@@ -75,8 +93,8 @@ function run(executable, args, cwd, deadlineAt, input) {
         resolve(Buffer.concat(stdout))
         return
       }
-      reject(Object.assign(new Error(`${executable} exited ${code}: ${Buffer.concat(stderr).toString('utf8')}`), {
-        code: 'MEDIA_TOOL_FAILED',
+      reject(Object.assign(new Error(`${executable} exited ${code ?? signal ?? 'unknown'}.`), {
+        code: failureCode,
       }))
     })
   })
@@ -274,7 +292,7 @@ async function buildNarration(workRoot, champions, segments, deadlineAt) {
     const candidate = champions[index]
     const pcm = applyFade(await run('ffmpeg', [
       '-v', 'error', '-i', candidate.filePath, '-f', 's16le', '-ac', '1', '-ar', '44100', 'pipe:1',
-    ], workRoot, deadlineAt))
+    ], workRoot, deadlineAt, undefined, 'FFMPEG_DECODE_FAILED'))
     const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2))
     maxJump = Math.max(maxJump, Math.abs(samples[0] ?? 0), Math.abs(samples[samples.length - 1] ?? 0))
     parts.push(pcm)
@@ -289,7 +307,7 @@ async function buildNarration(workRoot, champions, segments, deadlineAt) {
   await run('ffmpeg', [
     '-v', 'error', '-f', 's16le', '-ar', '44100', '-ac', '1', '-i', rawPath,
     '-codec:a', 'libmp3lame', '-b:a', '128k', '-y', outputPath,
-  ], workRoot, deadlineAt)
+  ], workRoot, deadlineAt, undefined, 'FFMPEG_ENCODE_FAILED')
   const bytes = await readFile(outputPath)
   return { bytes, seamScore }
 }
@@ -322,7 +340,7 @@ async function processStage10(payload) {
     await run('python3', [
       '/app/scripts/whisperx-phoneme-observer.py', '--input', observerInput,
       '--output', observerOutput, '--model', 'small.en',
-    ], workRoot, deadlineAt)
+    ], workRoot, deadlineAt, undefined, 'WHISPERX_OBSERVER_FAILED')
     const observed = JSON.parse(await readFile(observerOutput, 'utf8'))
     const observedById = new Map(observed.items.map((item) => [item.id, item]))
     for (const candidate of candidates) {
@@ -487,6 +505,7 @@ const server = createServer(async (request, response) => {
       jobDispatchEnabled: JOB_DISPATCH_ENABLED,
       stage10Enabled: STAGE10_ENABLED,
       stage10Ready: stage10Ready(),
+      pythonRuntimeVerified: PYTHON_RUNTIME_VERIFIED,
       calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
     }))
     return

@@ -12,6 +12,8 @@ RUN corepack enable \
 
 FROM node:22.22.3-bookworm-slim@sha256:e21fc383b50d5347dc7a9f1cae45b8f4e2f0d39f7ade28e4eef7d2934522b752
 
+ENV NLTK_DATA=/usr/local/share/nltk_data
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg ca-certificates python3 python3-pip \
   && python3 -m pip install --break-system-packages --no-cache-dir \
@@ -21,7 +23,8 @@ RUN apt-get update \
        --extra-index-url https://pypi.org/simple \
        torch==2.8.0 torchaudio==2.8.0 \
   && python3 -m pip install --break-system-packages --no-cache-dir whisperx==3.4.2 g2p-en==2.1.0 \
-  && python3 -m nltk.downloader -q averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict \
+  && python3 -m nltk.downloader -q -d "${NLTK_DATA}" \
+       averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict \
   && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 WORKDIR /app
@@ -31,7 +34,16 @@ COPY --from=build /src/packages/core-hash ./packages/core-hash
 COPY --from=build /src/packages/media-worker ./packages/media-worker
 COPY scripts/whisperx-phoneme-observer.py ./scripts/whisperx-phoneme-observer.py
 COPY scripts/replay-semantic-normalization.py ./scripts/replay-semantic-normalization.py
+COPY scripts/verify-stage10-python-runtime.py ./scripts/verify-stage10-python-runtime.py
+RUN mkdir -p /app/runtime-verification \
+  && chown node:node /app/runtime-verification
 WORKDIR /app/packages/media-worker
+USER node
+RUN python3 /app/scripts/verify-stage10-python-runtime.py \
+  --output /app/runtime-verification/stage10-python.json
+USER root
+RUN chown root:root /app/runtime-verification/stage10-python.json \
+  && chmod 0444 /app/runtime-verification/stage10-python.json
 USER node
 
 ENTRYPOINT ["node", "container-entry.mjs"]
