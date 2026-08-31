@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "4ba869264522e42535cab1ceb1a57897d9935876b291d9fe65eaedc9ffd33738",
+  "aggregate_sha256": "c3459d0a1f419085182dddf6c769b58a969279cb9c25cecca83bb3b0b9f4a2d7",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -45,7 +45,7 @@
     },
     {
       "path": "app/api/media-worker/stage10/route.ts",
-      "sha256": "188fe63d2587474db3e38689cc62d5e4cccc6516974a3785eab088a1e9629042"
+      "sha256": "830d585f3c17a5ad49865768917b8dabefffae807668513a0d230b5aaa69edb3"
     },
     {
       "path": "app/api/operator/route.ts",
@@ -228,8 +228,24 @@
       "sha256": "1d2c6be177f082bd9dae77cbc52532c332248167fa655e4874cb81b905a484bd"
     },
     {
+      "path": "drizzle/meta/0008_snapshot.json",
+      "sha256": "5223c62ac03fdfe957425af2bb295fc79dc6badaa47524f1918cafac83e8c14a"
+    },
+    {
+      "path": "drizzle/meta/0009_snapshot.json",
+      "sha256": "22c6b1746362d5706d441d2dacebbcf1950d2b275b3b401759cdd3e005f4dd8b"
+    },
+    {
+      "path": "drizzle/meta/0012_snapshot.json",
+      "sha256": "25aafdb6890f1672138cd4158a7167df3adc086c1fad2245bae44dbc85b9e18b"
+    },
+    {
+      "path": "drizzle/meta/0013_snapshot.json",
+      "sha256": "c97e63d975b438117663ea592ec78e5e81426079f877d9a7211d82de2fcabb3c"
+    },
+    {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "56c5414445d8d4a963d69a0e115cb87c4c3bcfcfb5168b20ff0d0cec2ff079c3"
+      "sha256": "ccbb457d067d788d618684638a80220a8c8c37f1166f3880394e3ab085e7fc43"
     },
     {
       "path": "eslint.config.mjs",
@@ -300,8 +316,12 @@
       "sha256": "260a49997db09019e6969804b3e865ca6d1ba8560e8b2c6462d5b88b8baa24e0"
     },
     {
+      "path": "tests/guardrails/stage10-edge-fetch.test.ts",
+      "sha256": "130bdd2e6050eda61d6c825c1939637aa0b0f9058858e888daf662477983f591"
+    },
+    {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "08d3849029b0a96f466d1ee0d7c984b9e4e000ef2ff812d66da8c907fd93766a"
+      "sha256": "f0ea7eb3a65a4d98e6a02293d383937f8e045606bd593bfca1b1c8e746a89252"
     },
     {
       "path": "tests/rendered-html.test.mjs",
@@ -310,6 +330,10 @@
     {
       "path": "tsconfig.json",
       "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3"
+    },
+    {
+      "path": "tsconfig.tsbuildinfo",
+      "sha256": "0aa7677c841ec0c2ffc55cdf98998bbb3be9b1d49c3adb5b2587e2c823209b16"
     },
     {
       "path": "vite.config.ts",
