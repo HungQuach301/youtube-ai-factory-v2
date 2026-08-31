@@ -12,3 +12,15 @@
 - Evidence: regression test chấp nhận đúng hai transition, từ chối transition sai,
   từ chối command chưa đăng ký, bảo toàn command cũ và chứng minh migration replay.
 - Rollback: migration kế tiếp khôi phục trigger trước đó; không sửa migration đã seal.
+
+## EVO-STAGE10-NLTK-RUNTIME
+
+- Status: `OWNER_PROMOTION_APPROVED`; deploy correction only, replay explicitly excluded.
+- Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_RUNTIME_PROOF`.
+- Source: Production Stage 10 terminal receipt `MEDIA_TOOL_FAILED` after PR #147.
+- Root cause: the image downloaded NLTK taggers/cmudict under build-time root home,
+  then executed the observer as `node`; calibration CI did not reproduce this user boundary.
+- Diff: shared immutable NLTK data path, non-root Python/G2P preflight, live health
+  proof bit and phase-specific sanitized subprocess error codes.
+- Evidence: package regression test, full CI, image build/preflight and Fly live-health read-back.
+- Boundary: no threshold, provider width, spend ceiling, schema, release, publish or replay change.

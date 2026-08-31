@@ -34,6 +34,10 @@ jobs:
         run: grep -Eq '^FROM .+@sha256:[a-f0-9]{64}' packages/media-worker/Dockerfile
       - name: Build worker image
         run: docker build --file packages/media-worker/Dockerfile --tag factory-media-worker:test .
+      - name: Verify Stage 10 Python runtime as non-root
+        run: |
+          docker run --rm --entrypoint sh factory-media-worker:test -c \
+            'test "$(id -u)" -ne 0 && python3 /app/scripts/verify-stage10-python-runtime.py --output /tmp/stage10-python.json'
       - name: Prove health and absence of D1 binding
         run: |
           docker run --detach --name factory-media-worker \
@@ -42,7 +46,8 @@ jobs:
           for attempt in $(seq 1 20); do
             health="$(curl --fail --silent http://127.0.0.1:18080/health || true)"
             if echo "$health" | jq --exit-status \
-              '.ok == true and .jobDispatchEnabled == false and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
+              '.ok == true and .jobDispatchEnabled == false and .pythonRuntimeVerified == true
+               and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
               exit 0
             fi
             sleep 1

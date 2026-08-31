@@ -134,6 +134,7 @@ jobs:
             health="$(curl --fail --silent --show-error "$health_url" || true)"
             if echo "$health" | jq --exit-status --arg digest "$IMAGE_DIGEST"               --arg evidence "$CALIBRATION_EVIDENCE"               '.ok == true and .imageDigest == $digest and .jobDispatchEnabled == false
                and .stage10Enabled == true and .stage10Ready == true
+               and .pythonRuntimeVerified == true
                and .calibrationEvidenceSha256 == $evidence' >/dev/null; then
               echo "LIVE_STAGE10_HEALTH_OK"
               exit 0

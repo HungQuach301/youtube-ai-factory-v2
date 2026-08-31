@@ -1253,3 +1253,23 @@ MODE: BUILD. This work package adds the Production control-plane command surface
 
 Hotfix chỉ được kích hoạt sau owner `PROMOTE_EVOLUTION`. Việc chuẩn bị và kiểm thử
 không tạo Stage 10 job, không provider dispatch và không spend.
+
+---
+
+## EVO-STAGE10-NLTK-RUNTIME · Non-root observer runtime recovery
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| NLTK pronunciation data is installed outside the build-time root home | `packages/media-worker/Dockerfile` sets `NLTK_DATA=/usr/local/share/nltk_data` and downloads the pinned taggers/cmudict there |
+| The exact non-root image user can initialize G2P before an image is accepted | `scripts/verify-stage10-python-runtime.py`; Docker build preflight after `USER node`; `packages/media-worker/tests/container-contract.test.ts` |
+| PR image CI repeats the non-root Python runtime proof | `.github/workflows/media-worker-image.yml` runs the preflight inside the built image |
+| Production health cannot report Stage 10 ready without the Python proof marker | `container-entry.mjs` includes `pythonRuntimeVerified` in `stage10Ready()` and `/health`; deploy workflow requires it |
+| A future subprocess failure identifies its phase without persisting stderr | `WHISPERX_OBSERVER_FAILED`, `FFMPEG_DECODE_FAILED`, `FFMPEG_ENCODE_FAILED`; container contract regression test |
+| Existing quality, cost and publication controls remain unchanged | No threshold, calibration, provider width, budget, schema, release or auto-publish change; no Stage 10 replay in this evolution |
+
+## Production boundary
+
+Owner approved diagnosis, PR and deployment of this correction on 2026-08-31.
+Deployment must stop after CI and live health PASS; replay requires a separate later command.
