@@ -428,6 +428,11 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(issuerMetadata.client_id_metadata_document_supported, true);
     assert.deepEqual(issuerMetadata.code_challenge_methods_supported, ["S256"]);
 
+    const openIdMetadataResponse = await mf.dispatchFetch(`${productionOrigin}/.well-known/openid-configuration`);
+    const openIdMetadata = await openIdMetadataResponse.json();
+    assert.equal(openIdMetadataResponse.status, 200);
+    assert.deepEqual(openIdMetadata, issuerMetadata);
+
     const authorize = new URL(`${productionOrigin}/oauth/authorize`);
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("client_id", clientId);
@@ -490,6 +495,27 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     });
     assert.equal(replayResponse.status, 400);
     assert.equal((await replayResponse.json()).error, "invalid_grant");
+
+    const discoveryId = "mcp-2026-discovery-probe";
+    const discoveryResponse = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.access_token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2026-07-28",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: discoveryId,
+        method: "server/discover",
+        params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+      }),
+    });
+    const discovery = await discoveryResponse.json();
+    assert.equal(discoveryResponse.status, 200);
+    assert.equal(discovery.id, discoveryId);
+    assert.equal(discovery.error.code, -32601);
 
     const rawToolsResponse = await mf.dispatchFetch(resource, {
       method: "POST",

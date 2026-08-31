@@ -100,7 +100,7 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
 
 function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
-    { name: "youtube-ai-factory-v2", version: "1.1.0" },
+    { name: "youtube-ai-factory-v2", version: "1.2.0" },
     {
       capabilities: { tools: {} },
       instructions:
@@ -1273,6 +1273,23 @@ function errorResponse(error: unknown): Response {
   );
 }
 
+async function legacyDiscoveryFallback(request: Request): Promise<Response | null> {
+  if (request.method !== "POST") return null;
+  const payload = await request.clone().json().catch(() => null) as {
+    id?: unknown;
+    method?: unknown;
+  } | null;
+  if (payload?.method !== "server/discover" || !("id" in payload)) return null;
+  return Response.json(
+    {
+      jsonrpc: "2.0",
+      id: payload.id,
+      error: { code: -32601, message: "Method not found" },
+    },
+    { status: 200, headers: corsHeaders },
+  );
+}
+
 async function handleMcp(request: Request): Promise<Response> {
   try {
     const chatGPTUser = await getChatGPTUser();
@@ -1291,6 +1308,8 @@ async function handleMcp(request: Request): Promise<Response> {
       );
     }
     requireOwner(user);
+    const discoveryFallback = await legacyDiscoveryFallback(request);
+    if (discoveryFallback) return discoveryFallback;
     const grantedScopes = chatGPTUser ? new Set(oauthScopes) : bearerIdentity?.scopes ?? new Set<string>();
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
