@@ -4406,7 +4406,7 @@ export async function finalizeTrackGVideoOneStage10(
     await d1.batch([
       d1.prepare(`INSERT INTO command_log
         (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state, trace_id, created_at)
-        VALUES (?, 'FINALIZE_TRACK_G_VIDEO_1_STAGE_10', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_10_RECEIPT_READY',
+        VALUES (?, 'FINALIZE_TRACK_G_VIDEO_1_STAGE_10', ?, ?, ?, 'TRACK_G_VIDEO_1_STAGE_10_READY',
           'TRACK_G_VIDEO_1_STAGE_11_READY', ?, ?)`).bind(commandId, canonicalize({
         objective, operationRunId: bootstrap.run.id, packageId: STAGE_00_PACKAGE_ID,
         stageCode: STAGE_10_CODE, executorVersion: evidenceEnvelope.executorVersion,
