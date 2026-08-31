@@ -252,6 +252,36 @@ export async function POST(request: Request) {
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });
     }
+    if (body.commandType === "ADVANCE_TRACK_G_VIDEO_1_STAGE_11") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_11_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await advanceTrackGVideoOneStage(user, {
+        stageCode: "11",
+        objective: body.objective
+          ?? "Seal the ambience-only Stage 11 sound-design and loudness plan for Stage 12 rendering.",
+        ownerApprovalText: "ADVANCE TRACK G VIDEO 1",
+        idempotencyKey: await trackGVideoOneStageIdempotencyKey("11"),
+      });
+      if (!("audioPlanModel" in result)) {
+        throw new Error("TRACK_G_STAGE_11_EXECUTOR_RECEIPT_INVALID");
+      }
+      const audioPlanModel = result.audioPlanModel as {
+        mode: "ambience_only"; cues: unknown[]; rightsEvidenceSha256: string;
+        providerCallCount: 0;
+      };
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "11", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash,
+        gateResults: result.gateResults,
+        mode: audioPlanModel.mode, cueCount: audioPlanModel.cues.length,
+        rightsEvidenceSha256: audioPlanModel.rightsEvidenceSha256,
+        providerCallCount: audioPlanModel.providerCallCount,
+        stageReservedUsd: 0, stageActualUsd: 0,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
     return Response.json({ error: "COMMAND_NOT_AVAILABLE_ON_OPERATOR_SURFACE" }, { status: 400 });
   } catch (error) {
     return errorResponse(error);

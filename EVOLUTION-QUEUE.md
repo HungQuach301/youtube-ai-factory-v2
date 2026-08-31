@@ -43,3 +43,12 @@
 - Root cause: application emitted legacy `TRACK_G_VIDEO_1_STAGE_10_RECEIPT_READY`; sealed D1 contract requires canonical `TRACK_G_VIDEO_1_STAGE_10_READY`.
 - Diff: one application state literal plus regression evidence; no migration, provider, threshold, budget or media-worker change.
 - Operations: no START replay, no provider call, no new media job and no publish; FINALIZE advances only to `STAGE_11_READY`.
+
+## EVO-STAGE11-AMBIENCE-ONLY
+
+- Status: `OWNER_PROMOTION_APPROVED`; build, deploy and exactly one Stage 11 execution authorized after CI and health PASS.
+- Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_RIGHTS_AND_DISPATCH_CONTROL`.
+- Source: Production is sealed at `STAGE_11_READY`; Track G contract selects `ambience_only` with no production audio provider.
+- Diff: deterministic procedural ambience recipe, M0 rights gate, M1 two-pass loudness/ducking plan, append-only D1 persistence, Operator action and generic MCP executor.
+- Boundary: no MUSIC cue, no paid provider, no spend, no measured-master claim, no release and no publish.
+- Operations: advance exactly once from Stage 11 to `STAGE_12_READY`; read back the sealed artifact and stop.

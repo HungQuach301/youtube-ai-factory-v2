@@ -20,6 +20,7 @@ import {
   scriptDrafts,
   stage10AudioProductions,
   stage10MediaJobs,
+  stage11AudioPlans,
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
@@ -35,6 +36,7 @@ import {
   trackGVideoOneStage09VisualCompositionModel,
   trackGVideoOneState,
 } from "./track-g-video-one";
+import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import { voiceQualificationReadBack } from "./voice-qualification";
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -257,6 +259,30 @@ async function getTrackGVideoOneWorkbench() {
     calibrationEvidenceSha256: stage10Production.calibrationEvidenceSha256,
     narrationSha256: stage10Production.narrationSha256,
   } : null;
+  const stage11Instance = instances.find((instance) => instance.stageCode === "11") ?? null;
+  const stage11Artifact = stage11Instance
+    ? artifactByStageInstance.get(stage11Instance.id) ?? null
+    : null;
+  const [stage11Plan] = await db.select().from(stage11AudioPlans)
+    .where(eq(stage11AudioPlans.packageId, productionPackage.id)).limit(1);
+  const stage11Model = stage10Production
+    ? buildTrackGVideoOneStage11AudioPlan(
+      trackGVideoOneStage08ShotCueProgramModel(selectedCreativeRouteId).targetDurationSec,
+      stage10Production.narrationSha256,
+    )
+    : null;
+  const stage11 = stage11Instance && stage11Plan && stage11Model ? {
+    controlState: stage11Instance.controlState,
+    artifactSha256: stage11Artifact?.canonicalHash ?? null,
+    mode: stage11Plan.mode,
+    cueCount: stage11Model.cues.length,
+    rightsEvidenceSha256: stage11Plan.rightsEvidenceSha256,
+    providerCallCount: stage11Plan.providerCallCount,
+    reservedUsd: stage11Plan.reservedUsd,
+    actualUsd: stage11Plan.actualUsd,
+    loudnessTarget: stage11Model.loudnessTarget,
+    gateResults: stage11Model.gateResults,
+  } : null;
 
   const [tournament] = await db.select().from(creativeTournaments)
     .where(eq(creativeTournaments.packageId, productionPackage.id)).limit(1);
@@ -334,6 +360,7 @@ async function getTrackGVideoOneWorkbench() {
       updatedAt: stage10Job.updatedAt,
     } : null,
     stage10,
+    stage11,
     humanDecisionCount: decisions.length,
     allowedActions: run.currentStep === "STAGE_06_READY" && stage06?.reviewState === "AWAITING_HUMAN"
       ? ["APPLY_TRACK_G_VIDEO_1_STAGE_06_EDITORIAL_DECISION"]
@@ -356,6 +383,8 @@ async function getTrackGVideoOneWorkbench() {
             ? ["START_TRACK_G_VIDEO_1_STAGE_10"]
           : run.currentStep === "STAGE_10_READY" && stage10Job?.state === "READY"
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_10"]
+          : run.currentStep === "STAGE_11_READY"
+            ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_11"]
           : [],
   };
 }

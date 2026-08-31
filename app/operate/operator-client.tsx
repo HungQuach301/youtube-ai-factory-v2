@@ -105,6 +105,21 @@ type Stage10Job = {
   errorCode: string | null;
   updatedAt: string;
 };
+type Stage11 = {
+  controlState: string;
+  artifactSha256: string | null;
+  mode: "ambience_only";
+  cueCount: number;
+  rightsEvidenceSha256: string;
+  providerCallCount: number;
+  reservedUsd: number;
+  actualUsd: number;
+  loudnessTarget: {
+    integratedLufs: number; toleranceLufs: number; truePeakMaxDbtp: number;
+    lraMin: number; lraMax: number; sampleRateHz: number;
+  };
+  gateResults: Array<{ gate: string; state: string; evidence: string }>;
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -122,6 +137,7 @@ type Workbench = {
   stage09: Stage09 | null;
   stage10Job: Stage10Job | null;
   stage10: Stage10 | null;
+  stage11: Stage11 | null;
   humanDecisionCount: number;
   allowedActions: string[];
 };
@@ -184,6 +200,7 @@ export default function OperatorClient() {
   const stage09 = workbench?.stage09 ?? null;
   const stage10Job = workbench?.stage10Job ?? null;
   const stage10 = workbench?.stage10 ?? null;
+  const stage11 = workbench?.stage11 ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
   const effectiveBeatId = beatId || stage06?.sections[0]?.beatId || "";
@@ -217,6 +234,8 @@ export default function OperatorClient() {
     .includes("START_TRACK_G_VIDEO_1_STAGE_10");
   const canFinalizeNarration = workbench?.allowedActions
     .includes("FINALIZE_TRACK_G_VIDEO_1_STAGE_10");
+  const canAdvanceAmbience = workbench?.allowedActions
+    .includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_11");
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -366,6 +385,20 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
+  async function advanceAmbience() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "ADVANCE_TRACK_G_VIDEO_1_STAGE_11",
+          confirm: true }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 11 ambience plan failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
   if (!snapshot?.channel) {
     return <div className="operator-layout">
       <section className="operator-command-card operator-full-card">
@@ -393,7 +426,7 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canStartNarration ? "Start durable Stage 10 job" : canFinalizeNarration ? "Finalize Stage 10 receipt" : stage10Job?.state === "PENDING" ? "Stage 10 worker is running" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canStartNarration ? "Start durable Stage 10 job" : canFinalizeNarration ? "Finalize Stage 10 receipt" : canAdvanceAmbience ? "Seal Stage 11 ambience plan" : stage10Job?.state === "PENDING" ? "Stage 10 worker is running" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
@@ -515,6 +548,22 @@ export default function OperatorClient() {
       </>}
       {error ? <p className="operator-error" role="alert">{error}</p> : null}
       {receipt?.artifactSha256 && receipt.currentStep === "STAGE_11_READY" ? <p className="decision-receipt" role="status">Stage 10 {receipt.stageState} · next {receipt.currentStep} · {receipt.providerCallCount} calls · ${receipt.stageActualUsd?.toFixed(4)} actual · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
+    </section> : null}
+
+    {workbench?.run.currentStep === "STAGE_11_READY" || stage11?.controlState === "FROZEN" ? <section className="operator-command-card operator-full-card">
+      <div className="operator-card-heading"><div><p className="eyebrow">SOUND DESIGN · ZERO PROVIDER</p><h2>Stage 11 ambience-only plan</h2></div><span className="write-badge">M0 + M1</span></div>
+      {stage11 ? <>
+        <div className="script-metadata"><div><span>Mode</span><strong>{stage11.mode}</strong></div><div><span>Cues</span><strong>{stage11.cueCount} Factory-original ambience</strong></div><div><span>Loudness target</span><strong>{stage11.loudnessTarget.integratedLufs} LUFS-I · {stage11.loudnessTarget.truePeakMaxDbtp} dBTP</strong></div><div><span>Provider / spend</span><strong>{stage11.providerCallCount} calls · ${stage11.actualUsd.toFixed(2)}</strong></div></div>
+        <div className="gate-strip">{stage11.gateResults.map((gate) => <span key={gate.gate} className={gate.state === "PASS" ? "pass" : "waiting"}>{gate.gate.replaceAll("_", " ")} · {gate.state}</span>)}</div>
+        <p className="decision-rationale">Stage 11 is sealed. Rights evidence {stage11.rightsEvidenceSha256.slice(0, 16)}… is bound to the procedural ambience recipe; final render and measured loudness remain deferred to Stage 12.</p>
+      </> : <>
+        <p className="operator-help">Create a deterministic Factory-original neutral-room ambience cue, forbid MUSIC, bind rights evidence, and seal a two-pass loudness/ducking plan for Stage 12.</p>
+        <div className="script-metadata"><div><span>Music</span><strong>Forbidden</strong></div><div><span>Provider</span><strong>None · 0 calls</strong></div><div><span>Spend</span><strong>$0.00</strong></div><div><span>Publishing</span><strong>Release OFF · auto-publish OFF</strong></div></div>
+        <button type="button" disabled={busy || !canAdvanceAmbience} onClick={advanceAmbience}>{busy ? "Sealing…" : "Seal Stage 11 ambience plan"}</button>
+        <p className="operator-boundary">This command seals planning evidence only. It does not render the master, call a media provider, release, or publish.</p>
+      </>}
+      {error ? <p className="operator-error" role="alert">{error}</p> : null}
+      {receipt?.artifactSha256 && receipt.currentStep === "STAGE_12_READY" ? <p className="decision-receipt" role="status">Stage 11 {receipt.stageState} · next {receipt.currentStep} · 0 provider calls · $0 spend · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
     </section> : null}
 
     <section className="operator-timeline-card operator-full-card">

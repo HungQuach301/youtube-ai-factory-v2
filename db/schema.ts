@@ -357,6 +357,27 @@ export const stage10AudioProductions = sqliteTable("stage10_audio_production", {
   uniqueIndex("stage10_audio_production_idempotency_unique").on(table.idempotencyKey),
 ]);
 
+export const stage11AudioPlans = sqliteTable("stage11_audio_plan", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  mode: text("mode", { enum: ["ambience_only"] }).notNull(),
+  narrationSha256: text("narration_sha256").notNull(),
+  cueProgramJson: text("cue_program_json").notNull(),
+  rightsEvidenceSha256: text("rights_evidence_sha256").notNull(),
+  loudnormPlanJson: text("loudnorm_plan_json").notNull(),
+  duckingFilter: text("ducking_filter").notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage11_audio_plan_package_unique").on(table.packageId),
+  uniqueIndex("stage11_audio_plan_stage_unique").on(table.stageInstanceId),
+]);
+
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),
   channelId: text("channel_id").notNull().references(() => channels.id),
