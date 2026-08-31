@@ -24,6 +24,7 @@ const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 const SEAM_THRESHOLD = 0.005
 const STAGE10_EXECUTION_CACHE_LIMIT = 8
 const stage10Executions = new Map()
+const stage10Jobs = new Map()
 
 function stage10Ready() {
   return STAGE10_ENABLED
@@ -194,6 +195,11 @@ function validateStage10Payload(value) {
   if (!voice || typeof voice.voiceId !== 'string' || typeof voice.modelId !== 'string'
     || voice.outputFormat !== 'mp3_44100_128' || typeof voice.settings !== 'object') {
     throw Object.assign(new Error('Invalid qualified voice binding.'), { code: 'INVALID_VOICE_BINDING' })
+  }
+  if (value.callback !== undefined && (!value.callback
+    || typeof value.callback.url !== 'string' || !value.callback.url.startsWith('https://')
+    || !/^[a-f0-9]{64}$/u.test(value.callback.token ?? ''))) {
+    throw Object.assign(new Error('Invalid durable callback.'), { code: 'INVALID_STAGE10_CALLBACK' })
   }
   return value
 }
@@ -403,6 +409,42 @@ async function processStage10Idempotent(payload) {
   }
 }
 
+async function publishStage10Callback(callback, idempotencyKey, result) {
+  const response = await fetch(callback.url, {
+    method: 'POST',
+    redirect: 'error',
+    headers: {
+      'authorization': `Bearer ${callback.token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ idempotencyKey, result }),
+  })
+  if (!response.ok) {
+    throw Object.assign(new Error(`Stage 10 callback returned ${response.status}.`), {
+      code: 'STAGE10_CALLBACK_FAILED',
+    })
+  }
+}
+
+function startStage10Job(payload) {
+  const existing = stage10Jobs.get(payload.idempotencyKey)
+  if (existing) return existing.status
+  if (!payload.callback) {
+    throw Object.assign(new Error('Durable callback is required.'), { code: 'STAGE10_CALLBACK_REQUIRED' })
+  }
+  const job = { status: 'PENDING' }
+  stage10Jobs.set(payload.idempotencyKey, job)
+  void processStage10Idempotent(payload)
+    .then(async (result) => {
+      await publishStage10Callback(payload.callback, payload.idempotencyKey, result)
+      job.status = 'READY'
+    })
+    .catch(() => {
+      job.status = 'FAILED'
+    })
+  return job.status
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -430,6 +472,31 @@ const server = createServer(async (request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result))
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE10_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST' && request.url === '/stage10/start') {
+    if (!STAGE10_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"STAGE10_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage10Payload(JSON.parse(body.toString('utf8')))
+      const jobStatus = startStage10Job(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        accepted: true,
+        jobStatus,
+        idempotencyKey: payload.idempotencyKey,
+        imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE10_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
     }
     return

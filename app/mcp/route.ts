@@ -18,6 +18,7 @@ import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
   executeTrackGVideoOneStage00,
+  finalizeTrackGVideoOneStage10,
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
@@ -25,6 +26,7 @@ import {
   selectTrackGVideoOneStage04Champion,
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
+  startTrackGVideoOneStage10,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -36,6 +38,8 @@ import {
   trackGVideoOneStage07ASelectionIdempotencyKey,
   trackGVideoOneStage09PrepareIdempotencyKey,
   trackGVideoOneStage09SelectionIdempotencyKey,
+  trackGVideoOneStage10FinalizeIdempotencyKey,
+  trackGVideoOneStage10StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -961,6 +965,112 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         humanGate: "SATISFIED:HP-02_D3_THUMBNAIL_SELECTION" as const,
         stageReservedUsd: 0 as const, stageActualUsd: 0 as const,
         providerDispatch: "OFF" as const, releaseEligible: false as const, autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "start_track_g_video_1_stage_10",
+    {
+      title: "Start durable Track G Video #1 Stage 10",
+      description:
+        "Create one durable Stage 10 job and return quickly. The calibrated media worker runs the bounded 12-call narration tournament asynchronously and posts an immutable receipt back to Production object storage. This command never freezes Stage 10.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("START STAGE 10"),
+      },
+      outputSchema: {
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        currentStep: z.literal("STAGE_10_READY"),
+        jobStatus: z.enum(["PENDING", "READY", "FAILED"]),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const callbackUrl = new URL("/api/media-worker/stage10", request.url).toString();
+      const result = await startTrackGVideoOneStage10(user, {
+        objective,
+        ownerApprovalText: "START STAGE 10",
+        idempotencyKey: await trackGVideoOneStage10StartIdempotencyKey(),
+        callbackUrl,
+      });
+      const output = {
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.bootstrap.run.id,
+        currentStep: "STAGE_10_READY" as const,
+        jobStatus: result.job.state,
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "finalize_track_g_video_1_stage_10",
+    {
+      title: "Finalize durable Track G Video #1 Stage 10",
+      description:
+        "Read the immutable Stage 10 worker receipt from Production object storage, verify media hashes and calibrated gates, then atomically seal Stage 10 and advance exactly to STAGE_11_READY. A PENDING or failed job leaves Production unfrozen.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("FINALIZE STAGE 10"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_11_READY"), stageCode: z.literal("10"),
+        stageState: z.literal("FROZEN"), artifactState: z.literal("SEALED"),
+        artifactEligibility: z.literal("ELIGIBLE_FOR_STAGE"),
+        artifactSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        narrationSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+        gateResults: z.array(z.object({ gate: z.string(), state: z.literal("PASS"), evidence: z.string() })),
+        stageReservedUsd: z.number().nonnegative(), stageActualUsd: z.number().nonnegative(),
+        providerCallCount: z.number().int().nonnegative(),
+        providerDispatch: z.literal("OFF"), releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const result = await finalizeTrackGVideoOneStage10(user, {
+        objective,
+        ownerApprovalText: "FINALIZE STAGE 10",
+        idempotencyKey: await trackGVideoOneStage10FinalizeIdempotencyKey(),
+      });
+      const output = {
+        accepted: true, replayed: result.replayed, runId: result.base.run.id,
+        currentStep: "STAGE_11_READY" as const, stageCode: "10" as const,
+        stageState: "FROZEN" as const, artifactState: "SEALED" as const,
+        artifactEligibility: "ELIGIBLE_FOR_STAGE" as const,
+        artifactSha256: result.stageArtifact.canonicalHash,
+        narrationSha256: result.production.narrationSha256,
+        gateResults: result.gateResults,
+        stageReservedUsd: result.production.reservedUsd,
+        stageActualUsd: result.production.actualUsd,
+        providerCallCount: result.production.providerCallCount,
+        providerDispatch: "OFF" as const, releaseEligible: false as const,
+        autoPublish: "OFF" as const,
       };
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     },

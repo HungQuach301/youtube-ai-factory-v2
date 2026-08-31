@@ -25,6 +25,13 @@ export type Stage10MediaRequest = {
   }>;
 };
 
+export type Stage10MediaStartRequest = Stage10MediaRequest & {
+  callback: {
+    url: string;
+    token: string;
+  };
+};
+
 export type Stage10MediaCandidate = {
   takeId: string;
   segmentId: string;
@@ -62,13 +69,18 @@ export type Stage10MediaResult = {
   gateResults: Array<{ gate: string; state: "PASS"; evidence: string }>;
 };
 
+export type Stage10MediaJobReceipt = {
+  accepted: true;
+  jobStatus: "PENDING" | "READY";
+  idempotencyKey: string;
+  imageDigest: string;
+};
+
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-export async function dispatchStage10Media(
-  payload: Stage10MediaRequest,
-): Promise<Stage10MediaResult> {
+async function signedStage10Fetch(path: string, payload: unknown): Promise<Response> {
   const env = getFactoryEnv();
   const baseUrl = env.MEDIA_WORKER_URL?.replace(/\/$/u, "");
   const signingKey = env.MEDIA_REQUEST_SIGNING_KEY;
@@ -81,7 +93,7 @@ export async function dispatchStage10Media(
     key: Buffer.from(signingKey, "base64"), format: "der", type: "pkcs8",
   });
   const signature = sign(null, message, privateKey).toString("base64");
-  const response = await fetch(`${baseUrl}/stage10/narrate`, {
+  const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -94,12 +106,13 @@ export async function dispatchStage10Media(
   if (response.status >= 300 && response.status < 400) {
     throw new Error("TRACK_G_STAGE_10_MEDIA_WORKER_REDIRECT_REJECTED");
   }
-  const result = await response.json() as Stage10MediaResult & { code?: string };
-  if (!response.ok || result.accepted !== true) {
-    throw new Error(`TRACK_G_STAGE_10_MEDIA_WORKER_FAILED:${result.code ?? response.status}`);
-  }
-  if (result.providerCallCount !== 12 || result.champions.length !== 6
-    || result.rejected.length !== 6
+  return response;
+}
+
+export function validateStage10MediaResult(result: Stage10MediaResult & { code?: string }): void {
+  if (result.accepted !== true || result.providerCallCount !== 12
+    || result.champions.length !== 6 || result.rejected.length !== 6
+    || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)
     || result.gateResults.length !== 2
     || result.gateResults.some((gate) => gate.state !== "PASS")
     || !Number.isFinite(result.calibration.errorFloor)
@@ -107,5 +120,30 @@ export async function dispatchStage10Media(
     || result.calibration.threshold < result.calibration.errorFloor) {
     throw new Error("TRACK_G_STAGE_10_MEDIA_WORKER_RECEIPT_INVALID");
   }
+}
+
+export async function dispatchStage10MediaStart(
+  payload: Stage10MediaStartRequest,
+): Promise<Stage10MediaJobReceipt> {
+  const response = await signedStage10Fetch("/stage10/start", payload);
+  const result = await response.json() as Stage10MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
+    throw new Error(`TRACK_G_STAGE_10_MEDIA_WORKER_START_FAILED:${result.code ?? response.status}`);
+  }
+  return result;
+}
+
+export async function dispatchStage10Media(
+  payload: Stage10MediaRequest,
+): Promise<Stage10MediaResult> {
+  const response = await signedStage10Fetch("/stage10/narrate", payload);
+  const result = await response.json() as Stage10MediaResult & { code?: string };
+  if (!response.ok || result.accepted !== true) {
+    throw new Error(`TRACK_G_STAGE_10_MEDIA_WORKER_FAILED:${result.code ?? response.status}`);
+  }
+  validateStage10MediaResult(result);
   return result;
 }

@@ -156,6 +156,12 @@ jobs:
           status="$(curl --silent --show-error --output /tmp/stage10-response.json --write-out '%{http_code}'             --request POST --header 'content-type: application/json' --data '{}'             "https://${FLY_APP_NAME}.fly.dev/stage10/narrate")"
           test "$status" = "401"
           jq --exit-status '.ok == false and .code == "INVALID_SIGNATURE"'             /tmp/stage10-response.json >/dev/null
+          start_status="$(curl --silent --show-error --output /tmp/stage10-start-response.json --write-out '%{http_code}' \
+            --request POST --header 'content-type: application/json' --data '{}' \
+            "https://${FLY_APP_NAME}.fly.dev/stage10/start")"
+          test "$start_status" = "401"
+          jq --exit-status '.ok == false and .code == "INVALID_SIGNATURE"' \
+            /tmp/stage10-start-response.json >/dev/null
       - name: Upload calibration evidence
         if: always()
         uses: actions/upload-artifact@v4
