@@ -264,6 +264,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
+      "finalize_track_g_video_1_stage_12",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
@@ -276,6 +277,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
       "start_track_g_video_1_stage_10",
+      "start_track_g_video_1_stage_12",
     ]);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
@@ -516,6 +518,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "apply_track_g_video_1_stage_06_editorial_decision",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
+      "finalize_track_g_video_1_stage_12",
       "get_factory_state",
       "prepare_approved_channel",
       "prepare_track_g_video_1_stage_04_tournament",
@@ -528,6 +531,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       "select_track_g_video_1_stage_09_thumbnail",
       "start_track_g_video_1_qualification",
       "start_track_g_video_1_stage_10",
+      "start_track_g_video_1_stage_12",
     ]);
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);

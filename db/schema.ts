@@ -378,6 +378,46 @@ export const stage11AudioPlans = sqliteTable("stage11_audio_plan", {
   uniqueIndex("stage11_audio_plan_stage_unique").on(table.stageInstanceId),
 ]);
 
+export const stage12MediaJobs = sqliteTable("stage12_media_job", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
+  stageInstanceId: text("stage_instance_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_media_job_package_unique").on(table.packageId),
+  uniqueIndex("stage12_media_job_key_unique").on(table.idempotencyKey),
+]);
+
+export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  jobId: text("job_id").notNull().references(() => stage12MediaJobs.id),
+  preMasterR2Key: text("pre_master_r2_key").notNull(),
+  preMasterSha256: text("pre_master_sha256").notNull(),
+  frameMd5Sha256: text("frame_md5_sha256").notNull(),
+  reportR2Key: text("report_r2_key").notNull(),
+  reportSha256: text("report_sha256").notNull(),
+  measurementsJson: text("measurements_json").notNull(),
+  renderAuthorized: integer("render_authorized").notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_pre_master_qa_package_unique").on(table.packageId),
+  uniqueIndex("stage12_pre_master_qa_stage_unique").on(table.stageInstanceId),
+]);
+
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),
   channelId: text("channel_id").notNull().references(() => channels.id),

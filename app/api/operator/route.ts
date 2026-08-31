@@ -4,11 +4,13 @@ import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
   finalizeTrackGVideoOneStage10,
+  finalizeTrackGVideoOneStage12,
   prepareTrackGVideoOneStage09VisualReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
   selectTrackGVideoOneStage09Thumbnail,
   selectTrackGVideoOneStage07ATone,
   startTrackGVideoOneStage10,
+  startTrackGVideoOneStage12,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
@@ -16,6 +18,8 @@ import {
   trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStage10FinalizeIdempotencyKey,
   trackGVideoOneStage10StartIdempotencyKey,
+  trackGVideoOneStage12FinalizeIdempotencyKey,
+  trackGVideoOneStage12StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
 } from "../../track-g-video-one";
 
@@ -278,6 +282,46 @@ export async function POST(request: Request) {
         mode: audioPlanModel.mode, cueCount: audioPlanModel.cues.length,
         rightsEvidenceSha256: audioPlanModel.rightsEvidenceSha256,
         providerCallCount: audioPlanModel.providerCallCount,
+        stageReservedUsd: 0, stageActualUsd: 0,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 201 });
+    }
+    if (body.commandType === "START_TRACK_G_VIDEO_1_STAGE_12") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_12_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
+      const result = await startTrackGVideoOneStage12(user, {
+        objective: body.objective
+          ?? "Start the durable Stage 12 pre-master render and full-timeline deterministic QA job.",
+        ownerApprovalText: "START STAGE 12",
+        idempotencyKey: await trackGVideoOneStage12StartIdempotencyKey(),
+        callbackUrl: workerRoute,
+        objectAccessUrl: workerRoute,
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.bootstrap.run.id, currentStep: result.bootstrap.run.currentStep,
+        stageCode: "12", jobStatus: result.job.state,
+        providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
+      { status: result.replayed ? 200 : 202 });
+    }
+    if (body.commandType === "FINALIZE_TRACK_G_VIDEO_1_STAGE_12") {
+      if (body.confirm !== true) {
+        return Response.json({ error: "STAGE_12_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
+      }
+      const result = await finalizeTrackGVideoOneStage12(user, {
+        objective: body.objective
+          ?? "Verify the immutable Stage 12 pre-master and deterministic QA receipt, seal it and advance to Stage 13.",
+        ownerApprovalText: "FINALIZE STAGE 12",
+        idempotencyKey: await trackGVideoOneStage12FinalizeIdempotencyKey(),
+      });
+      return Response.json({ accepted: true, replayed: result.replayed,
+        runId: result.base.run.id, currentStep: result.base.run.currentStep,
+        stageCode: "12", stageState: "FROZEN",
+        artifactSha256: result.stageArtifact.canonicalHash,
+        preMasterSha256: result.stage12Qa.preMasterSha256,
+        gateResults: result.gateResults,
+        renderAuthorized: true, providerCallCount: 0,
         stageReservedUsd: 0, stageActualUsd: 0,
         providerDispatch: "OFF", releaseEligible: false, autoPublish: "OFF" },
       { status: result.replayed ? 200 : 201 });

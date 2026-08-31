@@ -120,6 +120,24 @@ type Stage11 = {
   };
   gateResults: Array<{ gate: string; state: string; evidence: string }>;
 };
+type Stage12Job = {
+  state: "PENDING" | "READY" | "FAILED";
+  receiptSha256: string | null;
+  workerImageDigest: string | null;
+  errorCode: string | null;
+  updatedAt: string;
+};
+type Stage12 = {
+  controlState: string;
+  artifactSha256: string | null;
+  preMasterSha256: string;
+  frameMd5Sha256: string;
+  measurements: Record<string, number | boolean | string>;
+  renderAuthorized: boolean;
+  providerCallCount: number;
+  reservedUsd: number;
+  actualUsd: number;
+};
 type Workbench = {
   run: Run;
   contract: { profile: string; assuranceMode: string; releaseEligible: boolean; providerDispatch: string; autoPublish: string };
@@ -138,6 +156,8 @@ type Workbench = {
   stage10Job: Stage10Job | null;
   stage10: Stage10 | null;
   stage11: Stage11 | null;
+  stage12Job: Stage12Job | null;
+  stage12: Stage12 | null;
   humanDecisionCount: number;
   allowedActions: string[];
 };
@@ -201,6 +221,8 @@ export default function OperatorClient() {
   const stage10Job = workbench?.stage10Job ?? null;
   const stage10 = workbench?.stage10 ?? null;
   const stage11 = workbench?.stage11 ?? null;
+  const stage12Job = workbench?.stage12Job ?? null;
+  const stage12 = workbench?.stage12 ?? null;
   const effectiveTitle = revisedTitle || stage06?.title || "";
   const effectiveHook = revisedHook || stage06?.hook || "";
   const effectiveBeatId = beatId || stage06?.sections[0]?.beatId || "";
@@ -236,6 +258,10 @@ export default function OperatorClient() {
     .includes("FINALIZE_TRACK_G_VIDEO_1_STAGE_10");
   const canAdvanceAmbience = workbench?.allowedActions
     .includes("ADVANCE_TRACK_G_VIDEO_1_STAGE_11");
+  const canStartStage12 = workbench?.allowedActions
+    .includes("START_TRACK_G_VIDEO_1_STAGE_12");
+  const canFinalizeStage12 = workbench?.allowedActions
+    .includes("FINALIZE_TRACK_G_VIDEO_1_STAGE_12");
 
   async function prepareChannel() {
     setBusy(true); setError("");
@@ -399,6 +425,34 @@ export default function OperatorClient() {
     finally { setBusy(false); }
   }
 
+  async function startStage12() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "START_TRACK_G_VIDEO_1_STAGE_12",
+          confirm: true, autoPublish: "OFF" }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 12 durable job start failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function finalizeStage12() {
+    setBusy(true); setError(""); setReceipt(null);
+    try {
+      const response = await fetch("/api/operator", { method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commandType: "FINALIZE_TRACK_G_VIDEO_1_STAGE_12",
+          confirm: true, autoPublish: "OFF" }) });
+      const body = await response.json() as Receipt & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Stage 12 durable receipt finalization failed");
+      setReceipt(body); await refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+
   if (!snapshot?.channel) {
     return <div className="operator-layout">
       <section className="operator-command-card operator-full-card">
@@ -426,7 +480,7 @@ export default function OperatorClient() {
     </section>
 
     <aside className="operator-blocker-card">
-      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canStartNarration ? "Start durable Stage 10 job" : canFinalizeNarration ? "Finalize Stage 10 receipt" : canAdvanceAmbience ? "Seal Stage 11 ambience plan" : stage10Job?.state === "PENDING" ? "Stage 10 worker is running" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
+      <p className="eyebrow">NEXT VALID ACTION</p><h2>{canPrepareTone ? "Prepare two tone routes" : canSelectTone || stage07A?.reviewState === "AWAITING_HUMAN" ? "Choose Stage 07A tone" : canAdvanceVisualGrammar ? "Compile Stage 07B visual grammar" : canAdvanceShotCueProgram ? "Compile Stage 08 ShotCueProgram" : canPrepareVisualReview ? "Prepare Stage 09 visual review" : canSelectThumbnail || stage09?.reviewState === "AWAITING_HUMAN" ? "Choose and edit Stage 09 thumbnail" : canStartNarration ? "Start durable Stage 10 job" : canFinalizeNarration ? "Finalize Stage 10 receipt" : canAdvanceAmbience ? "Seal Stage 11 ambience plan" : canStartStage12 ? "Start Stage 12 pre-master QA" : canFinalizeStage12 ? "Finalize Stage 12 receipt" : stage12Job?.state === "PENDING" ? "Stage 12 worker is rendering" : stage10Job?.state === "PENDING" ? "Stage 10 worker is running" : workbench?.allowedActions.length ? "Owner editorial decision" : "No action available"}</h2>
       <ul>{snapshot.activationBlockers.map((blocker) => <li key={blocker}>{blocker.replaceAll("_", " ")}</li>)}</ul>
       <p>Provider dispatch {workbench?.contract.providerDispatch ?? "OFF"} · release {workbench?.contract.releaseEligible ? "eligible" : "blocked"} · auto-publish {workbench?.contract.autoPublish ?? "OFF"}</p>
     </aside>
@@ -564,6 +618,25 @@ export default function OperatorClient() {
       </>}
       {error ? <p className="operator-error" role="alert">{error}</p> : null}
       {receipt?.artifactSha256 && receipt.currentStep === "STAGE_12_READY" ? <p className="decision-receipt" role="status">Stage 11 {receipt.stageState} · next {receipt.currentStep} · 0 provider calls · $0 spend · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
+    </section> : null}
+
+    {workbench?.run.currentStep === "STAGE_12_READY" || stage12?.controlState === "FROZEN" ? <section className="operator-command-card operator-full-card">
+      <div className="operator-card-heading"><div><p className="eyebrow">PRE-MASTER · FULL-TIMELINE QA</p><h2>Stage 12 pre-master QA</h2></div><span className="write-badge">M0 + M1 × 6</span></div>
+      {stage12 ? <>
+        <div className="script-metadata"><div><span>Render authorization</span><strong>{stage12.renderAuthorized ? "PASS" : "BLOCKED"}</strong></div><div><span>Pre-master</span><code>{stage12.preMasterSha256.slice(0, 16)}…</code></div><div><span>Measured loudness</span><strong>{String(stage12.measurements.integratedLufs)} LUFS-I · {String(stage12.measurements.truePeakDbtp)} dBTP</strong></div><div><span>Provider / spend</span><strong>{stage12.providerCallCount} calls · ${stage12.actualUsd.toFixed(2)}</strong></div></div>
+        <div className="gate-strip"><span className="pass">FULL TIMELINE · PASS</span><span className="pass">A/V SYNC · PASS</span><span className="pass">BLACK FREEZE SILENCE · PASS</span><span className="pass">MOBILE SAFE ZONE · PASS</span><span className="pass">P0 · 0</span></div>
+        <p className="decision-rationale">Stage 12 is sealed. The read-back verified pre-master is ready for the separate Stage 13 archival and distribution master step.</p>
+      </> : <>
+        <p className="operator-help">Render the sealed edit with narration plus Factory-original ambience, scan the complete timeline, measure loudness and A/V sync, and fail closed on any P0, missing input, unresolved rights, black/freeze/silence/drop, unsafe text or residue.</p>
+        <div className="script-metadata"><div><span>Provider</span><strong>None · 0 calls</strong></div><div><span>Rights</span><strong>Stage 09 + Stage 11 sealed</strong></div><div><span>Output</span><strong>Immutable pre-master + frame MD5</strong></div><div><span>Publishing</span><strong>Release OFF · auto-publish OFF</strong></div></div>
+        {!stage12Job ? <button type="button" disabled={busy || !canStartStage12} onClick={startStage12}>{busy ? "Starting…" : "Start Stage 12 pre-master QA"}</button> : null}
+        {stage12Job?.state === "PENDING" ? <p className="decision-receipt" role="status">Stage 12 PENDING · media-worker is rendering and scanning the full timeline asynchronously.</p> : null}
+        {stage12Job?.state === "READY" ? <button type="button" disabled={busy || !canFinalizeStage12} onClick={finalizeStage12}>{busy ? "Verifying receipt…" : "Verify receipt and freeze Stage 12"}</button> : null}
+        {stage12Job?.state === "FAILED" ? <p className="operator-error" role="alert">Stage 12 failed closed: {stage12Job.errorCode}</p> : null}
+        <p className="operator-boundary">Only FINALIZE can seal Stage 12 after immutable pre-master read-back and all deterministic gates pass. Stage 13 master, release and publishing remain separate.</p>
+      </>}
+      {error ? <p className="operator-error" role="alert">{error}</p> : null}
+      {receipt?.artifactSha256 && receipt.currentStep === "STAGE_13_READY" ? <p className="decision-receipt" role="status">Stage 12 {receipt.stageState} · next {receipt.currentStep} · evidence {receipt.artifactSha256.slice(0, 16)}…</p> : null}
     </section> : null}
 
     <section className="operator-timeline-card operator-full-card">

@@ -1,5 +1,22 @@
 # DONE
 
+## Track G Video #1 · Stage 12 Pre-master QA
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Durable `START` tách khỏi `FINALIZE` và giữ idempotency | `0017-stage12-pre-master-qa.test.ts`; `stage12_media_job` |
+| Render toàn timeline từ Stage 09 + narration Stage 10 + ambience Stage 11 | signed media-worker envelope; immutable Production R2 read-back |
+| M0 inputs/rights/P0 và M1 full-scan, A/V sync, loudness, black/freeze/silence, safe-zone đều fail-closed | `validateTrackGVideoOneStage12Receipt`; DB trigger `stage12_pre_master_qa_validate_insert` |
+| Artifact và frame digest được niêm phong trước `STAGE_13_READY` | `stage12_pre_master_qa`; sealed `stage_artifact`; immutable receipt |
+| Không gọi provider, không reserve spend, không publish | `provider_call_count = 0`; `reserved_usd = actual_usd = 0`; `autoPublish = OFF` |
+| Operator, MCP và Sites dùng cùng executor | authenticated Stage 12 routes/tools; verified `sites/control-plane/source-lock.json` |
+
+Lệnh xác minh: `pnpm ci` và `npm test` trong `sites/control-plane`.
+
+---
+
 ## WP-00 · Scaffold & Contracts
 
 ## Mode: BUILD

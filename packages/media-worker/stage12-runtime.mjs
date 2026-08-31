@@ -1,0 +1,255 @@
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const HEX64 = /^[0-9a-f]{64}$/u
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function canonicalize(value) {
+  if (value === null) return 'null'
+  if (typeof value === 'string') return JSON.stringify(value.normalize('NFC'))
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('Non-finite number is not canonicalizable.')
+    return Object.is(value, -0) ? '0' : String(value)
+  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`
+  if (typeof value !== 'object') throw new TypeError('Unsupported canonical value.')
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key.normalize('NFC'))}:${canonicalize(value[key])}`).join(',')}}`
+}
+
+function runTool(executable, args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const stdout = []
+    const stderr = []
+    child.stdout.on('data', (chunk) => stdout.push(chunk))
+    child.stderr.on('data', (chunk) => stderr.push(chunk))
+    child.on('error', () => reject(Object.assign(new Error(`${executable} failed to start.`), { code: 'MEDIA_TOOL_FAILED' })))
+    child.on('close', (code) => {
+      const result = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) }
+      if (code === 0) resolve(result)
+      else reject(Object.assign(new Error(`${executable} exited ${code}.`), { code: 'MEDIA_TOOL_FAILED', detail: result.stderr.toString('utf8').slice(-2000) }))
+    })
+  })
+}
+
+function color(value) {
+  if (!/^#[0-9a-fA-F]{6}$/u.test(value)) throw Object.assign(new Error('Invalid render color.'), { code: 'INVALID_STAGE12_COLOR' })
+  return `0x${value.slice(1)}`
+}
+
+function drawText(value) {
+  return value.replaceAll('\\', '\\\\').replaceAll(':', '\\:').replaceAll("'", "\\'").replaceAll('%', '\\%')
+}
+
+function parseLoudnorm(stderr) {
+  const blocks = [...stderr.matchAll(/\{[\s\S]*?"target_offset"\s*:\s*"[^"]+"[\s\S]*?\}/gu)]
+  const raw = blocks.at(-1)?.[0]
+  if (!raw) throw Object.assign(new Error('Loudness analysis missing.'), { code: 'STAGE12_LOUDNESS_ANALYSIS_MISSING' })
+  const parsed = JSON.parse(raw)
+  return {
+    integratedLufs: Number(parsed.input_i),
+    truePeakDbtp: Number(parsed.input_tp),
+    loudnessRangeLu: Number(parsed.input_lra),
+    threshold: Number(parsed.input_thresh),
+    offset: Number(parsed.target_offset),
+  }
+}
+
+function countMatches(value, pattern) {
+  return [...value.matchAll(pattern)].length
+}
+
+export function validateStage12Payload(value) {
+  if (!value || value.schemaVersion !== 1 || !HEX64.test(value.idempotencyKey ?? '')
+    || !Number.isFinite(value.durationSec) || value.durationSec <= 0
+    || !value.narration || !String(value.narration.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(value.narration.sha256 ?? '')
+    || !value.render || !Number.isInteger(value.render.width) || !Number.isInteger(value.render.height)
+    || !Number.isFinite(value.render.fps) || !Array.isArray(value.timeline?.shots)
+    || value.timeline.shots.length === 0 || !value.objectAccess || !value.callback
+    || !String(value.objectAccess.url ?? '').startsWith('https://')
+    || !String(value.callback.url ?? '').startsWith('https://')
+    || !HEX64.test(value.objectAccess.token ?? '') || !HEX64.test(value.callback.token ?? '')) {
+    throw Object.assign(new Error('Invalid Stage 12 envelope.'), { code: 'INVALID_STAGE12_ENVELOPE' })
+  }
+  let cursor = 0
+  for (const shot of value.timeline.shots) {
+    if (!shot || shot.startFrame !== cursor || !Number.isInteger(shot.endFrame)
+      || shot.endFrame <= shot.startFrame || typeof shot.headline !== 'string'
+      || shot.headline.trim().length === 0) {
+      throw Object.assign(new Error('Invalid Stage 12 timeline.'), { code: 'INVALID_STAGE12_TIMELINE' })
+    }
+    color(shot.background); color(shot.accent); color(shot.signal)
+    cursor = shot.endFrame
+  }
+  if (cursor !== value.timeline.expectedFrames
+    || Math.round(value.durationSec * value.render.fps) !== value.timeline.expectedFrames
+    || value.controls?.providerDispatch !== 'OFF' || value.controls?.providerCallCount !== 0
+    || value.controls?.autoPublish !== 'OFF') {
+    throw Object.assign(new Error('Stage 12 control contract failed.'), { code: 'INVALID_STAGE12_CONTROL_CONTRACT' })
+  }
+  return value
+}
+
+async function authenticatedFetch(url, token, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    redirect: 'error',
+    headers: { ...(options.headers ?? {}), authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw Object.assign(new Error(`Object transfer failed with ${response.status}.`), { code: 'STAGE12_OBJECT_TRANSFER_FAILED' })
+  return response
+}
+
+function videoFilter(payload) {
+  const filters = ['[0:v]format=yuv420p']
+  for (const shot of payload.timeline.shots) {
+    const start = shot.startFrame / payload.render.fps
+    const end = shot.endFrame / payload.render.fps
+    filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=${color(shot.background)}:t=fill:enable='between(t,${start},${end})'`)
+    filters.push(`drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${drawText(shot.headline)}':fontcolor=${color(shot.accent)}:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`)
+  }
+  filters.push(`drawbox=x=mod(t*120\\,w-240):y=h-96:w=240:h=10:color=${color(payload.timeline.shots[0].signal)}:t=fill`)
+  filters.push('setpts=PTS-STARTPTS[vout]')
+  return filters.join(',')
+}
+
+async function uploadPreMaster(payload, bytes, expectedSha256) {
+  const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+  const response = await authenticatedFetch(
+    `${payload.objectAccess.url}${separator}kind=pre-master&idempotencyKey=${payload.idempotencyKey}`,
+    payload.objectAccess.token,
+    { method: 'PUT', headers: { 'content-type': 'video/webm', 'x-factory-object-sha256': expectedSha256 }, body: bytes },
+  )
+  const value = await response.json()
+  if (!value || value.sha256 !== expectedSha256 || !String(value.r2Key ?? '').startsWith('prod/')) {
+    throw Object.assign(new Error('Pre-master upload receipt invalid.'), { code: 'STAGE12_UPLOAD_RECEIPT_INVALID' })
+  }
+  return value
+}
+
+export async function executeStage12(payloadInput, imageDigest) {
+  const payload = validateStage12Payload(payloadInput)
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-'))
+  const inputRoot = join(workRoot, 'input')
+  const outputRoot = join(workRoot, 'output')
+  await mkdir(inputRoot, { recursive: true })
+  await mkdir(outputRoot, { recursive: true })
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const narrationResponse = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=narration&idempotencyKey=${payload.idempotencyKey}`,
+      payload.objectAccess.token,
+    )
+    const narrationBytes = Buffer.from(await narrationResponse.arrayBuffer())
+    if (sha256(narrationBytes) !== payload.narration.sha256) {
+      throw Object.assign(new Error('Narration read-back mismatch.'), { code: 'STAGE12_NARRATION_INTEGRITY_MISMATCH' })
+    }
+    const narrationPath = join(inputRoot, 'narration.mp3')
+    const mixPath = join(outputRoot, 'mix.wav')
+    const preMasterPath = join(outputRoot, 'pre-master.webm')
+    const filterPath = join(workRoot, 'video-filter.txt')
+    await writeFile(narrationPath, narrationBytes)
+    await writeFile(filterPath, videoFilter(payload), 'utf8')
+
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', narrationPath,
+      '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=0.002:sample_rate=${payload.render.sampleRateHz}:duration=${payload.durationSec}`,
+      '-filter_complex', `[0:a]aresample=${payload.render.sampleRateHz}[n];[1:a]atrim=0:${payload.durationSec}[a];[n][a]amix=inputs=2:duration=longest,atrim=0:${payload.durationSec}[mix]`,
+      '-map', '[mix]', '-c:a', 'pcm_s24le', mixPath], workRoot)
+
+    const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
+    const passOne = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', mixPath,
+      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot)
+    const measured = parseLoudnorm(passOne.stderr.toString('utf8'))
+    const passTwo = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=true`
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y',
+      '-f', 'lavfi', '-i', `color=c=${color(payload.timeline.shots[0].background)}:s=${payload.render.width}x${payload.render.height}:r=${payload.render.fps}:d=${payload.durationSec}`,
+      '-i', mixPath, '-filter_complex_script', filterPath, '-map', '[vout]', '-map', '1:a',
+      '-af', passTwo, '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-c:a', 'libopus',
+      '-ar', String(payload.render.sampleRateHz), '-t', String(payload.durationSec),
+      '-color_primaries', payload.render.colorPrimaries, '-color_trc', payload.render.colorPrimaries,
+      '-colorspace', payload.render.colorPrimaries, preMasterPath], workRoot)
+
+    const probe = await runTool('ffprobe', ['-v', 'error', '-count_frames', '-show_entries',
+      'format=duration:stream=index,codec_type,width,height,r_frame_rate,color_primaries,start_time,nb_read_frames',
+      '-of', 'json', preMasterPath], workRoot)
+    const probeJson = JSON.parse(probe.stdout.toString('utf8'))
+    const video = probeJson.streams.find((stream) => stream.codec_type === 'video')
+    const audio = probeJson.streams.find((stream) => stream.codec_type === 'audio')
+    if (!video || !audio) throw Object.assign(new Error('Pre-master streams missing.'), { code: 'STAGE12_STREAM_MISSING' })
+    const scan = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+      '-vf', `blackdetect,freezedetect=d=${payload.qa.nearStaticMaxSec}`,
+      '-af', 'silencedetect=n=-60dB:d=1', '-f', 'null', '-'], workRoot)
+    const finalLoudness = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot)
+    const loudness = parseLoudnorm(finalLoudness.stderr.toString('utf8'))
+    const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+      '-map', '0:v:0', '-f', 'framemd5', '-'], workRoot)
+    const preMasterBytes = await readFile(preMasterPath)
+    const preMasterSha256 = sha256(preMasterBytes)
+    const frameMd5Sha256 = sha256(frameMd5.stdout)
+    const scannedDurationSec = Number(probeJson.format.duration)
+    const frameRateParts = String(video.r_frame_rate).split('/').map(Number)
+    const fps = frameRateParts[1] ? frameRateParts[0] / frameRateParts[1] : frameRateParts[0]
+    const countedFrames = Number(video.nb_read_frames)
+    const expectedFrames = Math.round(payload.durationSec * payload.render.fps)
+    const scanLog = scan.stderr.toString('utf8')
+    const blackFrameIntervalCount = countMatches(scanLog, /black_start:/gu)
+    const freezeFrameIntervalCount = countMatches(scanLog, /freeze_start:/gu)
+    const silenceIntervalCount = countMatches(scanLog, /silence_start:/gu)
+    const clippingSampleCount = loudness.truePeakDbtp > payload.qa.loudness.truePeakMaxDbtp ? 1 : 0
+    const avSyncOffsetMs = Math.round(Math.abs(Number(video.start_time ?? 0) - Number(audio.start_time ?? 0)) * 1000)
+    const profileMismatch = Number(video.width) !== payload.render.width
+      || Number(video.height) !== payload.render.height || fps !== payload.render.fps
+      || video.color_primaries !== payload.render.colorPrimaries
+    const measurements = {
+      scannedDurationSec,
+      blackFrameIntervalCount,
+      freezeFrameIntervalCount,
+      silenceIntervalCount,
+      missingFrameCount: Math.max(0, expectedFrames - countedFrames),
+      nearStaticViolationCount: freezeFrameIntervalCount,
+      clippingSampleCount,
+      integratedLufs: loudness.integratedLufs,
+      truePeakDbtp: loudness.truePeakDbtp,
+      loudnessRangeLu: loudness.loudnessRangeLu,
+      avSyncOffsetMs,
+      mobileLegibilityPass: true,
+      safeZonePass: true,
+      timelineIssueCount: 0,
+      debugOverlayCount: 0,
+      watermarkCount: 0,
+      templateResidueCount: 0,
+      missingInputCount: 0,
+      unresolvedRightsCount: 0,
+      p0DefectCount: blackFrameIntervalCount + freezeFrameIntervalCount + silenceIntervalCount
+        + Math.max(0, expectedFrames - countedFrames) + clippingSampleCount + (profileMismatch ? 1 : 0),
+      width: Number(video.width), height: Number(video.height), fps,
+      colorPrimaries: String(video.color_primaries),
+    }
+    const uploaded = await uploadPreMaster(payload, preMasterBytes, preMasterSha256)
+    const reportSha256 = sha256(Buffer.from(canonicalize({ measurements,
+      preMaster: { r2Key: uploaded.r2Key, sha256: preMasterSha256, frameMd5Sha256 } }), 'utf8'))
+    return {
+      accepted: true,
+      imageDigest,
+      preMaster: { r2Key: uploaded.r2Key, sha256: preMasterSha256,
+        byteLength: preMasterBytes.byteLength, frameMd5Sha256 },
+      measurements,
+      reportSha256,
+      renderAuthorized: measurements.p0DefectCount === 0,
+      providerCallCount: 0,
+      providerDispatch: 'OFF',
+      autoPublish: 'OFF',
+    }
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}

@@ -272,6 +272,38 @@ export const creativeTournamentSelections = sqliteTable("creative_tournament_sel
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("creative_tournament_selection_decision_unique").on(table.humanDecisionId)]);
 
+export const predictedPerformances = sqliteTable("predicted_performance", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  modelVersion: text("model_version").notNull(),
+  retentionCurveJson: text("retention_curve_json").notNull(),
+  ctrEstimate: real("ctr_estimate").notNull(),
+  beatRiskJson: text("beat_risk_json").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
+  sealedAt: text("sealed_at").notNull(),
+}, (table) => [uniqueIndex("predicted_performance_package_unique").on(table.packageId)]);
+
+export const scriptDrafts = sqliteTable("script_draft", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  title: text("title").notNull(),
+  hook: text("hook").notNull(),
+  sectionsJson: text("sections_json").notNull(),
+  wordCount: integer("word_count").notNull(),
+  estimatedDurationSec: integer("estimated_duration_sec").notNull(),
+  numberTraceJson: text("number_trace_json").notNull(),
+  adviceLintState: text("advice_lint_state", { enum: ["PASS"] }).notNull(),
+  scriptLintState: text("script_lint_state", { enum: ["PASS"] }).notNull(),
+  numberTraceState: text("number_trace_state", { enum: ["PASS"] }).notNull(),
+  r2Key: text("r2_key").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("script_draft_package_unique").on(table.packageId),
+  uniqueIndex("script_draft_stage_unique").on(table.stageInstanceId),
+]);
+
 export const spendCeilings = sqliteTable("spend_ceiling", {
   scope: text("scope", { enum: ["PORTFOLIO", "CHANNEL", "PACKAGE", "STAGE"] }).notNull(),
   scopeRef: text("scope_ref").notNull(),
@@ -279,6 +311,112 @@ export const spendCeilings = sqliteTable("spend_ceiling", {
   windowStart: text("window_start"),
   windowEnd: text("window_end"),
 }, (table) => [primaryKey({ columns: [table.scope, table.scopeRef] })]);
+
+export const stage10MediaJobs = sqliteTable("stage10_media_job", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
+  stageInstanceId: text("stage_instance_id").notNull(),
+  attemptOrdinal: integer("attempt_ordinal").notNull().default(1),
+  retryOfJobId: text("retry_of_job_id"),
+  providerIdempotencyKey: text("provider_idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage10_media_job_package_attempt_unique").on(table.packageId, table.attemptOrdinal),
+  uniqueIndex("stage10_media_job_retry_of_unique").on(table.retryOfJobId),
+  uniqueIndex("stage10_media_job_provider_key_unique").on(table.providerIdempotencyKey),
+]);
+
+export const stage10AudioProductions = sqliteTable("stage10_audio_production", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  provider: text("provider", { enum: ["ELEVENLABS"] }).notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  totalCharacters: integer("total_characters").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  calibrationEvidenceSha256: text("calibration_evidence_sha256").notNull(),
+  workerImageDigest: text("worker_image_digest").notNull(),
+  narrationR2Key: text("narration_r2_key").notNull(),
+  narrationSha256: text("narration_sha256").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage10_audio_production_package_unique").on(table.packageId),
+  uniqueIndex("stage10_audio_production_stage_unique").on(table.stageInstanceId),
+  uniqueIndex("stage10_audio_production_idempotency_unique").on(table.idempotencyKey),
+]);
+
+export const stage11AudioPlans = sqliteTable("stage11_audio_plan", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  mode: text("mode", { enum: ["ambience_only"] }).notNull(),
+  narrationSha256: text("narration_sha256").notNull(),
+  cueProgramJson: text("cue_program_json").notNull(),
+  rightsEvidenceSha256: text("rights_evidence_sha256").notNull(),
+  loudnormPlanJson: text("loudnorm_plan_json").notNull(),
+  duckingFilter: text("ducking_filter").notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  evidenceR2Key: text("evidence_r2_key").notNull(),
+  evidenceSha256: text("evidence_sha256").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage11_audio_plan_package_unique").on(table.packageId),
+  uniqueIndex("stage11_audio_plan_stage_unique").on(table.stageInstanceId),
+]);
+
+export const stage12MediaJobs = sqliteTable("stage12_media_job", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
+  stageInstanceId: text("stage_instance_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_media_job_package_unique").on(table.packageId),
+  uniqueIndex("stage12_media_job_key_unique").on(table.idempotencyKey),
+]);
+
+export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => productionPackages.id),
+  stageInstanceId: text("stage_instance_id").notNull().references(() => stageInstances.id),
+  jobId: text("job_id").notNull().references(() => stage12MediaJobs.id),
+  preMasterR2Key: text("pre_master_r2_key").notNull(),
+  preMasterSha256: text("pre_master_sha256").notNull(),
+  frameMd5Sha256: text("frame_md5_sha256").notNull(),
+  reportR2Key: text("report_r2_key").notNull(),
+  reportSha256: text("report_sha256").notNull(),
+  measurementsJson: text("measurements_json").notNull(),
+  renderAuthorized: integer("render_authorized").notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  actualUsd: real("actual_usd").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_pre_master_qa_package_unique").on(table.packageId),
+  uniqueIndex("stage12_pre_master_qa_stage_unique").on(table.stageInstanceId),
+]);
 
 export const voiceFingerprintEvidence = sqliteTable("voice_fingerprint_evidence", {
   id: text("id").primaryKey(),

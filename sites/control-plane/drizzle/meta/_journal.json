@@ -50,6 +50,76 @@
       "when": 1788024046603,
       "tag": "0007_creative_tournament",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788054865450,
+      "tag": "0008_story_architecture_prediction",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788061658433,
+      "tag": "0009_stage06_script_editorial_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788073200000,
+      "tag": "0010_stage07a_voice_tournament",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788080400000,
+      "tag": "0011_stage09_visual_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788102123348,
+      "tag": "0012_stage10_audio_production",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788140688338,
+      "tag": "0013_stage10_durable_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788150370167,
+      "tag": "0014_stage10_command_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788163200000,
+      "tag": "0015_stage10_failed_retry",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788166800000,
+      "tag": "0016_stage11_ambience_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788170400000,
+      "tag": "0017_stage12_pre_master_qa",
+      "breakpoints": true
     }
   ]
 }
