@@ -18,8 +18,15 @@ export async function POST(request: Request) {
   const body = await request.json() as {
     idempotencyKey?: string;
     result?: Stage10MediaResult;
+    errorCode?: string;
   };
-  if (!/^[a-f0-9]{64}$/u.test(body.idempotencyKey ?? "") || !body.result) {
+  const hasResult = body.result !== undefined;
+  const errorCode = typeof body.errorCode === "string"
+    && /^[A-Z0-9_:.-]{1,160}$/u.test(body.errorCode)
+    ? body.errorCode
+    : null;
+  if (!/^[a-f0-9]{64}$/u.test(body.idempotencyKey ?? "")
+    || hasResult === (errorCode !== null)) {
     return Response.json({ error: "STAGE_10_CALLBACK_INVALID" }, { status: 400 });
   }
   const db = getDb();
@@ -35,8 +42,19 @@ export async function POST(request: Request) {
   if (job.state !== "PENDING") {
     return Response.json({ error: "STAGE_10_CALLBACK_STATE_CONFLICT" }, { status: 409 });
   }
+  if (!hasResult) {
+    const result = await getD1().prepare(`UPDATE stage10_media_job
+      SET state = 'FAILED', error_code = ?, updated_at = ?
+      WHERE id = ? AND state = 'PENDING'`).bind(
+      errorCode, new Date().toISOString(), job.id,
+    ).run();
+    if ((result.meta.changes ?? 0) !== 1) {
+      return Response.json({ error: "STAGE_10_CALLBACK_CONCURRENT_STATE_CONFLICT" }, { status: 409 });
+    }
+    return Response.json({ accepted: true, replayed: false, jobStatus: "FAILED" }, { status: 201 });
+  }
   try {
-    validateStage10MediaResult(body.result);
+    validateStage10MediaResult(body.result!);
     const receiptBytes = new TextEncoder().encode(`${canonicalize({
       schemaVersion: 1,
       idempotencyKey: body.idempotencyKey,
