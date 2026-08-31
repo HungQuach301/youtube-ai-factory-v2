@@ -54,8 +54,17 @@ test("Stage 10 separates bounded start from durable receipt finalization", async
     fileURLToPath(new URL("../app/api/media-worker/stage10/route.ts", import.meta.url)),
     "utf8",
   );
+  const flyConfig = await readFile(
+    fileURLToPath(new URL("../packages/media-worker/fly.toml", import.meta.url)),
+    "utf8",
+  );
   assert.match(worker, /request\.url === '\/stage10\/start'/);
   assert.match(worker, /publishStage10Callback/);
+  assert.match(worker, /publishStage10Failure/);
+  assert.match(worker, /AbortSignal\.timeout\(TTS_REQUEST_TIMEOUT_MS\)/);
+  assert.match(callback, /errorCode\?: string/);
+  assert.match(callback, /jobStatus: "FAILED"/);
+  assert.match(flyConfig, /min_machines_running = 1/);
   assert.match(domain, /START_TRACK_G_VIDEO_1_STAGE_10/);
   assert.match(domain, /FINALIZE_TRACK_G_VIDEO_1_STAGE_10/);
   assert.match(domain, /TRACK_G_STAGE_10_JOB_PENDING/);
