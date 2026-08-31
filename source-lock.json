@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "5f0304bca881bc718c390a729a4319487a4bf901344a4ec9e8fb8ed13ad07494",
+  "aggregate_sha256": "4ba869264522e42535cab1ceb1a57897d9935876b291d9fe65eaedc9ffd33738",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -196,6 +196,10 @@
       "sha256": "ead34c09b82db27c9cd5a79414bd481e4ee5fa3fe019a517baaeb899f99eebdf"
     },
     {
+      "path": "drizzle/0014_stage10_command_contract.sql",
+      "sha256": "a68f1f1586e455703514789f2077a1a7d9b9d79c6e65dbc57c5be3ee3025d2be"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -225,7 +229,7 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "ccbb457d067d788d618684638a80220a8c8c37f1166f3880394e3ab085e7fc43"
+      "sha256": "56c5414445d8d4a963d69a0e115cb87c4c3bcfcfb5168b20ff0d0cec2ff079c3"
     },
     {
       "path": "eslint.config.mjs",
