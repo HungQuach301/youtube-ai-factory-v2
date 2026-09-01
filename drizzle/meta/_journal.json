@@ -134,6 +134,13 @@
       "when": 1788249600000,
       "tag": "0019_stage12_failed_retry",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788253200000,
+      "tag": "0020_stage12_attempt_three",
+      "breakpoints": true
     }
   ]
 }

@@ -62,6 +62,9 @@ jobs:
           docker logs factory-media-worker-candidate
           exit 1
 
+      - name: Verify Stage 12 renderer smoke in candidate
+        run: docker exec factory-media-worker-candidate node stage12-render-smoke.mjs
+
       - name: Clean up candidate
         if: always()
         run: docker rm --force factory-media-worker-candidate >/dev/null 2>&1 || true

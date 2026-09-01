@@ -116,7 +116,7 @@ async function authenticatedFetch(url, token, options = {}) {
   return response
 }
 
-function videoFilter(payload) {
+export function buildStage12VideoFilter(payload) {
   const filters = ['[0:v]format=yuv420p']
   for (const shot of payload.timeline.shots) {
     const start = shot.startFrame / payload.render.fps
@@ -124,7 +124,7 @@ function videoFilter(payload) {
     filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=${color(shot.background)}:t=fill:enable='between(t,${start},${end})'`)
     filters.push(`drawtext=fontfile=${STAGE12_FONT_PATH}:text='${drawText(shot.headline)}':fontcolor=${color(shot.accent)}:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`)
   }
-  filters.push(`drawbox=x=mod(t*120\\,w-240):y=h-96:w=240:h=10:color=${color(payload.timeline.shots[0].signal)}:t=fill`)
+  filters.push(`drawbox=x=mod(t*120\\,iw-240):y=ih-96:w=240:h=10:color=${color(payload.timeline.shots[0].signal)}:t=fill`)
   filters.push('setpts=PTS-STARTPTS[vout]')
   return filters.join(',')
 }
@@ -165,7 +165,7 @@ export async function executeStage12(payloadInput, imageDigest) {
     const preMasterPath = join(outputRoot, 'pre-master.webm')
     const filterPath = join(workRoot, 'video-filter.txt')
     await writeFile(narrationPath, narrationBytes)
-    await writeFile(filterPath, videoFilter(payload), 'utf8')
+    await writeFile(filterPath, buildStage12VideoFilter(payload), 'utf8')
 
     await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', narrationPath,
       '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=0.002:sample_rate=${payload.render.sampleRateHz}:duration=${payload.durationSec}`,
