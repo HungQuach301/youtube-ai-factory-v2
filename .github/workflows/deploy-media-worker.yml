@@ -48,6 +48,8 @@ jobs:
         run: |
           docker run --detach --name factory-media-worker-candidate \
             --env MEDIA_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --env MEDIA_STAGE12_ENABLED=true \
+            --env MEDIA_STAGE10_VERIFY_KEY=ci-stage12-readiness-key \
             --publish 18080:8080 factory-media-worker:production-candidate
           for attempt in $(seq 1 30); do
             health="$(curl --fail --silent http://127.0.0.1:18080/health || true)"
