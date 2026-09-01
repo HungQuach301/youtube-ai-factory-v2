@@ -423,7 +423,7 @@ async function getTrackGVideoOneWorkbench() {
           : run.currentStep === "STAGE_12_READY" && !stage12Job
             ? ["START_TRACK_G_VIDEO_1_STAGE_12"]
           : run.currentStep === "STAGE_12_READY" && stage12Job?.state === "FAILED"
-            && stage12Job.attemptOrdinal === 1 && isStage12RetryableErrorCode(stage12Job.errorCode)
+            && stage12Job.attemptOrdinal < 3 && isStage12RetryableErrorCode(stage12Job.errorCode)
             ? ["START_TRACK_G_VIDEO_1_STAGE_12"]
           : run.currentStep === "STAGE_12_READY" && stage12Job?.state === "READY"
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_12"]
