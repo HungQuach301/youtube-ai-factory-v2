@@ -1,0 +1,88 @@
+name: Fly media-worker Production
+run-name: Fly media-worker Production · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/media-worker/**"
+      - "packages/contracts/**"
+      - "packages/core-hash/**"
+      - "scripts/whisperx-phoneme-observer.py"
+      - "scripts/replay-semantic-normalization.py"
+      - "scripts/verify-stage10-python-runtime.py"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy-media-worker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-media-worker-production
+  cancel-in-progress: false
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify immutable source and deployment credential
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -n "${FLY_API_TOKEN}"
+
+      - name: Build production candidate
+        run: docker build --file packages/media-worker/Dockerfile --tag factory-media-worker:production-candidate .
+
+      - name: Verify Stage 12 runtime and font in candidate
+        run: |
+          docker run --detach --name factory-media-worker-candidate \
+            --env MEDIA_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --publish 18080:8080 factory-media-worker:production-candidate
+          for attempt in $(seq 1 30); do
+            health="$(curl --fail --silent http://127.0.0.1:18080/health || true)"
+            if echo "${health}" | jq --exit-status \
+              '.ok == true and .stage12Ready == true and .stage12FontVerified == true and .pythonRuntimeVerified == true' >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs factory-media-worker-candidate
+          exit 1
+
+      - name: Clean up candidate
+        if: always()
+        run: docker rm --force factory-media-worker-candidate >/dev/null 2>&1 || true
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy exact main commit
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy . --config packages/media-worker/fly.toml --dockerfile packages/media-worker/Dockerfile --remote-only --wait-timeout 600
+
+      - name: Verify Fly Production health
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          for attempt in $(seq 1 36); do
+            health="$(curl --fail --silent https://youtube-ai-factory-v2-media-worker-prod.fly.dev/health || true)"
+            if echo "${health}" | jq --exit-status \
+              '.ok == true and .stage12Ready == true and .stage12FontVerified == true and .pythonRuntimeVerified == true and .jobDispatchEnabled == true' >/dev/null; then
+              echo "${health}" | jq .
+              exit 0
+            fi
+            sleep 10
+          done
+          flyctl status --app youtube-ai-factory-v2-media-worker-prod
+          exit 1
