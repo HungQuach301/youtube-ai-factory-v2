@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const ownerIdentity = sqliteTable("owner_identity", {
   identity: text("identity").primaryKey(),
@@ -495,3 +495,17 @@ export const oauthAccessTokens = sqliteTable("oauth_access_token", {
   revokedAt: integer("revoked_at"),
   createdAt: integer("created_at").notNull(),
 });
+
+export const oauthRefreshTokens = sqliteTable("oauth_refresh_token", {
+  tokenHash: text("token_hash").primaryKey(),
+  familyId: text("family_id").notNull(),
+  clientId: text("client_id").notNull(),
+  resource: text("resource").notNull(),
+  scope: text("scope").notNull(),
+  ownerIdentity: text("owner_identity").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  rotatedAt: integer("rotated_at"),
+  revokedAt: integer("revoked_at"),
+  replacedByHash: text("replaced_by_hash"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("oauth_refresh_token_family_idx").on(table.familyId)]);
