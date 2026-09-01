@@ -1,5 +1,34 @@
 # EVOLUTION QUEUE
 
+## EVO-STAGE12-CALLBACK-EVIDENCE-RECOVERY
+
+- Status: `DETECTED`; requires an `EVOLVE` session, shadow evidence and explicit
+  owner promotion before Production activation.
+- Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_FAILURE_EVIDENCE`.
+- Source: the existing immutable Stage 12 attempt 3 recovery command reached the
+  Production callback, but `POST /api/media-worker/stage12` returned `422` and the
+  durable job retained only `STAGE12_CALLBACK_FAILED:422` instead of the exact
+  deterministic QA or storage failure.
+- Production evidence: Cloudflare request
+  `90bde8a7faebfb07e448020f7c930037`, trace
+  `8f1cf1c8978134ee79545a627354df50`, wall time `20313 ms`; D1 attempt 3 remains
+  `FAILED`, receipt fields remain null, `stage12_pre_master_qa` remains empty, and
+  the sole immutable pre-master remains SHA-256
+  `8f3e76527bc219b8f85db7adefe6abdcd18ef59617e6016aaf838f5c4ea5fd42`.
+- Proposed bounded diff: preserve a sanitized exact Stage 12 callback failure code;
+  add regression coverage for multi-gate QA errors; permit one audited exact
+  callback-evidence recovery replay against the same attempt-3 pre-master and no
+  render; retain stable `start_track_g_video_1_stage_12` routing so routine recovery
+  does not require MCP metadata refresh.
+- Boundary: no attempt 4, no render, no migration, no contract/threshold/gate
+  relaxation, no provider call, no spend, no release and no publish. `FINALIZE`
+  remains forbidden unless the durable job and immutable receipt both read back
+  `READY` after every deterministic gate passes.
+- Required shadow evidence: callback failure normalization vectors; exact replay
+  concurrency/idempotency test; full repository CI; media-worker image smoke; Sites
+  Production health; read-back proving the same pre-master hash and zero provider,
+  spend and publish deltas.
+
 ## EVO-STAGE10-COMMAND-CONTRACT
 
 - Status: `EVIDENCE_READY`; chờ owner `PROMOTE_EVOLUTION`.
