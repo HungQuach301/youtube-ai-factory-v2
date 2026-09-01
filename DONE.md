@@ -12,6 +12,7 @@
 | Operator và MCP dùng một hydrated preflight | HTTP operator chuyển sang `start/finalizeTrackGVideoOneStage12WithDerivedIdempotency`, cùng contract với MCP |
 | Sites nhận đúng canonical gateway/OAuth/Stage 12 code | Deployable mirror đồng bộ stable `/mcp`, renewable OAuth, migrations 0018–0022 và worker runtime; source fingerprint `6435cfc7de58e952142e148345544ddf96ad49cd3e449d464eabc7465485e004` |
 | Shadow local không tạo Production side effect | `pnpm run ci` PASS; Sites build + 18/18 test PASS; Stage 12 renderer smoke PASS; provider/spend/release/publish đều không được gọi |
+| Remote candidate đủ chuẩn `EVIDENCE_READY` | PR #172: build `33516242307`, source-integrity `33516213997`, Sites `33516213956`, media-worker image `33516214291` đều PASS |
 
 ## Risk, cost và rollback
 
@@ -19,7 +20,7 @@
 - Shadow cost: USD 0; chỉ dùng fixture, local D1/R2 và local renderer.
 - Rollback: revert code/mirror commit; không có migration mới và không sửa dữ liệu
   Production. Lỗi exact mới là terminal, nên không thể tạo vòng replay vô hạn.
-- Activation boundary: dừng ở `EVIDENCE_READY`; merge/deploy/replay Production chỉ sau
+- Activation boundary: đã dừng ở `EVIDENCE_READY`; merge/deploy/replay Production chỉ sau
   owner `PROMOTE_EVOLUTION` ở một session khác.
 
 ---
