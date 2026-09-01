@@ -145,6 +145,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         errorCode: z.string().nullable(),
         currentStep: z.string(),
         jobStatus: z.string(),
+        workerVerifyKeyBase64: z.string().min(1).nullable(),
         providerDispatch: z.literal("OFF"),
         autoPublish: z.literal("OFF"),
       },

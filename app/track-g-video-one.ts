@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getD1, getDb } from "../db";
 import {
@@ -4790,7 +4790,13 @@ async function latestStage12Job() {
 }
 
 export async function diagnoseTrackGVideoOneStage12Preflight() {
+  let workerVerifyKeyBase64: string | null = null;
   try {
+    const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+    if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+    workerVerifyKeyBase64 = createPublicKey(createPrivateKey({
+      key: Buffer.from(signingKey, "base64"), format: "der", type: "pkcs8",
+    })).export({ format: "der", type: "spki" }).toString("base64");
     const job = await latestStage12Job();
     const retryEligible = job?.state === "FAILED" && job.attemptOrdinal === 1
       && isStage12RetryableErrorCode(job.errorCode);
@@ -4805,6 +4811,7 @@ export async function diagnoseTrackGVideoOneStage12Preflight() {
         : "TRACK_G_STAGE_12_NOT_READY",
       currentStep: prepared.bootstrap.run.currentStep,
       jobStatus: job?.state ?? "NONE",
+      workerVerifyKeyBase64,
       providerDispatch: "OFF" as const,
       autoPublish: "OFF" as const,
     };
@@ -4814,6 +4821,7 @@ export async function diagnoseTrackGVideoOneStage12Preflight() {
       errorCode: error instanceof Error ? error.message : "TRACK_G_STAGE_12_PREFLIGHT_FAILED",
       currentStep: "UNKNOWN",
       jobStatus: "UNKNOWN",
+      workerVerifyKeyBase64,
       providerDispatch: "OFF" as const,
       autoPublish: "OFF" as const,
     };
