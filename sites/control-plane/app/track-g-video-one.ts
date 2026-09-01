@@ -4756,6 +4756,34 @@ async function latestStage12Job() {
   return job ?? null;
 }
 
+export async function diagnoseTrackGVideoOneStage12Preflight() {
+  try {
+    const prepared = await prepareStage12MediaRequest();
+    stage12CallbackToken(prepared.workerIdempotencyKey);
+    const job = await latestStage12Job();
+    const ready = prepared.bootstrap.run.currentStep === "STAGE_12_READY" && job === null;
+    return {
+      preflightState: ready ? "PASS" as const : "FAIL" as const,
+      errorCode: ready ? null : job
+        ? `TRACK_G_STAGE_12_JOB_ALREADY_${job.state}`
+        : "TRACK_G_STAGE_12_NOT_READY",
+      currentStep: prepared.bootstrap.run.currentStep,
+      jobStatus: job?.state ?? "NONE",
+      providerDispatch: "OFF" as const,
+      autoPublish: "OFF" as const,
+    };
+  } catch (error) {
+    return {
+      preflightState: "FAIL" as const,
+      errorCode: error instanceof Error ? error.message : "TRACK_G_STAGE_12_PREFLIGHT_FAILED",
+      currentStep: "UNKNOWN",
+      jobStatus: "UNKNOWN",
+      providerDispatch: "OFF" as const,
+      autoPublish: "OFF" as const,
+    };
+  }
+}
+
 async function readBackStage12Job() {
   const prepared = await prepareStage12MediaRequest();
   const job = await latestStage12Job();
