@@ -18,6 +18,7 @@ import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
   diagnoseTrackGVideoOneStage12Preflight,
+  diagnoseTrackGVideoOneStage12Recovery,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
   finalizeTrackGVideoOneStage12WithDerivedIdempotency,
@@ -25,6 +26,7 @@ import {
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
   prepareTrackGVideoOneStage09VisualReview,
+  recoverTrackGVideoOneStage12AttemptThree,
   selectTrackGVideoOneStage04Champion,
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
@@ -164,6 +166,24 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         content: [{ type: "text", text: JSON.stringify(output) }],
         structuredContent: output,
       };
+    },
+  );
+
+  server.registerTool(
+    "diagnose_track_g_video_1_stage_12_recovery",
+    {
+      title: "Diagnose Track G Video #1 Stage 12 attempt 3 recovery",
+      description:
+        "Read the failed attempt 3 job and orphaned immutable pre-master candidates without mutation, rendering, provider calls or publishing.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
+    },
+    async () => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
+      const output = await diagnoseTrackGVideoOneStage12Recovery();
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     },
   );
 
@@ -1197,6 +1217,45 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "recover_track_g_video_1_stage_12_attempt_3",
+    {
+      title: "Recover Track G Video #1 Stage 12 attempt 3",
+      description:
+        "Re-scan the one immutable pre-master already produced by failed attempt 3, without rendering or creating attempt 4. The existing job becomes READY only if every deterministic QA gate passes. This never calls a provider, releases or publishes.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("RECOVER STAGE 12 ATTEMPT 3"),
+      },
+      outputSchema: {
+        accepted: z.boolean(), replayed: z.boolean(), runId: z.string(),
+        currentStep: z.literal("STAGE_12_READY"), stageCode: z.literal("12"),
+        attemptOrdinal: z.literal(3), jobStatus: z.enum(["PENDING", "READY"]),
+        renderExecuted: z.literal(false), providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false), autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
+      const result = await recoverTrackGVideoOneStage12AttemptThree(user, {
+        objective, ownerApprovalText: "RECOVER STAGE 12 ATTEMPT 3",
+        callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+      });
+      const output = { accepted: true, replayed: result.replayed,
+        runId: result.bootstrap.run.id, currentStep: "STAGE_12_READY" as const,
+        stageCode: "12" as const, attemptOrdinal: 3 as const,
+        jobStatus: result.job.state as "PENDING" | "READY", renderExecuted: false as const,
+        providerDispatch: "OFF" as const, releaseEligible: false as const,
+        autoPublish: "OFF" as const };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
     "advance_track_g_video_1_stage",
     {
       title: "Advance Track G Video #1 through a qualified stage",
@@ -1393,6 +1452,12 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
     }
     if (tool.name === "diagnose_track_g_video_1_stage_12_preflight") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "diagnose_track_g_video_1_stage_12_recovery") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "recover_track_g_video_1_stage_12_attempt_3") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "prepare_approved_channel") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];

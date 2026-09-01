@@ -36,6 +36,7 @@ import { approvedChannel, qualifiedVoice, trackGVideoOneContract } from "./facto
 import {
   putImmutableEvidence,
   putImmutableProductionEvidence,
+  listImmutableProductionEvidence,
   readVerifiedProductionEvidence,
   sha256,
   verifyImmutableEvidence,
@@ -49,7 +50,11 @@ import {
   type Stage10MediaResult,
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
-import { dispatchStage12MediaStart, parseStage12MediaReceipt } from "./stage12-media";
+import {
+  dispatchStage12MediaRecovery,
+  dispatchStage12MediaStart,
+  parseStage12MediaReceipt,
+} from "./stage12-media";
 import {
   buildTrackGVideoOneStage12Request,
   validateTrackGVideoOneStage12Receipt,
@@ -172,6 +177,7 @@ export const STAGE_12_RETRYABLE_ERROR_CODES = [
 ] as const;
 const STAGE_12_QA_ID = "pre_master_qa_track_g_video_1_stage_12_v1";
 const STAGE_12_START_OWNER_APPROVAL_TEXT = "START STAGE 12";
+const STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT = "RECOVER STAGE 12 ATTEMPT 3";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -229,6 +235,13 @@ export type FinalizeTrackGVideoOneStage12Input = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT;
   idempotencyKey: string;
+};
+
+export type RecoverTrackGVideoOneStage12Input = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
 };
 
 export type PrepareTrackGVideoOneStage04Input = {
@@ -4738,6 +4751,12 @@ function stage12FinalizeIdempotencyKey(workerIdempotencyKey: string): string {
   ).digest("hex");
 }
 
+function stage12RecoveryIdempotencyKey(workerIdempotencyKey: string, preMasterSha256: string): string {
+  return createHash("sha256").update(
+    `RECOVER_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3\0${workerIdempotencyKey}\0${preMasterSha256}`,
+  ).digest("hex");
+}
+
 function stage12CallbackToken(workerIdempotencyKey: string): string {
   const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
   if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
@@ -4855,6 +4874,40 @@ function requireStage12WorkerToken(job: Awaited<ReturnType<typeof latestStage12J
   }
 }
 
+function stage12PreMasterPrefix(): string {
+  return ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "pre-master", ""].join("/");
+}
+
+async function stage12PreMasterCandidates() {
+  return listImmutableProductionEvidence(stage12PreMasterPrefix(), 8);
+}
+
+export async function diagnoseTrackGVideoOneStage12Recovery() {
+  const job = await latestStage12Job();
+  const candidates = await stage12PreMasterCandidates();
+  const eligible = job?.attemptOrdinal === 3 && job.state === "FAILED"
+    && ["STAGE12_CALLBACK_FAILED", "STAGE12_CALLBACK_FAILED:422"].includes(job.errorCode ?? "")
+    && candidates.length === 1;
+  return {
+    recoveryState: eligible ? "PASS" as const : "FAIL" as const,
+    errorCode: eligible ? null : !job
+      ? "TRACK_G_STAGE_12_JOB_READ_BACK_FAILED"
+      : job.attemptOrdinal !== 3
+        ? "TRACK_G_STAGE_12_RECOVERY_REQUIRES_ATTEMPT_3"
+        : job.state !== "FAILED"
+          ? `TRACK_G_STAGE_12_RECOVERY_JOB_${job.state}`
+          : candidates.length !== 1
+            ? `TRACK_G_STAGE_12_RECOVERY_PRE_MASTER_COUNT:${candidates.length}`
+            : `TRACK_G_STAGE_12_RECOVERY_ERROR_NOT_ELIGIBLE:${job.errorCode ?? "UNKNOWN"}`,
+    attemptOrdinal: job?.attemptOrdinal ?? null,
+    jobStatus: job?.state ?? "NONE",
+    preMasterCandidates: candidates,
+    providerDispatch: "OFF" as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
 export async function readTrackGVideoOneStage12Narration(
   idempotencyKey: string,
   token: string,
@@ -4867,6 +4920,22 @@ export async function readTrackGVideoOneStage12Narration(
     prepared.payload.narration.r2Key,
     prepared.payload.narration.sha256,
   );
+}
+
+export async function readTrackGVideoOneStage12PreMaster(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+): Promise<Uint8Array> {
+  const job = await latestStage12Job();
+  requireStage12WorkerToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || job.attemptOrdinal !== 3 || !HEX64.test(expectedSha256)) {
+    throw new Error("STAGE_12_RECOVERY_STATE_CONFLICT");
+  }
+  const candidate = (await stage12PreMasterCandidates())
+    .find((object) => object.sha256 === expectedSha256);
+  if (!candidate) throw new Error("STAGE_12_RECOVERY_PRE_MASTER_NOT_FOUND");
+  return readVerifiedProductionEvidence(candidate.key, candidate.sha256);
 }
 
 export async function storeTrackGVideoOneStage12PreMaster(
@@ -5043,6 +5112,84 @@ export async function startTrackGVideoOneStage12WithDerivedIdempotency(
     ...input,
     idempotencyKey: stage12StartIdempotencyKey(attempt.prepared.workerIdempotencyKey),
   }, attempt, objective);
+}
+
+export async function recoverTrackGVideoOneStage12AttemptThree(
+  user: ChatGPTUser,
+  input: RecoverTrackGVideoOneStage12Input,
+) {
+  if (input.ownerApprovalText !== STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_RECOVERY_OWNER_APPROVAL_REQUIRED");
+  }
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) {
+    throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  }
+  if (!input.callbackUrl.startsWith("https://") || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_ENDPOINT_URL_INVALID");
+  }
+  const job = await latestStage12Job();
+  if (!job || job.attemptOrdinal !== 3) {
+    throw new Error("TRACK_G_STAGE_12_RECOVERY_REQUIRES_ATTEMPT_3");
+  }
+  const prepared = await prepareStage12MediaRequest(3);
+  if (job.idempotencyKey !== prepared.workerIdempotencyKey) {
+    throw new Error("TRACK_G_STAGE_12_JOB_READ_BACK_FAILED");
+  }
+  const candidates = await stage12PreMasterCandidates();
+  if (candidates.length !== 1) {
+    throw new Error(`TRACK_G_STAGE_12_RECOVERY_PRE_MASTER_COUNT:${candidates.length}`);
+  }
+  const preMaster = candidates[0];
+  const recoveryKey = stage12RecoveryIdempotencyKey(job.idempotencyKey, preMaster.sha256);
+  const [existingCommand] = await getDb().select({ id: commandLog.id }).from(commandLog)
+    .where(eq(commandLog.idempotencyKey, recoveryKey)).limit(1);
+  if (existingCommand) {
+    if (job.state === "PENDING" || job.state === "READY") {
+      return { ...(await readBackStage12Job()), replayed: true, preMaster };
+    }
+    throw new Error(`TRACK_G_STAGE_12_RECOVERY_ALREADY_FAILED:${job.errorCode ?? "UNKNOWN"}`);
+  }
+  if (job.state !== "FAILED" || !["STAGE12_CALLBACK_FAILED", "STAGE12_CALLBACK_FAILED:422"]
+    .includes(job.errorCode ?? "")) {
+    throw new Error(`TRACK_G_STAGE_12_RECOVERY_NOT_ALLOWED:${job.state}:${job.errorCode ?? "UNKNOWN"}`);
+  }
+  const callbackToken = stage12CallbackToken(job.idempotencyKey);
+  const now = new Date().toISOString();
+  const d1 = getD1();
+  const results = await d1.batch([
+    d1.prepare(`INSERT INTO command_log
+      (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state,
+       trace_id, created_at) VALUES (?, 'RECOVER_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3', ?, ?, ?,
+       'TRACK_G_VIDEO_1_STAGE_12_FAILED', 'TRACK_G_VIDEO_1_STAGE_12_PENDING', ?, ?)`).bind(
+      crypto.randomUUID(), canonicalize({ objective, operationRunId: prepared.bootstrap.run.id,
+        packageId: STAGE_00_PACKAGE_ID, stageCode: STAGE_12_CODE, attemptOrdinal: 3,
+        workerIdempotencyKey: job.idempotencyKey, preMaster }), recoveryKey,
+      user.email.toLowerCase(), crypto.randomUUID(), now),
+    d1.prepare(`UPDATE stage12_media_job SET state = 'PENDING', error_code = NULL,
+      updated_at = ? WHERE id = ? AND attempt_ordinal = 3 AND state = 'FAILED'`).bind(now, job.id),
+  ]);
+  if ((results[1]?.meta.changes ?? 0) !== 1) {
+    throw new Error("TRACK_G_STAGE_12_RECOVERY_CONCURRENT_STATE_CONFLICT");
+  }
+  try {
+    await dispatchStage12MediaRecovery({
+      ...prepared.payload,
+      objectAccess: { url: input.objectAccessUrl, token: callbackToken },
+      callback: { url: input.callbackUrl, token: callbackToken },
+      recovery: { attemptOrdinal: 3, preMaster: {
+        r2Key: preMaster.key, sha256: preMaster.sha256, byteLength: preMaster.size,
+      }, render: false },
+    });
+  } catch (error) {
+    await d1.prepare(`UPDATE stage12_media_job SET state = 'FAILED', error_code = ?, updated_at = ?
+      WHERE id = ? AND state = 'PENDING'`).bind(
+      error instanceof Error ? error.message : "STAGE12_RECOVERY_START_FAILED",
+      new Date().toISOString(), job.id,
+    ).run();
+    throw error;
+  }
+  return { ...(await readBackStage12Job()), replayed: false, preMaster };
 }
 
 async function readBackStage12(operationRunId: string) {

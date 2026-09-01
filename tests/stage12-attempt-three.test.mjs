@@ -65,3 +65,26 @@ test('Stage 12 migration preserves history and permits only attempt three', asyn
     retryOf: 'attempt-3', state: 'PENDING', error: null }))
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
 })
+
+test('Stage 12 attempt-three recovery reuses the immutable pre-master without rendering', async () => {
+  const [runtime, worker, domain, objectRoute, migration] = await Promise.all([
+    readFile('packages/media-worker/stage12-runtime.mjs', 'utf8'),
+    readFile('packages/media-worker/container-entry.mjs', 'utf8'),
+    readFile('app/track-g-video-one.ts', 'utf8'),
+    readFile('app/api/media-worker/stage12/route.ts', 'utf8'),
+    readFile('drizzle/0021_stage12_attempt_three_recovery.sql', 'utf8'),
+  ])
+  const recovery = runtime.slice(runtime.indexOf('export async function executeStage12Recovery'))
+  assert.match(recovery, /inspectPreMaster\(payload, preMasterPath, workRoot\)/u)
+  assert.match(recovery, /recovery\.render !== false/u)
+  assert.doesNotMatch(recovery, /libvpx-vp9/u)
+  assert.doesNotMatch(recovery, /uploadPreMaster/u)
+  assert.match(worker, /request\.url === '\/stage12\/recover'/u)
+  assert.match(worker, /body\?\.error/u)
+  assert.match(domain, /RECOVER_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3/u)
+  assert.match(domain, /attemptOrdinal !== 3/u)
+  assert.match(domain, /candidates\.length !== 1/u)
+  assert.match(objectRoute, /kind === "pre-master"/u)
+  assert.match(migration, /TRACK_G_VIDEO_1_STAGE_12_FAILED/u)
+  assert.match(migration, /TRACK_G_VIDEO_1_STAGE_12_PENDING/u)
+})
