@@ -1380,20 +1380,33 @@ async function legacyDiscoveryFallback(request: Request): Promise<Response | nul
   );
 }
 
-async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
-  if (request.method !== "POST") return undefined;
-  const payload = await request.clone().json().catch(() => null) as {
-    method?: unknown;
-    params?: { name?: unknown; [key: string]: unknown };
-    [key: string]: unknown;
-  } | null;
+type JsonRpcToolCall = {
+  method?: unknown;
+  params?: { name?: unknown; [key: string]: unknown };
+  [key: string]: unknown;
+};
+
+function normalizeNamespacedToolCallItem(payload: JsonRpcToolCall): JsonRpcToolCall {
   const prefix = "youtube_ai_factory_v2.";
-  if (payload?.method !== "tools/call" || typeof payload.params?.name !== "string"
-    || !payload.params.name.startsWith(prefix)) return undefined;
+  if (payload.method !== "tools/call" || typeof payload.params?.name !== "string"
+    || !payload.params.name.startsWith(prefix)) return payload;
   return {
     ...payload,
     params: { ...payload.params, name: payload.params.name.slice(prefix.length) },
   };
+}
+
+async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
+  if (request.method !== "POST") return undefined;
+  const payload = await request.clone().json().catch(() => null) as
+    JsonRpcToolCall | JsonRpcToolCall[] | null;
+  if (!payload) return undefined;
+  if (Array.isArray(payload)) {
+    const normalized = payload.map(normalizeNamespacedToolCallItem);
+    return normalized.some((item, index) => item !== payload[index]) ? normalized : undefined;
+  }
+  const normalized = normalizeNamespacedToolCallItem(payload);
+  return normalized === payload ? undefined : normalized;
 }
 
 async function handleMcp(request: Request): Promise<Response> {
