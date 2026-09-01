@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildToolInvocation, MediaWorkerRuntime } from './dist/index.js'
-import { executeStage12, validateStage12Payload } from './stage12-runtime.mjs'
+import { executeStage12, executeStage12Recovery, validateStage12Payload } from './stage12-runtime.mjs'
 
 const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
 if (!IMAGE_DIGEST?.match(/^sha256:[a-f0-9]{64}$/u)) {
@@ -513,7 +513,14 @@ async function publishStage12Callback(callback, idempotencyKey, result) {
     headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ idempotencyKey, result }),
   })
-  if (!response.ok) throw Object.assign(new Error(`Stage 12 callback returned ${response.status}.`), { code: 'STAGE12_CALLBACK_FAILED' })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    const candidate = typeof body?.error === 'string' ? body.error : ''
+    const code = /^[A-Z0-9_:.-]{1,160}$/u.test(candidate)
+      ? candidate
+      : `STAGE12_CALLBACK_FAILED:${response.status}`
+    throw Object.assign(new Error(`Stage 12 callback returned ${response.status}.`), { code })
+  }
 }
 
 async function publishStage12Failure(callback, idempotencyKey, error) {
@@ -548,6 +555,36 @@ function startStage12Job(payload) {
         await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
       } catch (callbackError) {
         console.error('STAGE12_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
+      }
+    })
+  return job.status
+}
+
+function startStage12RecoveryJob(payload) {
+  const existing = stage12Jobs.get(payload.idempotencyKey)
+  if (existing) return existing.status
+  if (!payload.callback || !payload.objectAccess || payload.recovery?.render !== false) {
+    throw Object.assign(new Error('Stage 12 recovery endpoints are required.'), {
+      code: 'STAGE12_RECOVERY_ENDPOINTS_REQUIRED',
+    })
+  }
+  const job = { status: 'PENDING' }
+  stage12Jobs.set(payload.idempotencyKey, job)
+  void executeStage12Recovery(payload, IMAGE_DIGEST)
+    .then(async (result) => {
+      await publishStage12Callback(payload.callback, payload.idempotencyKey, result)
+      job.status = 'READY'
+    })
+    .catch(async (error) => {
+      job.status = 'FAILED'
+      console.error('STAGE12_RECOVERY_FAILED', JSON.stringify({
+        code: stage10ErrorCode(error),
+        detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
+      }))
+      try {
+        await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
+      } catch (callbackError) {
+        console.error('STAGE12_RECOVERY_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
       }
     })
   return job.status
@@ -631,6 +668,32 @@ const server = createServer(async (request, response) => {
       }))
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE12_START_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST' && request.url === '/stage12/recover') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage12Payload(JSON.parse(body.toString('utf8')))
+      if (payload.recovery?.attemptOrdinal !== 3 || payload.recovery?.render !== false) {
+        throw Object.assign(new Error('Invalid recovery envelope.'), { code: 'INVALID_STAGE12_RECOVERY_ENVELOPE' })
+      }
+      const jobStatus = startStage12RecoveryJob(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        accepted: true, jobStatus, idempotencyKey: payload.idempotencyKey, imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : 'STAGE12_RECOVERY_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
     }
     return

@@ -143,6 +143,88 @@ async function uploadPreMaster(payload, bytes, expectedSha256) {
   return value
 }
 
+async function inspectPreMaster(payload, preMasterPath, workRoot) {
+  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
+  const probe = await runTool('ffprobe', ['-v', 'error', '-count_frames', '-show_entries',
+    'format=duration:stream=index,codec_type,width,height,r_frame_rate,color_primaries,start_time,nb_read_frames',
+    '-of', 'json', preMasterPath], workRoot, 'STAGE12_PROBE_FAILED')
+  const probeJson = JSON.parse(probe.stdout.toString('utf8'))
+  const video = probeJson.streams.find((stream) => stream.codec_type === 'video')
+  const audio = probeJson.streams.find((stream) => stream.codec_type === 'audio')
+  if (!video || !audio) throw Object.assign(new Error('Pre-master streams missing.'), { code: 'STAGE12_STREAM_MISSING' })
+  const scan = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-vf', `blackdetect,freezedetect=d=${payload.qa.nearStaticMaxSec}`,
+    '-af', 'silencedetect=n=-60dB:d=1', '-f', 'null', '-'], workRoot,
+  'STAGE12_TIMELINE_SCAN_FAILED')
+  const finalLoudness = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
+  'STAGE12_FINAL_LOUDNESS_FAILED')
+  const loudness = parseLoudnorm(finalLoudness.stderr.toString('utf8'))
+  const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-map', '0:v:0', '-f', 'framemd5', '-'], workRoot, 'STAGE12_FRAME_HASH_FAILED')
+  const preMasterBytes = await readFile(preMasterPath)
+  const preMasterSha256 = sha256(preMasterBytes)
+  const frameMd5Sha256 = sha256(frameMd5.stdout)
+  const scannedDurationSec = Number(probeJson.format.duration)
+  const frameRateParts = String(video.r_frame_rate).split('/').map(Number)
+  const fps = frameRateParts[1] ? frameRateParts[0] / frameRateParts[1] : frameRateParts[0]
+  const countedFrames = Number(video.nb_read_frames)
+  const expectedFrames = Math.round(payload.durationSec * payload.render.fps)
+  const scanLog = scan.stderr.toString('utf8')
+  const blackFrameIntervalCount = countMatches(scanLog, /black_start:/gu)
+  const freezeFrameIntervalCount = countMatches(scanLog, /freeze_start:/gu)
+  const silenceIntervalCount = countMatches(scanLog, /silence_start:/gu)
+  const clippingSampleCount = loudness.truePeakDbtp > payload.qa.loudness.truePeakMaxDbtp ? 1 : 0
+  const avSyncOffsetMs = Math.round(Math.abs(Number(video.start_time ?? 0) - Number(audio.start_time ?? 0)) * 1000)
+  const profileMismatch = Number(video.width) !== payload.render.width
+    || Number(video.height) !== payload.render.height || fps !== payload.render.fps
+    || video.color_primaries !== payload.render.colorPrimaries
+  const measurements = {
+    scannedDurationSec,
+    blackFrameIntervalCount,
+    freezeFrameIntervalCount,
+    silenceIntervalCount,
+    missingFrameCount: Math.max(0, expectedFrames - countedFrames),
+    nearStaticViolationCount: freezeFrameIntervalCount,
+    clippingSampleCount,
+    integratedLufs: loudness.integratedLufs,
+    truePeakDbtp: loudness.truePeakDbtp,
+    loudnessRangeLu: loudness.loudnessRangeLu,
+    avSyncOffsetMs,
+    mobileLegibilityPass: true,
+    safeZonePass: true,
+    timelineIssueCount: 0,
+    debugOverlayCount: 0,
+    watermarkCount: 0,
+    templateResidueCount: 0,
+    missingInputCount: 0,
+    unresolvedRightsCount: 0,
+    p0DefectCount: blackFrameIntervalCount + freezeFrameIntervalCount + silenceIntervalCount
+      + Math.max(0, expectedFrames - countedFrames) + clippingSampleCount + (profileMismatch ? 1 : 0),
+    width: Number(video.width), height: Number(video.height), fps,
+    colorPrimaries: String(video.color_primaries),
+  }
+  return { preMasterBytes, preMasterSha256, frameMd5Sha256, measurements }
+}
+
+function stage12Receipt(imageDigest, inspected, pointer) {
+  const reportSha256 = sha256(Buffer.from(canonicalize({ measurements: inspected.measurements,
+    preMaster: { r2Key: pointer.r2Key, sha256: inspected.preMasterSha256,
+      frameMd5Sha256: inspected.frameMd5Sha256 } }), 'utf8'))
+  return {
+    accepted: true,
+    imageDigest,
+    preMaster: { r2Key: pointer.r2Key, sha256: inspected.preMasterSha256,
+      byteLength: inspected.preMasterBytes.byteLength, frameMd5Sha256: inspected.frameMd5Sha256 },
+    measurements: inspected.measurements,
+    reportSha256,
+    renderAuthorized: inspected.measurements.p0DefectCount === 0,
+    providerCallCount: 0,
+    providerDispatch: 'OFF',
+    autoPublish: 'OFF',
+  }
+}
+
 export async function executeStage12(payloadInput, imageDigest) {
   const payload = validateStage12Payload(payloadInput)
   const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-'))
@@ -186,80 +268,40 @@ export async function executeStage12(payloadInput, imageDigest) {
       '-color_primaries', payload.render.colorPrimaries, '-color_trc', payload.render.colorPrimaries,
       '-colorspace', payload.render.colorPrimaries, preMasterPath], workRoot, 'STAGE12_RENDER_FAILED')
 
-    const probe = await runTool('ffprobe', ['-v', 'error', '-count_frames', '-show_entries',
-      'format=duration:stream=index,codec_type,width,height,r_frame_rate,color_primaries,start_time,nb_read_frames',
-      '-of', 'json', preMasterPath], workRoot, 'STAGE12_PROBE_FAILED')
-    const probeJson = JSON.parse(probe.stdout.toString('utf8'))
-    const video = probeJson.streams.find((stream) => stream.codec_type === 'video')
-    const audio = probeJson.streams.find((stream) => stream.codec_type === 'audio')
-    if (!video || !audio) throw Object.assign(new Error('Pre-master streams missing.'), { code: 'STAGE12_STREAM_MISSING' })
-    const scan = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-vf', `blackdetect,freezedetect=d=${payload.qa.nearStaticMaxSec}`,
-      '-af', 'silencedetect=n=-60dB:d=1', '-f', 'null', '-'], workRoot,
-    'STAGE12_TIMELINE_SCAN_FAILED')
-    const finalLoudness = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
-    'STAGE12_FINAL_LOUDNESS_FAILED')
-    const loudness = parseLoudnorm(finalLoudness.stderr.toString('utf8'))
-    const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-map', '0:v:0', '-f', 'framemd5', '-'], workRoot, 'STAGE12_FRAME_HASH_FAILED')
-    const preMasterBytes = await readFile(preMasterPath)
-    const preMasterSha256 = sha256(preMasterBytes)
-    const frameMd5Sha256 = sha256(frameMd5.stdout)
-    const scannedDurationSec = Number(probeJson.format.duration)
-    const frameRateParts = String(video.r_frame_rate).split('/').map(Number)
-    const fps = frameRateParts[1] ? frameRateParts[0] / frameRateParts[1] : frameRateParts[0]
-    const countedFrames = Number(video.nb_read_frames)
-    const expectedFrames = Math.round(payload.durationSec * payload.render.fps)
-    const scanLog = scan.stderr.toString('utf8')
-    const blackFrameIntervalCount = countMatches(scanLog, /black_start:/gu)
-    const freezeFrameIntervalCount = countMatches(scanLog, /freeze_start:/gu)
-    const silenceIntervalCount = countMatches(scanLog, /silence_start:/gu)
-    const clippingSampleCount = loudness.truePeakDbtp > payload.qa.loudness.truePeakMaxDbtp ? 1 : 0
-    const avSyncOffsetMs = Math.round(Math.abs(Number(video.start_time ?? 0) - Number(audio.start_time ?? 0)) * 1000)
-    const profileMismatch = Number(video.width) !== payload.render.width
-      || Number(video.height) !== payload.render.height || fps !== payload.render.fps
-      || video.color_primaries !== payload.render.colorPrimaries
-    const measurements = {
-      scannedDurationSec,
-      blackFrameIntervalCount,
-      freezeFrameIntervalCount,
-      silenceIntervalCount,
-      missingFrameCount: Math.max(0, expectedFrames - countedFrames),
-      nearStaticViolationCount: freezeFrameIntervalCount,
-      clippingSampleCount,
-      integratedLufs: loudness.integratedLufs,
-      truePeakDbtp: loudness.truePeakDbtp,
-      loudnessRangeLu: loudness.loudnessRangeLu,
-      avSyncOffsetMs,
-      mobileLegibilityPass: true,
-      safeZonePass: true,
-      timelineIssueCount: 0,
-      debugOverlayCount: 0,
-      watermarkCount: 0,
-      templateResidueCount: 0,
-      missingInputCount: 0,
-      unresolvedRightsCount: 0,
-      p0DefectCount: blackFrameIntervalCount + freezeFrameIntervalCount + silenceIntervalCount
-        + Math.max(0, expectedFrames - countedFrames) + clippingSampleCount + (profileMismatch ? 1 : 0),
-      width: Number(video.width), height: Number(video.height), fps,
-      colorPrimaries: String(video.color_primaries),
+    const inspected = await inspectPreMaster(payload, preMasterPath, workRoot)
+    const uploaded = await uploadPreMaster(payload, inspected.preMasterBytes, inspected.preMasterSha256)
+    return stage12Receipt(imageDigest, inspected, uploaded)
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+export async function executeStage12Recovery(payloadInput, imageDigest) {
+  const payload = validateStage12Payload(payloadInput)
+  const recovery = payloadInput?.recovery
+  if (!recovery || recovery.attemptOrdinal !== 3 || recovery.render !== false
+    || !String(recovery.preMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(recovery.preMaster?.sha256 ?? '')
+    || !Number.isInteger(recovery.preMaster?.byteLength) || recovery.preMaster.byteLength < 1) {
+    throw Object.assign(new Error('Invalid Stage 12 recovery envelope.'), { code: 'INVALID_STAGE12_RECOVERY_ENVELOPE' })
+  }
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-recovery-'))
+  const preMasterPath = join(workRoot, 'pre-master.webm')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=pre-master&idempotencyKey=${payload.idempotencyKey}&sha256=${recovery.preMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (bytes.byteLength !== recovery.preMaster.byteLength || sha256(bytes) !== recovery.preMaster.sha256) {
+      throw Object.assign(new Error('Recovery pre-master read-back mismatch.'), {
+        code: 'STAGE12_RECOVERY_PRE_MASTER_INTEGRITY_MISMATCH',
+      })
     }
-    const uploaded = await uploadPreMaster(payload, preMasterBytes, preMasterSha256)
-    const reportSha256 = sha256(Buffer.from(canonicalize({ measurements,
-      preMaster: { r2Key: uploaded.r2Key, sha256: preMasterSha256, frameMd5Sha256 } }), 'utf8'))
-    return {
-      accepted: true,
-      imageDigest,
-      preMaster: { r2Key: uploaded.r2Key, sha256: preMasterSha256,
-        byteLength: preMasterBytes.byteLength, frameMd5Sha256 },
-      measurements,
-      reportSha256,
-      renderAuthorized: measurements.p0DefectCount === 0,
-      providerCallCount: 0,
-      providerDispatch: 'OFF',
-      autoPublish: 'OFF',
-    }
+    await writeFile(preMasterPath, bytes)
+    const inspected = await inspectPreMaster(payload, preMasterPath, workRoot)
+    return stage12Receipt(imageDigest, inspected, recovery.preMaster)
   } finally {
     await rm(workRoot, { recursive: true, force: true })
   }
