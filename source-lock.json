@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "d89300690efcf9bfbc49e14cf93af00358ef9fd53d2c1fb055daa4dd4325ac1c",
+  "aggregate_sha256": "f3725e0e4d074f49302bf10a600362c6c5cf9acc88cc438722e30ce2ae2c45fb",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -133,7 +133,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "6fc1194d7be5355127a06a7d16da71129fcc2b700182fe5274b0f5cee5414081"
+      "sha256": "94c777c362b9fdb306cab651531f3499467ae6125ba7bf0f555149af4c651f55"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -321,11 +321,15 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "3c9691bf6711d58d009765ee8f2f3b7e8f5919522a681ed8526a8a22f7613481"
+      "sha256": "c01d4a8963d353cabebe7de2dd4f4087d7bfea98a15d6b0b64f845ac012f7d6d"
     },
     {
       "path": "packages/media-worker/fly.toml",
       "sha256": "be4a831815d57417a027d307a43abac33c8129024d8087df5a9d98f5559b136d"
+    },
+    {
+      "path": "packages/media-worker/stage12-callback-error.mjs",
+      "sha256": "8767448d78beefd310f1ca020623d6633f87cae15eb2e82d5148471b55d51c09"
     },
     {
       "path": "packages/media-worker/stage12-render-smoke.mjs",
@@ -417,7 +421,7 @@
     },
     {
       "path": "tests/stage12-attempt-three.test.mjs",
-      "sha256": "3caebbe3e49bfb37a449399de360ae45d4cd37825368435d2f2d764a06a7993b"
+      "sha256": "d0dfdbc6ebdbc539164a6bf7b34f7c86c91df9b29769c43ef06cc427cfb76935"
     },
     {
       "path": "tsconfig.json",

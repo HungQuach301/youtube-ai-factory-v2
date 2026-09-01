@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process'
 import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto'
 import { createServer } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildToolInvocation, MediaWorkerRuntime } from './dist/index.js'
-import { executeStage12, validateStage12Payload } from './stage12-runtime.mjs'
+import { stage12CallbackErrorCode, stage12WorkerErrorCode } from './stage12-callback-error.mjs'
+import { executeStage12, executeStage12Recovery, validateStage12Payload } from './stage12-runtime.mjs'
 
 const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
 if (!IMAGE_DIGEST?.match(/^sha256:[a-f0-9]{64}$/u)) {
@@ -32,6 +33,8 @@ const stage10Executions = new Map()
 const stage10Jobs = new Map()
 const stage12Jobs = new Map()
 const PYTHON_RUNTIME_MARKER = '/app/runtime-verification/stage10-python.json'
+const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
+  ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 function pythonRuntimeVerified() {
   try {
@@ -61,6 +64,7 @@ function stage10Ready() {
 
 function stage12Ready() {
   return STAGE12_ENABLED && typeof STAGE10_VERIFY_KEY === 'string'
+    && existsSync(STAGE12_FONT_PATH)
 }
 
 function sha256(bytes) {
@@ -510,14 +514,19 @@ async function publishStage12Callback(callback, idempotencyKey, result) {
     headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ idempotencyKey, result }),
   })
-  if (!response.ok) throw Object.assign(new Error(`Stage 12 callback returned ${response.status}.`), { code: 'STAGE12_CALLBACK_FAILED' })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    const candidate = typeof body?.error === 'string' ? body.error : ''
+    const code = stage12CallbackErrorCode(candidate, response.status)
+    throw Object.assign(new Error(`Stage 12 callback returned ${response.status}.`), { code })
+  }
 }
 
 async function publishStage12Failure(callback, idempotencyKey, error) {
   const response = await fetch(callback.url, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
     headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ idempotencyKey, errorCode: stage10ErrorCode(error) }),
+    body: JSON.stringify({ idempotencyKey, errorCode: stage12WorkerErrorCode(error) }),
   })
   if (!response.ok) throw Object.assign(new Error(`Stage 12 failure callback returned ${response.status}.`), { code: 'STAGE12_FAILURE_CALLBACK_FAILED' })
 }
@@ -537,10 +546,44 @@ function startStage12Job(payload) {
     })
     .catch(async (error) => {
       job.status = 'FAILED'
+      console.error('STAGE12_JOB_FAILED', JSON.stringify({
+        code: stage12WorkerErrorCode(error),
+        detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
+      }))
       try {
         await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
       } catch (callbackError) {
-        console.error('STAGE12_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
+        console.error('STAGE12_FAILURE_CALLBACK_FAILED', stage12WorkerErrorCode(callbackError))
+      }
+    })
+  return job.status
+}
+
+function startStage12RecoveryJob(payload) {
+  const existing = stage12Jobs.get(payload.idempotencyKey)
+  if (existing) return existing.status
+  if (!payload.callback || !payload.objectAccess || payload.recovery?.render !== false) {
+    throw Object.assign(new Error('Stage 12 recovery endpoints are required.'), {
+      code: 'STAGE12_RECOVERY_ENDPOINTS_REQUIRED',
+    })
+  }
+  const job = { status: 'PENDING' }
+  stage12Jobs.set(payload.idempotencyKey, job)
+  void executeStage12Recovery(payload, IMAGE_DIGEST)
+    .then(async (result) => {
+      await publishStage12Callback(payload.callback, payload.idempotencyKey, result)
+      job.status = 'READY'
+    })
+    .catch(async (error) => {
+      job.status = 'FAILED'
+      console.error('STAGE12_RECOVERY_FAILED', JSON.stringify({
+        code: stage12WorkerErrorCode(error),
+        detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
+      }))
+      try {
+        await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
+      } catch (callbackError) {
+        console.error('STAGE12_RECOVERY_FAILURE_CALLBACK_FAILED', stage12WorkerErrorCode(callbackError))
       }
     })
   return job.status
@@ -556,6 +599,7 @@ const server = createServer(async (request, response) => {
       stage10Ready: stage10Ready(),
       stage12Enabled: STAGE12_ENABLED,
       stage12Ready: stage12Ready(),
+      stage12FontVerified: existsSync(STAGE12_FONT_PATH),
       pythonRuntimeVerified: PYTHON_RUNTIME_VERIFIED,
       calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
     }))
@@ -623,6 +667,32 @@ const server = createServer(async (request, response) => {
       }))
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'STAGE12_START_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST' && request.url === '/stage12/recover') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage12Payload(JSON.parse(body.toString('utf8')))
+      if (payload.recovery?.attemptOrdinal !== 3 || payload.recovery?.render !== false) {
+        throw Object.assign(new Error('Invalid recovery envelope.'), { code: 'INVALID_STAGE12_RECOVERY_ENVELOPE' })
+      }
+      const jobStatus = startStage12RecoveryJob(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        accepted: true, jobStatus, idempotencyKey: payload.idempotencyKey, imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : 'STAGE12_RECOVERY_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
     }
     return

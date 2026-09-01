@@ -7,6 +7,14 @@ export type Stage12MediaStartRequest = Stage12MediaRequest & {
   callback: { url: string; token: string };
 };
 
+export type Stage12MediaRecoveryRequest = Stage12MediaStartRequest & {
+  recovery: {
+    attemptOrdinal: 3;
+    preMaster: { r2Key: string; sha256: string; byteLength: number };
+    render: false;
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -54,6 +62,20 @@ export async function dispatchStage12MediaStart(
     || result.idempotencyKey !== payload.idempotencyKey
     || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_START_FAILED:${result.code ?? response.status}`);
+  }
+  return result;
+}
+
+export async function dispatchStage12MediaRecovery(
+  payload: Stage12MediaRecoveryRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/recover", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
+    throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_RECOVERY_FAILED:${result.code ?? response.status}`);
   }
   return result;
 }

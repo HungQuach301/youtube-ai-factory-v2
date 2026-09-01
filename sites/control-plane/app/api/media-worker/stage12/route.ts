@@ -1,6 +1,7 @@
 import type { Stage12MediaReceipt } from "../../../stage12-pre-master";
 import {
   readTrackGVideoOneStage12Narration,
+  readTrackGVideoOneStage12PreMaster,
   recordTrackGVideoOneStage12Callback,
   storeTrackGVideoOneStage12PreMaster,
 } from "../../../track-g-video-one";
@@ -20,7 +21,19 @@ function idempotencyKey(request: Request): string {
 
 export async function GET(request: Request) {
   try {
-    if (new URL(request.url).searchParams.get("kind") !== "narration") {
+    const url = new URL(request.url);
+    const kind = url.searchParams.get("kind");
+    if (kind === "pre-master") {
+      const expectedSha256 = url.searchParams.get("sha256") ?? "";
+      if (!/^[a-f0-9]{64}$/u.test(expectedSha256)) {
+        return Response.json({ error: "STAGE_12_PRE_MASTER_SHA256_INVALID" }, { status: 400 });
+      }
+      const bytes = await readTrackGVideoOneStage12PreMaster(
+        idempotencyKey(request), token(request), expectedSha256,
+      );
+      return new Response(bytes, { headers: { "content-type": "video/webm" } });
+    }
+    if (kind !== "narration") {
       return Response.json({ error: "STAGE_12_OBJECT_KIND_INVALID" }, { status: 400 });
     }
     const bytes = await readTrackGVideoOneStage12Narration(idempotencyKey(request), token(request));

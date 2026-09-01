@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const ownerIdentity = sqliteTable("owner_identity", {
   identity: text("identity").primaryKey(),
@@ -383,6 +383,8 @@ export const stage12MediaJobs = sqliteTable("stage12_media_job", {
   packageId: text("package_id").notNull().references(() => productionPackages.id),
   operationRunId: text("operation_run_id").notNull().references(() => operationRuns.id),
   stageInstanceId: text("stage_instance_id").notNull(),
+  attemptOrdinal: integer("attempt_ordinal").notNull().default(1),
+  retryOfJobId: text("retry_of_job_id"),
   idempotencyKey: text("idempotency_key").notNull(),
   callbackTokenHash: text("callback_token_hash").notNull(),
   state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
@@ -393,7 +395,10 @@ export const stage12MediaJobs = sqliteTable("stage12_media_job", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
-  uniqueIndex("stage12_media_job_package_unique").on(table.packageId),
+  uniqueIndex("stage12_media_job_package_attempt_unique").on(
+    table.packageId, table.attemptOrdinal,
+  ),
+  uniqueIndex("stage12_media_job_retry_of_unique").on(table.retryOfJobId),
   uniqueIndex("stage12_media_job_key_unique").on(table.idempotencyKey),
 ]);
 
@@ -490,3 +495,17 @@ export const oauthAccessTokens = sqliteTable("oauth_access_token", {
   revokedAt: integer("revoked_at"),
   createdAt: integer("created_at").notNull(),
 });
+
+export const oauthRefreshTokens = sqliteTable("oauth_refresh_token", {
+  tokenHash: text("token_hash").primaryKey(),
+  familyId: text("family_id").notNull(),
+  clientId: text("client_id").notNull(),
+  resource: text("resource").notNull(),
+  scope: text("scope").notNull(),
+  ownerIdentity: text("owner_identity").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  rotatedAt: integer("rotated_at"),
+  revokedAt: integer("revoked_at"),
+  replacedByHash: text("replaced_by_hash"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("oauth_refresh_token_family_idx").on(table.familyId)]);

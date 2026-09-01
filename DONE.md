@@ -1,5 +1,29 @@
 # DONE
 
+## EVO-STAGE12-CALLBACK-EVIDENCE-RECOVERY · Shadow evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Callback 422 giữ đủ danh sách QA gate trong giới hạn code hiện hữu | `stage12CallbackErrorCode` ánh xạ lossless sang `S12QA:<gate.gate>`; full ten-gate vector dài không quá 160; unsafe body vẫn về generic status code |
+| Recovery command cũ chỉ được replay evidence đúng một lần | Atomic D1 update yêu cầu attempt 3, `FAILED` và đúng legacy error `STAGE12_CALLBACK_FAILED:422`; lần kế tiếp bị từ chối sau khi exact error được lưu |
+| Dùng lại đúng immutable pre-master, tuyệt đối không render | `dispatchStage12MediaRecovery` giữ `attemptOrdinal: 3`, cùng R2 key/SHA-256/size và `render: false`; source test cấm attempt 4 |
+| Operator và MCP dùng một hydrated preflight | HTTP operator chuyển sang `start/finalizeTrackGVideoOneStage12WithDerivedIdempotency`, cùng contract với MCP |
+| Sites nhận đúng canonical gateway/OAuth/Stage 12 code | Deployable mirror đồng bộ stable `/mcp`, renewable OAuth, migrations 0018–0022 và worker runtime; source fingerprint `6435cfc7de58e952142e148345544ddf96ad49cd3e449d464eabc7465485e004` |
+| Shadow local không tạo Production side effect | `pnpm run ci` PASS; Sites build + 18/18 test PASS; Stage 12 renderer smoke PASS; provider/spend/release/publish đều không được gọi |
+
+## Risk, cost và rollback
+
+- Strictness direction: `STRICTER_FAILURE_EVIDENCE`; không đổi threshold/gate verdict.
+- Shadow cost: USD 0; chỉ dùng fixture, local D1/R2 và local renderer.
+- Rollback: revert code/mirror commit; không có migration mới và không sửa dữ liệu
+  Production. Lỗi exact mới là terminal, nên không thể tạo vòng replay vô hạn.
+- Activation boundary: dừng ở `EVIDENCE_READY`; merge/deploy/replay Production chỉ sau
+  owner `PROMOTE_EVOLUTION` ở một session khác.
+
+---
+
 ## Track G Video #1 · Stage 12 Pre-master QA
 
 ## Mode: EVOLVE

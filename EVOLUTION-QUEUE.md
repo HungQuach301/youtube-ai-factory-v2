@@ -2,8 +2,9 @@
 
 ## EVO-STAGE12-CALLBACK-EVIDENCE-RECOVERY
 
-- Status: `DETECTED`; requires an `EVOLVE` session, shadow evidence and explicit
-  owner promotion before Production activation.
+- Status: `SHADOW_RUNNING`; local repository and deployable-mirror evidence PASS;
+  PR image/Sites checks remain required before `EVIDENCE_READY`, followed by
+  explicit owner promotion before Production activation.
 - Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_FAILURE_EVIDENCE`.
 - Source: the existing immutable Stage 12 attempt 3 recovery command reached the
   Production callback, but `POST /api/media-worker/stage12` returned `422` and the
@@ -28,6 +29,12 @@
   concurrency/idempotency test; full repository CI; media-worker image smoke; Sites
   Production health; read-back proving the same pre-master hash and zero provider,
   spend and publish deltas.
+- Local shadow evidence: full ten-gate normalization vector PASS; atomic legacy-422
+  replay source contract PASS; `pnpm run ci` PASS; Sites build and 18/18 tests PASS;
+  renderer smoke PASS; Sites source fingerprint
+  `6435cfc7de58e952142e148345544ddf96ad49cd3e449d464eabc7465485e004`.
+- Rollback: revert the candidate code/mirror commit; no new migration and no
+  Production data mutation. Shadow cost is USD 0.
 
 ## EVO-STAGE10-COMMAND-CONTRACT
 

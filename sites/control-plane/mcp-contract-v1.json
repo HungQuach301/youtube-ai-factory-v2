@@ -1,0 +1,40 @@
+{
+  "contractVersion": "1",
+  "endpointPath": "/api/mcp",
+  "serverName": "youtube-ai-factory-v2",
+  "serverVersion": "1.3.0",
+  "oauthGrantTypes": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "stableGatewayTools": [
+    "diagnose_factory_command",
+    "execute_factory_command",
+    "get_factory_state"
+  ],
+  "toolNames": [
+    "advance_track_g_video_1_stage",
+    "apply_track_g_video_1_stage_06_editorial_decision",
+    "diagnose_factory_command",
+    "diagnose_track_g_video_1_stage_12_preflight",
+    "diagnose_track_g_video_1_stage_12_recovery",
+    "execute_factory_command",
+    "execute_track_g_video_1_stage_00",
+    "finalize_track_g_video_1_stage_10",
+    "finalize_track_g_video_1_stage_12",
+    "get_factory_state",
+    "prepare_approved_channel",
+    "prepare_track_g_video_1_stage_04_tournament",
+    "prepare_track_g_video_1_stage_06_script_review",
+    "prepare_track_g_video_1_stage_07a_voice_tournament",
+    "prepare_track_g_video_1_stage_09_visual_review",
+    "recover_track_g_video_1_stage_12_attempt_3",
+    "register_qualified_voice",
+    "select_track_g_video_1_stage_04_champion",
+    "select_track_g_video_1_stage_07a_tone",
+    "select_track_g_video_1_stage_09_thumbnail",
+    "start_track_g_video_1_qualification",
+    "start_track_g_video_1_stage_10",
+    "start_track_g_video_1_stage_12"
+  ]
+}
