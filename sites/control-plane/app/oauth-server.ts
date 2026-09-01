@@ -14,6 +14,7 @@ const SUPPORTED_SCOPES = ["factory.read", "factory.prepare"] as const;
 const AUTHORIZATION_TTL_SECONDS = 10 * 60;
 const CODE_TTL_SECONDS = 5 * 60;
 const TOKEN_TTL_SECONDS = 8 * 60 * 60;
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export const oauthScopes = [...SUPPORTED_SCOPES];
 
@@ -58,6 +59,11 @@ type StoredAccessToken = {
   revoked_at: number | null;
 };
 
+type StoredRefreshToken = StoredAccessToken & {
+  family_id: string;
+  rotated_at: number | null;
+};
+
 export function factoryOrigin(request: Request): string {
   const origin = new URL(request.url).origin;
   return origin === "http://localhost" ? origin : oauthProductionOrigin;
@@ -96,7 +102,7 @@ export function authorizationServerMetadata(request: Request) {
     token_endpoint_auth_methods_supported: ["none"],
     code_challenge_methods_supported: ["S256"],
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
     scopes_supported: oauthScopes,
   };
 }
@@ -193,9 +199,11 @@ export async function approveAuthorizationRequest(user: ChatGPTUser, nonce: stri
   return redirect.toString();
 }
 
-export async function exchangeAuthorizationCode(request: Request): Promise<Response> {
+export async function exchangeOAuthToken(request: Request): Promise<Response> {
   const body = await request.formData();
-  if (body.get("grant_type") !== "authorization_code") return oauthError("unsupported_grant_type");
+  const grantType = body.get("grant_type");
+  if (grantType === "refresh_token") return rotateRefreshToken(request, body);
+  if (grantType !== "authorization_code") return oauthError("unsupported_grant_type");
   const code = stringField(body, "code");
   const clientId = stringField(body, "client_id");
   const redirectUri = stringField(body, "redirect_uri");
@@ -219,6 +227,8 @@ export async function exchangeAuthorizationCode(request: Request): Promise<Respo
   if (!safeEqual(base64UrlSha256(codeVerifier), stored.code_challenge)) return oauthError("invalid_grant");
 
   const accessToken = randomToken();
+  const refreshToken = randomToken();
+  const refreshFamilyId = randomToken();
   const results = await d1.batch([
     d1.prepare(`INSERT INTO oauth_access_token
       (token_hash, client_id, resource, scope, owner_identity, expires_at, created_at)
@@ -226,6 +236,19 @@ export async function exchangeAuthorizationCode(request: Request): Promise<Respo
       FROM oauth_authorization_code
       WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?`)
       .bind(hashSecret(accessToken), now + TOKEN_TTL_SECONDS, now, hashSecret(code), now),
+    d1.prepare(`INSERT INTO oauth_refresh_token
+      (token_hash, family_id, client_id, resource, scope, owner_identity, expires_at, created_at)
+      SELECT ?, ?, client_id, resource, scope, owner_identity, ?, ?
+      FROM oauth_authorization_code
+      WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?`)
+      .bind(
+        hashSecret(refreshToken),
+        refreshFamilyId,
+        now + REFRESH_TOKEN_TTL_SECONDS,
+        now,
+        hashSecret(code),
+        now,
+      ),
     d1.prepare(`UPDATE oauth_authorization_code SET used_at = ?
       WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?`)
       .bind(now, hashSecret(code), now),
@@ -234,9 +257,76 @@ export async function exchangeAuthorizationCode(request: Request): Promise<Respo
 
   return Response.json({
     access_token: accessToken,
+    refresh_token: refreshToken,
     token_type: "Bearer",
     expires_in: TOKEN_TTL_SECONDS,
     scope: stored.scope,
+  }, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
+}
+
+export const exchangeAuthorizationCode = exchangeOAuthToken;
+
+async function rotateRefreshToken(request: Request, body: FormData): Promise<Response> {
+  const refreshToken = stringField(body, "refresh_token");
+  const clientId = stringField(body, "client_id");
+  const resource = stringField(body, "resource");
+  if (!refreshToken || !clientId || !resource) return oauthError("invalid_request");
+  if (!isAllowedOAuthClientId(clientId)) return oauthError("invalid_client");
+  if (resource !== oauthResource(request)) return oauthError("invalid_target");
+
+  const d1 = getD1();
+  const tokenHash = hashSecret(refreshToken);
+  const stored = await d1.prepare(`SELECT family_id, client_id, resource, scope, owner_identity,
+      expires_at, revoked_at, rotated_at
+    FROM oauth_refresh_token WHERE token_hash = ?`)
+    .bind(tokenHash).first<StoredRefreshToken>();
+  const now = nowSeconds();
+  if (!stored || stored.revoked_at !== null || stored.expires_at <= now
+    || stored.client_id !== clientId || stored.resource !== resource) return oauthError("invalid_grant");
+  if (stored.rotated_at !== null) {
+    await d1.prepare(`UPDATE oauth_refresh_token SET revoked_at = ?
+      WHERE family_id = ? AND revoked_at IS NULL`).bind(now, stored.family_id).run();
+    return oauthError("invalid_grant");
+  }
+
+  const requestedScope = stringField(body, "scope");
+  let scope = stored.scope;
+  if (requestedScope) {
+    const requested = normalizeScope(requestedScope);
+    const original = new Set(normalizeScope(stored.scope));
+    if (requested.some((value) => !original.has(value))) return oauthError("invalid_scope");
+    scope = requested.join(" ");
+  }
+
+  const nextAccessToken = randomToken();
+  const nextRefreshToken = randomToken();
+  const nextRefreshHash = hashSecret(nextRefreshToken);
+  const results = await d1.batch([
+    d1.prepare(`INSERT INTO oauth_access_token
+      (token_hash, client_id, resource, scope, owner_identity, expires_at, created_at)
+      SELECT ?, client_id, resource, ?, owner_identity, ?, ?
+      FROM oauth_refresh_token
+      WHERE token_hash = ? AND rotated_at IS NULL AND revoked_at IS NULL AND expires_at > ?`)
+      .bind(hashSecret(nextAccessToken), scope, now + TOKEN_TTL_SECONDS, now, tokenHash, now),
+    d1.prepare(`INSERT INTO oauth_refresh_token
+      (token_hash, family_id, client_id, resource, scope, owner_identity, expires_at, created_at)
+      SELECT ?, family_id, client_id, resource, ?, owner_identity, ?, ?
+      FROM oauth_refresh_token
+      WHERE token_hash = ? AND rotated_at IS NULL AND revoked_at IS NULL AND expires_at > ?`)
+      .bind(nextRefreshHash, scope, now + REFRESH_TOKEN_TTL_SECONDS, now, tokenHash, now),
+    d1.prepare(`UPDATE oauth_refresh_token SET rotated_at = ?, replaced_by_hash = ?
+      WHERE token_hash = ? AND rotated_at IS NULL AND revoked_at IS NULL AND expires_at > ?`)
+      .bind(now, nextRefreshHash, tokenHash, now),
+  ]);
+  if ((results[0].meta.changes ?? 0) !== 1 || (results[1].meta.changes ?? 0) !== 1
+    || (results[2].meta.changes ?? 0) !== 1) return oauthError("invalid_grant");
+
+  return Response.json({
+    access_token: nextAccessToken,
+    refresh_token: nextRefreshToken,
+    token_type: "Bearer",
+    expires_in: TOKEN_TTL_SECONDS,
+    scope,
   }, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
 }
 

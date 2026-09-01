@@ -79,3 +79,31 @@ export async function readVerifiedProductionEvidence(
   }
   return bytes;
 }
+
+export type ProductionEvidenceObject = {
+  key: string;
+  sha256: string;
+  size: number;
+};
+
+export async function listImmutableProductionEvidence(
+  prefix: string,
+  limit = 16,
+): Promise<ProductionEvidenceObject[]> {
+  if (!prefix.startsWith("prod/") || prefix.includes("..") || prefix.includes("\\")
+    || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("PRODUCTION_EVIDENCE_R2_PREFIX_INVALID");
+  }
+  const result = await bucket().list({
+    prefix,
+    limit,
+    include: ["customMetadata"],
+  });
+  return result.objects.flatMap((object) => {
+    const match = object.key.match(/\/([0-9a-f]{64})\.[a-z0-9]+$/u);
+    const expectedSha256 = match?.[1];
+    if (!expectedSha256 || object.customMetadata?.sha256 !== expectedSha256
+      || object.customMetadata?.namespace !== "production") return [];
+    return [{ key: object.key, sha256: expectedSha256, size: object.size }];
+  });
+}

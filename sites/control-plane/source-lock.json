@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "d3ea18cb944f118dc57fb751bfdaa94d820a0baee1acd2c7fffec5ca27ca5269",
+  "aggregate_sha256": "6435cfc7de58e952142e148345544ddf96ad49cd3e449d464eabc7465485e004",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -49,7 +49,7 @@
     },
     {
       "path": "app/api/media-worker/stage12/route.ts",
-      "sha256": "19d6a6935c11d093fa7dd22676a17eb2b64892fc3ff6bbc10c2e0d82c5f833dd"
+      "sha256": "94624ec02a1d944304a42f5237f43d4fcafea9a4910b487ea119295d3098ac24"
     },
     {
       "path": "app/api/operator/route.ts",
@@ -61,7 +61,7 @@
     },
     {
       "path": "app/evidence-storage.ts",
-      "sha256": "457eb05d9a4872729439ef5295171a1e2f9c9039a954fd266949905cd7554b95"
+      "sha256": "8dd4874782967250b912275f72b52d629e9782367a4acd61c2c85fe173da5cb8"
     },
     {
       "path": "app/factory-contract.ts",
@@ -77,11 +77,11 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "05f9cc7f83bafe0067d619c3f794ce43a2311c2098d6af0095c38ee1650b164d"
+      "sha256": "7e63ef2e1063c3434adb39d49bee493946188f4324d1c8b666f552c29311634a"
     },
     {
       "path": "app/oauth-server.ts",
-      "sha256": "f7e19a5df07a11e7fcd87cf738dfd3be8a0ef14c205c40d7ce883a9ea6b9009a"
+      "sha256": "9df54ba876ac44f12d0c76052374f3a246519738984a59787b67b43d7c01d812"
     },
     {
       "path": "app/oauth/authorize/approve/route.ts",
@@ -93,11 +93,11 @@
     },
     {
       "path": "app/oauth/token/route.ts",
-      "sha256": "276ec5a841f51a330d04de70f837f5b95fa2e125a1d58895856925b3e2579960"
+      "sha256": "ce49126b1d9ba880f13fc147234375c90b8c80685cd5c716c81e2a173af3d29a"
     },
     {
       "path": "app/operate/operator-client.tsx",
-      "sha256": "0509d1507103957e8892bb1b9ef6ea9ba711280f4d650b7a3a07ac5baa4b3f61"
+      "sha256": "6de5e98b5bd3899f08e04d0b73804b72b4166b9b8ee4890bb204e6d776f3b746"
     },
     {
       "path": "app/operate/page.tsx",
@@ -105,7 +105,7 @@
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "c2874f35f06c9c3cdc0e1848cf766c15666e5831d756c54155e2f5864a47f4f5"
+      "sha256": "26203954aab52a3028bb0904390605aa3ee3b1ef24eff2571192449bbd3af860"
     },
     {
       "path": "app/page.tsx",
@@ -125,7 +125,7 @@
     },
     {
       "path": "app/stage12-media.ts",
-      "sha256": "57ab1b1902da21638094c8e303d1c757f9965ceb1ef63c7f382a31a16f1161be"
+      "sha256": "d9be1edfff0b8c1f308601bff2d61d88c1f995d92d88472a3c3b962b549ca7e1"
     },
     {
       "path": "app/stage12-pre-master.ts",
@@ -133,7 +133,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "dda505e0c3e07408f5a20fba4ec0b0a58ef2ac97b3008d88f9084b50528403bb"
+      "sha256": "94c777c362b9fdb306cab651531f3499467ae6125ba7bf0f555149af4c651f55"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -149,7 +149,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "5ad44a241d2bc6dde81ebe06e672fa7e6bd4ae236a2d1d3eeae2df51c73ffa63"
+      "sha256": "d687eb005e0f863fccb57e748945e20a3b5c579c09d01d85a2cd79afc95087d8"
     },
     {
       "path": "drizzle.config.ts",
@@ -228,6 +228,26 @@
       "sha256": "66b38f3cac9d4f84b5d17e3223ed712c5d84e2bcbe89e815ab2a64df2a6eeed4"
     },
     {
+      "path": "drizzle/0018_stage12_command_contract_allowlist.sql",
+      "sha256": "c8476e356a645bc58d63a6d94f794ab965f2cf2a63cdb603ea33a2ce64eb8561"
+    },
+    {
+      "path": "drizzle/0019_stage12_failed_retry.sql",
+      "sha256": "39bc4c061b6c807b6bfdf6477a181b88075c66fbf9f55c75e15edd8f948e25b9"
+    },
+    {
+      "path": "drizzle/0020_stage12_attempt_three.sql",
+      "sha256": "1f68ca1b73a8837e8569484dc7e961dacb8afbaa16f5ff809c21de7ec308ff3d"
+    },
+    {
+      "path": "drizzle/0021_stage12_attempt_three_recovery.sql",
+      "sha256": "f3659458e582041d3bfeb0682ca6640f97d52908d105da13148b76def24204d2"
+    },
+    {
+      "path": "drizzle/0022_stable_mcp_oauth_refresh.sql",
+      "sha256": "ea3c57c1910d097936b00244362f8250a690ec7d9c590fd1b52d7922117a849e"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -272,6 +292,10 @@
       "sha256": "d89eabd95716ce404f5f7ca2a254220435be8ddce7c899d7ef461ff22ec80454"
     },
     {
+      "path": "mcp-contract-v1.json",
+      "sha256": "f6a95961972af5a7380a33b019c4e345b2c98a710d8afc5778e98db8a1b6e817"
+    },
+    {
       "path": "next.config.ts",
       "sha256": "614bce25b089c3f19b1e17a6346c74b858034040154c6621e7d35303004767cc"
     },
@@ -292,16 +316,28 @@
       "sha256": "049c6c5b6986d84db64029944fe6d100c91d6a508ec39538aacd7bcc3d03297f"
     },
     {
+      "path": "packages/media-worker/Dockerfile",
+      "sha256": "2bbbe72792cdee0461a5804773d0b9f3b067d9b79501ba06a3f322cd96701971"
+    },
+    {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "9e37d3bc00d2a61a05fb4d7a08fa4439262db6ca076800b3da5b6ab39d8e8248"
+      "sha256": "c01d4a8963d353cabebe7de2dd4f4087d7bfea98a15d6b0b64f845ac012f7d6d"
     },
     {
       "path": "packages/media-worker/fly.toml",
-      "sha256": "649965e6d9f49963a8c35fc1d48dd817228a6fd9e110dad45c1c695e57f8fcc3"
+      "sha256": "be4a831815d57417a027d307a43abac33c8129024d8087df5a9d98f5559b136d"
+    },
+    {
+      "path": "packages/media-worker/stage12-callback-error.mjs",
+      "sha256": "8767448d78beefd310f1ca020623d6633f87cae15eb2e82d5148471b55d51c09"
+    },
+    {
+      "path": "packages/media-worker/stage12-render-smoke.mjs",
+      "sha256": "ba129b0f67f884d211dea969eba6376a49872ff42bf78e59403aee20a2997cb4"
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
-      "sha256": "baa3433c5d1a6f55bbdb6d0647b3a83d1e19c6ee3f564a898d90c13ff9615f78"
+      "sha256": "bfda0628a7df16739b0d2474dbe312bede7afe4137552f703b6710922dde4b6f"
     },
     {
       "path": "postcss.config.mjs",
@@ -337,11 +373,15 @@
     },
     {
       "path": "scripts/update-source-lock.mjs",
-      "sha256": "7259beef94e2584dcb362b4a97d02d9e5119f60c6a8380e22ec1bb1b3837f983"
+      "sha256": "ba24bd747f6fe747208ae9ab4aeddd17c6808df5ceb4f21e2881d92d8209d7bc"
     },
     {
       "path": "scripts/verify-source-lock.mjs",
       "sha256": "6d7f244fa5456041eb1a5dd1131784b29a1c8b927bb0e1ec3a885929c461b032"
+    },
+    {
+      "path": "scripts/verify-stage10-python-runtime.py",
+      "sha256": "5b463fa3123835a503aff84ba8044d708054893681746b0dd0cef873ef67527e"
     },
     {
       "path": "scripts/whisperx-phoneme-observer.py",
@@ -365,11 +405,15 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "81d4d892baceecebf629ff413ec533968b605f47730487f0683a00516fbf418a"
+      "sha256": "9dfc3109a97249f4fec72166592b5c251c6ad7eaeb2123e1e8eeee1290ed356f"
     },
     {
       "path": "tests/rendered-html.test.mjs",
       "sha256": "8bcd32eb3674dd7d50e41a65abbb453ffc155bd5d6b5da81b7025883e5854cdf"
+    },
+    {
+      "path": "tests/stage12-callback-error.test.mjs",
+      "sha256": "856d9844f2073ccf5314ddfe191ee9a47eb5d79d45c90e8ba77e47c3a792b88e"
     },
     {
       "path": "tsconfig.json",

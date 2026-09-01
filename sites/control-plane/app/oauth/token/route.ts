@@ -1,7 +1,7 @@
-import { exchangeAuthorizationCode } from "../../oauth-server";
+import { exchangeOAuthToken } from "../../oauth-server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  return exchangeAuthorizationCode(request);
+  return exchangeOAuthToken(request);
 }

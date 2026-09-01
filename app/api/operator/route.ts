@@ -4,13 +4,13 @@ import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
   finalizeTrackGVideoOneStage10,
-  finalizeTrackGVideoOneStage12,
+  finalizeTrackGVideoOneStage12WithDerivedIdempotency,
   prepareTrackGVideoOneStage09VisualReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
   selectTrackGVideoOneStage09Thumbnail,
   selectTrackGVideoOneStage07ATone,
   startTrackGVideoOneStage10,
-  startTrackGVideoOneStage12,
+  startTrackGVideoOneStage12WithDerivedIdempotency,
   trackGVideoOneStage06EditorialIdempotencyKey,
   trackGVideoOneStage07APrepareIdempotencyKey,
   trackGVideoOneStage07ASelectionIdempotencyKey,
@@ -18,8 +18,6 @@ import {
   trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStage10FinalizeIdempotencyKey,
   trackGVideoOneStage10StartIdempotencyKey,
-  trackGVideoOneStage12FinalizeIdempotencyKey,
-  trackGVideoOneStage12StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
 } from "../../track-g-video-one";
 
@@ -291,11 +289,10 @@ export async function POST(request: Request) {
         return Response.json({ error: "STAGE_12_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
       }
       const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
-      const result = await startTrackGVideoOneStage12(user, {
+      const result = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective: body.objective
           ?? "Start the durable Stage 12 pre-master render and full-timeline deterministic QA job.",
         ownerApprovalText: "START STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12StartIdempotencyKey(),
         callbackUrl: workerRoute,
         objectAccessUrl: workerRoute,
       });
@@ -309,11 +306,10 @@ export async function POST(request: Request) {
       if (body.confirm !== true) {
         return Response.json({ error: "STAGE_12_OWNER_CONFIRMATION_REQUIRED" }, { status: 400 });
       }
-      const result = await finalizeTrackGVideoOneStage12(user, {
+      const result = await finalizeTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective: body.objective
           ?? "Verify the immutable Stage 12 pre-master and deterministic QA receipt, seal it and advance to Stage 13.",
         ownerApprovalText: "FINALIZE STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12FinalizeIdempotencyKey(),
       });
       return Response.json({ accepted: true, replayed: result.replayed,
         runId: result.base.run.id, currentStep: result.base.run.currentStep,

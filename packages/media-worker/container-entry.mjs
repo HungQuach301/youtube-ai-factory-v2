@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildToolInvocation, MediaWorkerRuntime } from './dist/index.js'
+import { stage12CallbackErrorCode, stage12WorkerErrorCode } from './stage12-callback-error.mjs'
 import { executeStage12, executeStage12Recovery, validateStage12Payload } from './stage12-runtime.mjs'
 
 const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
@@ -516,9 +517,7 @@ async function publishStage12Callback(callback, idempotencyKey, result) {
   if (!response.ok) {
     const body = await response.json().catch(() => null)
     const candidate = typeof body?.error === 'string' ? body.error : ''
-    const code = /^[A-Z0-9_:.-]{1,160}$/u.test(candidate)
-      ? candidate
-      : `STAGE12_CALLBACK_FAILED:${response.status}`
+    const code = stage12CallbackErrorCode(candidate, response.status)
     throw Object.assign(new Error(`Stage 12 callback returned ${response.status}.`), { code })
   }
 }
@@ -527,7 +526,7 @@ async function publishStage12Failure(callback, idempotencyKey, error) {
   const response = await fetch(callback.url, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
     headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ idempotencyKey, errorCode: stage10ErrorCode(error) }),
+    body: JSON.stringify({ idempotencyKey, errorCode: stage12WorkerErrorCode(error) }),
   })
   if (!response.ok) throw Object.assign(new Error(`Stage 12 failure callback returned ${response.status}.`), { code: 'STAGE12_FAILURE_CALLBACK_FAILED' })
 }
@@ -548,13 +547,13 @@ function startStage12Job(payload) {
     .catch(async (error) => {
       job.status = 'FAILED'
       console.error('STAGE12_JOB_FAILED', JSON.stringify({
-        code: stage10ErrorCode(error),
+        code: stage12WorkerErrorCode(error),
         detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
       }))
       try {
         await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
       } catch (callbackError) {
-        console.error('STAGE12_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
+        console.error('STAGE12_FAILURE_CALLBACK_FAILED', stage12WorkerErrorCode(callbackError))
       }
     })
   return job.status
@@ -578,13 +577,13 @@ function startStage12RecoveryJob(payload) {
     .catch(async (error) => {
       job.status = 'FAILED'
       console.error('STAGE12_RECOVERY_FAILED', JSON.stringify({
-        code: stage10ErrorCode(error),
+        code: stage12WorkerErrorCode(error),
         detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
       }))
       try {
         await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
       } catch (callbackError) {
-        console.error('STAGE12_RECOVERY_FAILURE_CALLBACK_FAILED', stage10ErrorCode(callbackError))
+        console.error('STAGE12_RECOVERY_FAILURE_CALLBACK_FAILED', stage12WorkerErrorCode(callbackError))
       }
     })
   return job.status

@@ -1,0 +1,50 @@
+FROM node:22.22.3-bookworm-slim@sha256:e21fc383b50d5347dc7a9f1cae45b8f4e2f0d39f7ade28e4eef7d2934522b752 AS build
+
+WORKDIR /src
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY packages/contracts ./packages/contracts
+COPY packages/core-hash ./packages/core-hash
+COPY packages/media-worker ./packages/media-worker
+RUN corepack enable \
+  && corepack prepare pnpm@11.19.0 --activate \
+  && pnpm install --frozen-lockfile \
+  && pnpm exec tsc -b packages/contracts packages/core-hash packages/media-worker
+
+FROM node:22.22.3-bookworm-slim@sha256:e21fc383b50d5347dc7a9f1cae45b8f4e2f0d39f7ade28e4eef7d2934522b752
+
+ENV NLTK_DATA=/usr/local/share/nltk_data
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg ca-certificates fonts-dejavu-core python3 python3-pip \
+  && python3 -m pip install --break-system-packages --no-cache-dir \
+       --index-url https://pypi.org/simple pip==25.2 \
+  && python3 -m pip install --break-system-packages --no-cache-dir \
+       --index-url https://download.pytorch.org/whl/cpu \
+       --extra-index-url https://pypi.org/simple \
+       torch==2.8.0 torchaudio==2.8.0 \
+  && python3 -m pip install --break-system-packages --no-cache-dir whisperx==3.4.2 g2p-en==2.1.0 \
+  && python3 -m nltk.downloader -q -d "${NLTK_DATA}" \
+       averaged_perceptron_tagger averaged_perceptron_tagger_eng cmudict \
+  && test -r /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf \
+  && rm -rf /var/lib/apt/lists/* /root/.cache/pip
+
+WORKDIR /app
+COPY --from=build /src/node_modules ./node_modules
+COPY --from=build /src/packages/contracts ./packages/contracts
+COPY --from=build /src/packages/core-hash ./packages/core-hash
+COPY --from=build /src/packages/media-worker ./packages/media-worker
+COPY scripts/whisperx-phoneme-observer.py ./scripts/whisperx-phoneme-observer.py
+COPY scripts/replay-semantic-normalization.py ./scripts/replay-semantic-normalization.py
+COPY scripts/verify-stage10-python-runtime.py ./scripts/verify-stage10-python-runtime.py
+RUN mkdir -p /app/runtime-verification \
+  && chown node:node /app/runtime-verification
+WORKDIR /app/packages/media-worker
+USER node
+RUN python3 /app/scripts/verify-stage10-python-runtime.py \
+  --output /app/runtime-verification/stage10-python.json
+USER root
+RUN chown root:root /app/runtime-verification/stage10-python.json \
+  && chmod 0444 /app/runtime-verification/stage10-python.json
+USER node
+
+ENTRYPOINT ["node", "container-entry.mjs"]

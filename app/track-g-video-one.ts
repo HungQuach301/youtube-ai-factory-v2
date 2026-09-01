@@ -5142,10 +5142,42 @@ export async function recoverTrackGVideoOneStage12AttemptThree(
   }
   const preMaster = candidates[0];
   const recoveryKey = stage12RecoveryIdempotencyKey(job.idempotencyKey, preMaster.sha256);
+  const callbackToken = stage12CallbackToken(job.idempotencyKey);
+  const d1 = getD1();
+  const dispatchRecovery = async () => {
+    try {
+      await dispatchStage12MediaRecovery({
+        ...prepared.payload,
+        objectAccess: { url: input.objectAccessUrl, token: callbackToken },
+        callback: { url: input.callbackUrl, token: callbackToken },
+        recovery: { attemptOrdinal: 3, preMaster: {
+          r2Key: preMaster.key, sha256: preMaster.sha256, byteLength: preMaster.size,
+        }, render: false },
+      });
+    } catch (error) {
+      await d1.prepare(`UPDATE stage12_media_job SET state = 'FAILED', error_code = ?, updated_at = ?
+        WHERE id = ? AND state = 'PENDING'`).bind(
+        error instanceof Error ? error.message : "STAGE12_RECOVERY_START_FAILED",
+        new Date().toISOString(), job.id,
+      ).run();
+      throw error;
+    }
+  };
   const [existingCommand] = await getDb().select({ id: commandLog.id }).from(commandLog)
     .where(eq(commandLog.idempotencyKey, recoveryKey)).limit(1);
   if (existingCommand) {
     if (job.state === "PENDING" || job.state === "READY") {
+      return { ...(await readBackStage12Job()), replayed: true, preMaster };
+    }
+    if (job.state === "FAILED" && job.errorCode === "STAGE12_CALLBACK_FAILED:422") {
+      const replay = await d1.prepare(`UPDATE stage12_media_job SET state = 'PENDING',
+        error_code = NULL, updated_at = ? WHERE id = ? AND attempt_ordinal = 3
+        AND state = 'FAILED' AND error_code = 'STAGE12_CALLBACK_FAILED:422'`)
+        .bind(new Date().toISOString(), job.id).run();
+      if ((replay.meta.changes ?? 0) !== 1) {
+        throw new Error("TRACK_G_STAGE_12_RECOVERY_CONCURRENT_STATE_CONFLICT");
+      }
+      await dispatchRecovery();
       return { ...(await readBackStage12Job()), replayed: true, preMaster };
     }
     throw new Error(`TRACK_G_STAGE_12_RECOVERY_ALREADY_FAILED:${job.errorCode ?? "UNKNOWN"}`);
@@ -5154,9 +5186,7 @@ export async function recoverTrackGVideoOneStage12AttemptThree(
     .includes(job.errorCode ?? "")) {
     throw new Error(`TRACK_G_STAGE_12_RECOVERY_NOT_ALLOWED:${job.state}:${job.errorCode ?? "UNKNOWN"}`);
   }
-  const callbackToken = stage12CallbackToken(job.idempotencyKey);
   const now = new Date().toISOString();
-  const d1 = getD1();
   const results = await d1.batch([
     d1.prepare(`INSERT INTO command_log
       (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state,
@@ -5172,23 +5202,7 @@ export async function recoverTrackGVideoOneStage12AttemptThree(
   if ((results[1]?.meta.changes ?? 0) !== 1) {
     throw new Error("TRACK_G_STAGE_12_RECOVERY_CONCURRENT_STATE_CONFLICT");
   }
-  try {
-    await dispatchStage12MediaRecovery({
-      ...prepared.payload,
-      objectAccess: { url: input.objectAccessUrl, token: callbackToken },
-      callback: { url: input.callbackUrl, token: callbackToken },
-      recovery: { attemptOrdinal: 3, preMaster: {
-        r2Key: preMaster.key, sha256: preMaster.sha256, byteLength: preMaster.size,
-      }, render: false },
-    });
-  } catch (error) {
-    await d1.prepare(`UPDATE stage12_media_job SET state = 'FAILED', error_code = ?, updated_at = ?
-      WHERE id = ? AND state = 'PENDING'`).bind(
-      error instanceof Error ? error.message : "STAGE12_RECOVERY_START_FAILED",
-      new Date().toISOString(), job.id,
-    ).run();
-    throw error;
-  }
+  await dispatchRecovery();
   return { ...(await readBackStage12Job()), replayed: false, preMaster };
 }
 
