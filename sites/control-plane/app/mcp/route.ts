@@ -19,7 +19,7 @@ import {
   applyTrackGVideoOneStage06EditorialDecision,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
-  finalizeTrackGVideoOneStage12,
+  finalizeTrackGVideoOneStage12WithDerivedIdempotency,
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
@@ -28,7 +28,7 @@ import {
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
   startTrackGVideoOneStage10,
-  startTrackGVideoOneStage12,
+  startTrackGVideoOneStage12WithDerivedIdempotency,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -42,8 +42,6 @@ import {
   trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStage10FinalizeIdempotencyKey,
   trackGVideoOneStage10StartIdempotencyKey,
-  trackGVideoOneStage12FinalizeIdempotencyKey,
-  trackGVideoOneStage12StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -1105,9 +1103,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     async ({ objective }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
       const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
-      const result = await startTrackGVideoOneStage12(user, {
+      const result = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective, ownerApprovalText: "START STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12StartIdempotencyKey(),
         callbackUrl: workerRoute, objectAccessUrl: workerRoute,
       });
       const output = { accepted: true, replayed: result.replayed,
@@ -1148,9 +1145,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     },
     async ({ objective }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
-      const result = await finalizeTrackGVideoOneStage12(user, {
+      const result = await finalizeTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective, ownerApprovalText: "FINALIZE STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12FinalizeIdempotencyKey(),
       });
       const output = { accepted: true, replayed: result.replayed,
         runId: result.base.run.id, currentStep: "STAGE_13_READY" as const,

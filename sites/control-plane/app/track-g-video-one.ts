@@ -4855,11 +4855,9 @@ export async function recordTrackGVideoOneStage12Callback(input: {
   return { accepted: true, replayed: false, jobStatus: "READY" as const };
 }
 
-export async function startTrackGVideoOneStage12(
-  user: ChatGPTUser,
-  input: StartTrackGVideoOneStage12Input,
-) {
-  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+type PreparedStage12MediaRequest = Awaited<ReturnType<typeof prepareStage12MediaRequest>>;
+
+function validateStage12StartInput(input: Omit<StartTrackGVideoOneStage12Input, "idempotencyKey">) {
   if (input.ownerApprovalText !== STAGE_12_START_OWNER_APPROVAL_TEXT) {
     throw new Error("TRACK_G_STAGE_12_START_OWNER_APPROVAL_REQUIRED");
   }
@@ -4868,7 +4866,15 @@ export async function startTrackGVideoOneStage12(
   if (!input.callbackUrl.startsWith("https://") || !input.objectAccessUrl.startsWith("https://")) {
     throw new Error("TRACK_G_STAGE_12_ENDPOINT_URL_INVALID");
   }
-  const prepared = await prepareStage12MediaRequest();
+  return objective;
+}
+
+async function startTrackGVideoOneStage12Prepared(
+  user: ChatGPTUser,
+  input: StartTrackGVideoOneStage12Input,
+  prepared: PreparedStage12MediaRequest,
+  objective: string,
+) {
   const expectedKey = stage12StartIdempotencyKey(prepared.workerIdempotencyKey);
   if (input.idempotencyKey.toLowerCase() !== expectedKey) throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
   const existingJob = await latestStage12Job();
@@ -4917,6 +4923,29 @@ export async function startTrackGVideoOneStage12(
   return { ...(await readBackStage12Job()), replayed: false };
 }
 
+export async function startTrackGVideoOneStage12(
+  user: ChatGPTUser,
+  input: StartTrackGVideoOneStage12Input,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = validateStage12StartInput(input);
+  return startTrackGVideoOneStage12Prepared(
+    user, input, await prepareStage12MediaRequest(), objective,
+  );
+}
+
+export async function startTrackGVideoOneStage12WithDerivedIdempotency(
+  user: ChatGPTUser,
+  input: Omit<StartTrackGVideoOneStage12Input, "idempotencyKey">,
+) {
+  const objective = validateStage12StartInput(input);
+  const prepared = await prepareStage12MediaRequest();
+  return startTrackGVideoOneStage12Prepared(user, {
+    ...input,
+    idempotencyKey: stage12StartIdempotencyKey(prepared.workerIdempotencyKey),
+  }, prepared, objective);
+}
+
 async function readBackStage12(operationRunId: string) {
   const stage11 = await readBackStage11(operationRunId);
   const db = getDb();
@@ -4942,17 +4971,23 @@ async function readBackStage12(operationRunId: string) {
     stageArtifact: artifact, stage12Qa: qa };
 }
 
-export async function finalizeTrackGVideoOneStage12(
-  user: ChatGPTUser,
-  input: FinalizeTrackGVideoOneStage12Input,
+function validateStage12FinalizeInput(
+  input: Omit<FinalizeTrackGVideoOneStage12Input, "idempotencyKey">,
 ) {
-  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
   if (input.ownerApprovalText !== STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT) {
     throw new Error("TRACK_G_STAGE_12_FINALIZE_OWNER_APPROVAL_REQUIRED");
   }
   const objective = input.objective.trim();
   if (objective.length < 12 || objective.length > 500) throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
-  const prepared = await readBackStage12Job();
+  return objective;
+}
+
+async function finalizeTrackGVideoOneStage12Prepared(
+  user: ChatGPTUser,
+  input: FinalizeTrackGVideoOneStage12Input,
+  prepared: Awaited<ReturnType<typeof readBackStage12Job>>,
+  objective: string,
+) {
   const expectedKey = stage12FinalizeIdempotencyKey(prepared.workerIdempotencyKey);
   if (input.idempotencyKey.toLowerCase() !== expectedKey) throw new Error("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
   const [existing] = await getDb().select({ id: commandLog.id }).from(commandLog)
@@ -5061,6 +5096,29 @@ export async function finalizeTrackGVideoOneStage12(
   ]);
   return { ...(await readBackStage12(prepared.bootstrap.run.id)), replayed: false,
     gateResults: receipt.gateResults, receipt };
+}
+
+export async function finalizeTrackGVideoOneStage12(
+  user: ChatGPTUser,
+  input: FinalizeTrackGVideoOneStage12Input,
+) {
+  if (!HEX64.test(input.idempotencyKey)) throw new Error("IDEMPOTENCY_KEY_MUST_BE_64_HEX");
+  const objective = validateStage12FinalizeInput(input);
+  return finalizeTrackGVideoOneStage12Prepared(
+    user, input, await readBackStage12Job(), objective,
+  );
+}
+
+export async function finalizeTrackGVideoOneStage12WithDerivedIdempotency(
+  user: ChatGPTUser,
+  input: Omit<FinalizeTrackGVideoOneStage12Input, "idempotencyKey">,
+) {
+  const objective = validateStage12FinalizeInput(input);
+  const prepared = await readBackStage12Job();
+  return finalizeTrackGVideoOneStage12Prepared(user, {
+    ...input,
+    idempotencyKey: stage12FinalizeIdempotencyKey(prepared.workerIdempotencyKey),
+  }, prepared, objective);
 }
 
 export async function advanceTrackGVideoOneStage(
