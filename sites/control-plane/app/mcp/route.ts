@@ -17,6 +17,7 @@ import {
 import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
+  diagnoseTrackGVideoOneStage12Preflight,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
   finalizeTrackGVideoOneStage12WithDerivedIdempotency,
@@ -128,6 +129,39 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       return {
         content: [{ type: "text", text: JSON.stringify(state) }],
         structuredContent: state,
+      };
+    },
+  );
+
+  server.registerTool(
+    "diagnose_track_g_video_1_stage_12_preflight",
+    {
+      title: "Diagnose Track G Video #1 Stage 12 preflight",
+      description:
+        "Read and verify the Stage 12 predecessor evidence, worker signing configuration and existing durable job state without writing data, dispatching a worker, calling a provider or publishing.",
+      inputSchema: {},
+      outputSchema: {
+        preflightState: z.enum(["PASS", "FAIL"]),
+        errorCode: z.string().nullable(),
+        currentStep: z.string(),
+        jobStatus: z.string(),
+        providerDispatch: z.literal("OFF"),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
+    },
+    async () => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
+      const output = await diagnoseTrackGVideoOneStage12Preflight();
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
       };
     },
   );
@@ -1354,6 +1388,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
   if (!payload?.result?.tools) return response;
   for (const tool of payload.result.tools) {
     if (tool.name === "get_factory_state") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "diagnose_track_g_video_1_stage_12_preflight") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
     }
     if (tool.name === "prepare_approved_channel") {

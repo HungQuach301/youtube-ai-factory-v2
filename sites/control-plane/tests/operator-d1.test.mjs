@@ -293,6 +293,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
+      "diagnose_track_g_video_1_stage_12_preflight",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
       "finalize_track_g_video_1_stage_12",
@@ -593,6 +594,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
+      "diagnose_track_g_video_1_stage_12_preflight",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
       "finalize_track_g_video_1_stage_12",
