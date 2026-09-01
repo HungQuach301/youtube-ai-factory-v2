@@ -4798,9 +4798,11 @@ export async function diagnoseTrackGVideoOneStage12Preflight() {
       key: Buffer.from(signingKey, "base64"), format: "der", type: "pkcs8",
     })).export({ format: "der", type: "spki" }).toString("base64");
     const job = await latestStage12Job();
-    const retryEligible = job?.state === "FAILED" && job.attemptOrdinal === 1
+    const retryEligible = job?.state === "FAILED" && job.attemptOrdinal < 3
       && isStage12RetryableErrorCode(job.errorCode);
-    const prepared = await prepareStage12MediaRequest(retryEligible ? 2 : 1);
+    const prepared = await prepareStage12MediaRequest(
+      retryEligible ? job.attemptOrdinal + 1 : job?.attemptOrdinal ?? 1,
+    );
     stage12CallbackToken(prepared.workerIdempotencyKey);
     const ready = prepared.bootstrap.run.currentStep === "STAGE_12_READY"
       && (job === null || retryEligible);
@@ -4941,7 +4943,7 @@ function validateStage12StartInput(input: Omit<StartTrackGVideoOneStage12Input, 
 
 async function prepareStage12StartAttempt() {
   const existingJob = await latestStage12Job();
-  if (existingJob?.state === "FAILED" && (existingJob.attemptOrdinal >= 2
+  if (existingJob?.state === "FAILED" && (existingJob.attemptOrdinal >= 3
     || !isStage12RetryableErrorCode(existingJob.errorCode))) {
     throw new Error(`TRACK_G_STAGE_12_JOB_RETRY_NOT_ALLOWED:${existingJob.errorCode ?? "UNKNOWN"}`);
   }
