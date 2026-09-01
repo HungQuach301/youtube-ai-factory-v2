@@ -17,9 +17,10 @@ import {
 import {
   advanceTrackGVideoOneStage,
   applyTrackGVideoOneStage06EditorialDecision,
+  diagnoseTrackGVideoOneStage12Preflight,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
-  finalizeTrackGVideoOneStage12,
+  finalizeTrackGVideoOneStage12WithDerivedIdempotency,
   prepareTrackGVideoOneStage04Tournament,
   prepareTrackGVideoOneStage06ScriptReview,
   prepareTrackGVideoOneStage07AVoiceTournament,
@@ -28,7 +29,7 @@ import {
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
   startTrackGVideoOneStage10,
-  startTrackGVideoOneStage12,
+  startTrackGVideoOneStage12WithDerivedIdempotency,
   startTrackGVideoOneQualification,
   trackGAdvanceStageCodes,
   trackGVideoOneIdempotencyKey,
@@ -42,8 +43,6 @@ import {
   trackGVideoOneStage09SelectionIdempotencyKey,
   trackGVideoOneStage10FinalizeIdempotencyKey,
   trackGVideoOneStage10StartIdempotencyKey,
-  trackGVideoOneStage12FinalizeIdempotencyKey,
-  trackGVideoOneStage12StartIdempotencyKey,
   trackGVideoOneStageIdempotencyKey,
   trackGVideoOneStage00IdempotencyKey,
 } from "../track-g-video-one";
@@ -100,7 +99,7 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
 
 function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
-    { name: "youtube-ai-factory-v2", version: "1.1.0" },
+    { name: "youtube-ai-factory-v2", version: "1.2.0" },
     {
       capabilities: { tools: {} },
       instructions:
@@ -130,6 +129,39 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       return {
         content: [{ type: "text", text: JSON.stringify(state) }],
         structuredContent: state,
+      };
+    },
+  );
+
+  server.registerTool(
+    "diagnose_track_g_video_1_stage_12_preflight",
+    {
+      title: "Diagnose Track G Video #1 Stage 12 preflight",
+      description:
+        "Read and verify the Stage 12 predecessor evidence, worker signing configuration and existing durable job state without writing data, dispatching a worker, calling a provider or publishing.",
+      inputSchema: {},
+      outputSchema: {
+        preflightState: z.enum(["PASS", "FAIL"]),
+        errorCode: z.string().nullable(),
+        currentStep: z.string(),
+        jobStatus: z.string(),
+        providerDispatch: z.literal("OFF"),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
+    },
+    async () => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
+      const output = await diagnoseTrackGVideoOneStage12Preflight();
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
       };
     },
   );
@@ -1085,7 +1117,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     {
       title: "Start durable Track G Video #1 Stage 12",
       description:
-        "Start exactly one durable pre-master render and full-timeline deterministic QA job from sealed Stage 09-11 inputs. This does not call a content provider, seal Stage 12, release, or publish.",
+        "Start one durable pre-master render and full-timeline deterministic QA attempt from sealed Stage 09-11 inputs. A later explicit owner command may append one retry only after an eligible runtime failure. This does not call a content provider, seal Stage 12, release, or publish.",
       inputSchema: {
         objective: z.string().min(12).max(500),
         confirm: z.literal(true),
@@ -1105,9 +1137,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     async ({ objective }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
       const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
-      const result = await startTrackGVideoOneStage12(user, {
+      const result = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective, ownerApprovalText: "START STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12StartIdempotencyKey(),
         callbackUrl: workerRoute, objectAccessUrl: workerRoute,
       });
       const output = { accepted: true, replayed: result.replayed,
@@ -1148,9 +1179,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     },
     async ({ objective }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
-      const result = await finalizeTrackGVideoOneStage12(user, {
+      const result = await finalizeTrackGVideoOneStage12WithDerivedIdempotency(user, {
         objective, ownerApprovalText: "FINALIZE STAGE 12",
-        idempotencyKey: await trackGVideoOneStage12FinalizeIdempotencyKey(),
       });
       const output = { accepted: true, replayed: result.replayed,
         runId: result.base.run.id, currentStep: "STAGE_13_READY" as const,
@@ -1273,6 +1303,39 @@ function errorResponse(error: unknown): Response {
   );
 }
 
+async function legacyDiscoveryFallback(request: Request): Promise<Response | null> {
+  if (request.method !== "POST") return null;
+  const payload = await request.clone().json().catch(() => null) as {
+    id?: unknown;
+    method?: unknown;
+  } | null;
+  if (payload?.method !== "server/discover" || !("id" in payload)) return null;
+  return Response.json(
+    {
+      jsonrpc: "2.0",
+      id: payload.id,
+      error: { code: -32601, message: "Method not found" },
+    },
+    { status: 200, headers: corsHeaders },
+  );
+}
+
+async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
+  if (request.method !== "POST") return undefined;
+  const payload = await request.clone().json().catch(() => null) as {
+    method?: unknown;
+    params?: { name?: unknown; [key: string]: unknown };
+    [key: string]: unknown;
+  } | null;
+  const prefix = "youtube_ai_factory_v2.";
+  if (payload?.method !== "tools/call" || typeof payload.params?.name !== "string"
+    || !payload.params.name.startsWith(prefix)) return undefined;
+  return {
+    ...payload,
+    params: { ...payload.params, name: payload.params.name.slice(prefix.length) },
+  };
+}
+
 async function handleMcp(request: Request): Promise<Response> {
   try {
     const chatGPTUser = await getChatGPTUser();
@@ -1291,6 +1354,9 @@ async function handleMcp(request: Request): Promise<Response> {
       );
     }
     requireOwner(user);
+    const discoveryFallback = await legacyDiscoveryFallback(request);
+    if (discoveryFallback) return discoveryFallback;
+    const normalizedBody = await normalizeNamespacedToolCall(request);
     const grantedScopes = chatGPTUser ? new Set(oauthScopes) : bearerIdentity?.scopes ?? new Set<string>();
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -1298,7 +1364,10 @@ async function handleMcp(request: Request): Promise<Response> {
     });
     const server = createFactoryServer(user, grantedScopes, request);
     await server.connect(transport);
-    const response = await addToolSecuritySchemes(await transport.handleRequest(request));
+    const response = await addToolSecuritySchemes(await transport.handleRequest(
+      request,
+      normalizedBody === undefined ? undefined : { parsedBody: normalizedBody },
+    ));
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
     return new Response(response.body, {
@@ -1319,6 +1388,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
   if (!payload?.result?.tools) return response;
   for (const tool of payload.result.tools) {
     if (tool.name === "get_factory_state") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "diagnose_track_g_video_1_stage_12_preflight") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
     }
     if (tool.name === "prepare_approved_channel") {
