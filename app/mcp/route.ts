@@ -52,6 +52,8 @@ import { registerQualifiedVoice } from "../voice-qualification";
 
 export const dynamic = "force-dynamic";
 
+const MCP_STABLE_CONTRACT_VERSION = "1" as const;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -99,9 +101,19 @@ function publicFactoryState(snapshot: Awaited<ReturnType<typeof getOperatorSnaps
   };
 }
 
+function requireStableTrackGVideoOneStage12Target(
+  trackCode: string,
+  videoNumber: number,
+  stageCode: string,
+): void {
+  if (trackCode !== "G" || videoNumber !== 1 || stageCode !== "12") {
+    throw new Error("STABLE_COMMAND_TARGET_NOT_SUPPORTED");
+  }
+}
+
 function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
-    { name: "youtube-ai-factory-v2", version: "1.2.0" },
+    { name: "youtube-ai-factory-v2", version: "1.3.0" },
     {
       capabilities: { tools: {} },
       instructions:
@@ -1262,6 +1274,157 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "diagnose_factory_command",
+    {
+      title: "Diagnose a YouTube AI Factory command",
+      description:
+        "Read the preflight and durable job state for a versioned Factory command envelope. The tool contract stays stable as new Stage handlers are added behind the gateway. It never mutates Production, calls a provider, releases or publishes.",
+      inputSchema: {
+        commandType: z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/u),
+        trackCode: z.string().regex(/^[A-Z][A-Z0-9_-]{0,15}$/u),
+        videoNumber: z.number().int().positive().max(10_000),
+        stageCode: z.string().regex(/^[0-9]{2}[A-Z]?$/u),
+        attemptOrdinal: z.number().int().positive().max(100).optional(),
+      },
+      outputSchema: {
+        contractVersion: z.literal(MCP_STABLE_CONTRACT_VERSION),
+        commandType: z.string(),
+        diagnosticState: z.enum(["PASS", "FAIL"]),
+        currentStep: z.string(),
+        operationState: z.string(),
+        diagnosticJson: z.string(),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
+    },
+    async ({ commandType, trackCode, videoNumber, stageCode, attemptOrdinal }) => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
+      requireStableTrackGVideoOneStage12Target(trackCode, videoNumber, stageCode);
+      let diagnostic: Record<string, unknown>;
+      if (commandType === "RECOVER_STAGE_12_ATTEMPT_3") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = await diagnoseTrackGVideoOneStage12Recovery() as unknown as Record<string, unknown>;
+      } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
+        diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
+      } else {
+        throw new Error("STABLE_COMMAND_NOT_SUPPORTED");
+      }
+      const state = await getOperatorSnapshot(user);
+      const diagnosticState = diagnostic.recoveryState === "PASS" || diagnostic.preflightState === "PASS"
+        ? "PASS" as const : "FAIL" as const;
+      const output = {
+        contractVersion: MCP_STABLE_CONTRACT_VERSION,
+        commandType,
+        diagnosticState,
+        currentStep: state.trackGVideo1.currentStep,
+        operationState: String(diagnostic.jobStatus ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
+        diagnosticJson: JSON.stringify(diagnostic),
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "execute_factory_command",
+    {
+      title: "Execute an owner-approved YouTube AI Factory command",
+      description:
+        "Execute one allowlisted, idempotent Factory command through a stable versioned envelope. New Stage handlers are added server-side without changing this tool schema. Every command remains fail-closed and cannot release or publish.",
+      inputSchema: {
+        commandType: z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/u),
+        trackCode: z.string().regex(/^[A-Z][A-Z0-9_-]{0,15}$/u),
+        videoNumber: z.number().int().positive().max(10_000),
+        stageCode: z.string().regex(/^[0-9]{2}[A-Z]?$/u),
+        attemptOrdinal: z.number().int().positive().max(100).optional(),
+        expectedCurrentStep: z.string().regex(/^STAGE_[0-9]{2}[A-Z]?_READY$/u),
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.string().min(8).max(120),
+      },
+      outputSchema: {
+        contractVersion: z.literal(MCP_STABLE_CONTRACT_VERSION),
+        commandType: z.string(),
+        accepted: z.boolean(),
+        replayed: z.boolean(),
+        runId: z.string(),
+        currentStep: z.string(),
+        operationState: z.string(),
+        receiptJson: z.string(),
+        providerDispatch: z.literal("OFF"),
+        releaseEligible: z.literal(false),
+        autoPublish: z.literal("OFF"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ commandType, trackCode, videoNumber, stageCode, attemptOrdinal,
+      expectedCurrentStep, objective, ownerApprovalText }) => {
+      if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
+      requireStableTrackGVideoOneStage12Target(trackCode, videoNumber, stageCode);
+      const before = await getOperatorSnapshot(user);
+      if (before.trackGVideo1.currentStep !== expectedCurrentStep) {
+        throw new Error("STABLE_COMMAND_EXPECTED_STATE_MISMATCH");
+      }
+
+      let result: { replayed: boolean; runId: string; currentStep: string;
+        operationState: string; receipt: Record<string, unknown> };
+      const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
+      if (commandType === "RECOVER_STAGE_12_ATTEMPT_3") {
+        if (attemptOrdinal !== 3 || ownerApprovalText !== "RECOVER STAGE 12 ATTEMPT 3") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const recovery = await recoverTrackGVideoOneStage12AttemptThree(user, {
+          objective, ownerApprovalText, callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+        });
+        result = { replayed: recovery.replayed, runId: recovery.bootstrap.run.id,
+          currentStep: "STAGE_12_READY", operationState: recovery.job.state,
+          receipt: { attemptOrdinal: 3, jobStatus: recovery.job.state, renderExecuted: false } };
+      } else if (commandType === "START_STAGE_12") {
+        if (ownerApprovalText !== "START STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        const start = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
+          objective, ownerApprovalText, callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+        });
+        result = { replayed: start.replayed, runId: start.bootstrap.run.id,
+          currentStep: "STAGE_12_READY", operationState: start.job.state,
+          receipt: { jobStatus: start.job.state } };
+      } else if (commandType === "FINALIZE_STAGE_12") {
+        if (ownerApprovalText !== "FINALIZE STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        const finalize = await finalizeTrackGVideoOneStage12WithDerivedIdempotency(user, {
+          objective, ownerApprovalText,
+        });
+        result = { replayed: finalize.replayed, runId: finalize.base.run.id,
+          currentStep: "STAGE_13_READY", operationState: "SEALED",
+          receipt: { artifactSha256: finalize.stageArtifact.canonicalHash,
+            preMasterSha256: finalize.stage12Qa.preMasterSha256, gateResults: finalize.gateResults } };
+      } else {
+        throw new Error("STABLE_COMMAND_NOT_SUPPORTED");
+      }
+      const output = {
+        contractVersion: MCP_STABLE_CONTRACT_VERSION,
+        commandType,
+        accepted: true,
+        replayed: result.replayed,
+        runId: result.runId,
+        currentStep: result.currentStep,
+        operationState: result.operationState,
+        receiptJson: JSON.stringify(result.receipt),
+        providerDispatch: "OFF" as const,
+        releaseEligible: false as const,
+        autoPublish: "OFF" as const,
+      };
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
     "advance_track_g_video_1_stage",
     {
       title: "Advance Track G Video #1 through a qualified stage",
@@ -1437,6 +1600,30 @@ async function handleMcp(request: Request): Promise<Response> {
     if (discoveryFallback) return discoveryFallback;
     const normalizedBody = await normalizeNamespacedToolCall(request);
     const grantedScopes = chatGPTUser ? new Set(oauthScopes) : bearerIdentity?.scopes ?? new Set<string>();
+    if (Array.isArray(normalizedBody)) {
+      const batch = await Promise.all(normalizedBody.map(async (item) => {
+        const itemRequest = new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body: JSON.stringify(item),
+        });
+        const itemResponse = await dispatchMcpPayload(user, grantedScopes, itemRequest, item);
+        return itemResponse.json();
+      }));
+      return Response.json(batch, { headers: corsHeaders });
+    }
+    return dispatchMcpPayload(user, grantedScopes, request, normalizedBody);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+async function dispatchMcpPayload(
+  user: ChatGPTUser,
+  grantedScopes: Set<string>,
+  request: Request,
+  parsedBody: unknown | undefined,
+): Promise<Response> {
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -1445,7 +1632,7 @@ async function handleMcp(request: Request): Promise<Response> {
     await server.connect(transport);
     const response = await addToolSecuritySchemes(await transport.handleRequest(
       request,
-      normalizedBody === undefined ? undefined : { parsedBody: normalizedBody },
+      parsedBody === undefined ? undefined : { parsedBody },
     ));
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
@@ -1454,9 +1641,6 @@ async function handleMcp(request: Request): Promise<Response> {
       statusText: response.statusText,
       headers,
     });
-  } catch (error) {
-    return errorResponse(error);
-  }
 }
 
 async function addToolSecuritySchemes(response: Response): Promise<Response> {
@@ -1474,6 +1658,12 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
     }
     if (tool.name === "diagnose_track_g_video_1_stage_12_recovery") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "diagnose_factory_command") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
+    if (tool.name === "execute_factory_command") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "recover_track_g_video_1_stage_12_attempt_3") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];

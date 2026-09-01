@@ -314,27 +314,10 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
   try {
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "advance_track_g_video_1_stage",
-      "apply_track_g_video_1_stage_06_editorial_decision",
-      "diagnose_track_g_video_1_stage_12_preflight",
-      "execute_track_g_video_1_stage_00",
-      "finalize_track_g_video_1_stage_10",
-      "finalize_track_g_video_1_stage_12",
-      "get_factory_state",
-      "prepare_approved_channel",
-      "prepare_track_g_video_1_stage_04_tournament",
-      "prepare_track_g_video_1_stage_06_script_review",
-      "prepare_track_g_video_1_stage_07a_voice_tournament",
-      "prepare_track_g_video_1_stage_09_visual_review",
-      "register_qualified_voice",
-      "select_track_g_video_1_stage_04_champion",
-      "select_track_g_video_1_stage_07a_tone",
-      "select_track_g_video_1_stage_09_thumbnail",
-      "start_track_g_video_1_qualification",
-      "start_track_g_video_1_stage_10",
-      "start_track_g_video_1_stage_12",
-    ]);
+    const contract = JSON.parse(await readFile(
+      fileURLToPath(new URL("../mcp-contract-v1.json", import.meta.url)), "utf8",
+    ));
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), contract.toolNames);
 
     const before = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(before.structuredContent.channelStatus, "NOT_PREPARED");
@@ -344,6 +327,37 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
       "qualified_voice_fingerprint",
       "critic_qualification_and_real_calibration_evidence",
     ]);
+
+    const diagnostic = await client.callTool({
+      name: "diagnose_factory_command",
+      arguments: {
+        commandType: "RECOVER_STAGE_12_ATTEMPT_3",
+        trackCode: "G",
+        videoNumber: 1,
+        stageCode: "12",
+        attemptOrdinal: 3,
+      },
+    });
+    assert.equal(diagnostic.structuredContent.contractVersion, "1");
+    assert.equal(diagnostic.structuredContent.providerDispatch, "OFF");
+    assert.equal(diagnostic.structuredContent.autoPublish, "OFF");
+
+    const rejectedStableWrite = await client.callTool({
+      name: "execute_factory_command",
+      arguments: {
+        commandType: "RECOVER_STAGE_12_ATTEMPT_3",
+        trackCode: "G",
+        videoNumber: 1,
+        stageCode: "12",
+        attemptOrdinal: 3,
+        expectedCurrentStep: "STAGE_12_READY",
+        objective: "Verify the stable command rejects a stale expected state without mutation.",
+        confirm: true,
+        ownerApprovalText: "RECOVER STAGE 12 ATTEMPT 3",
+      },
+    });
+    assert.equal(rejectedStableWrite.isError, true);
+    assert.match(rejectedStableWrite.content[0].text, /STABLE_COMMAND_EXPECTED_STATE_MISMATCH/);
 
     const objective = "Persist the approved AI-Era Money Defense strategy through the ChatGPT Production command surface.";
     const prepared = await client.callTool({
@@ -483,6 +497,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(issuerMetadata.issuer, productionOrigin);
     assert.equal(issuerMetadata.client_id_metadata_document_supported, true);
     assert.deepEqual(issuerMetadata.code_challenge_methods_supported, ["S256"]);
+    assert.deepEqual(issuerMetadata.grant_types_supported, ["authorization_code", "refresh_token"]);
 
     const openIdMetadataResponse = await mf.dispatchFetch(`${productionOrigin}/.well-known/openid-configuration`);
     const openIdMetadata = await openIdMetadataResponse.json();
@@ -536,6 +551,38 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(token.token_type, "Bearer");
     assert.equal(token.scope, "factory.read factory.prepare");
     assert.ok(token.access_token);
+    assert.ok(token.refresh_token);
+
+    const refreshResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: token.refresh_token,
+        client_id: clientId,
+        resource,
+      }),
+    });
+    const refreshedToken = await refreshResponse.json();
+    assert.equal(refreshResponse.status, 200);
+    assert.ok(refreshedToken.access_token);
+    assert.ok(refreshedToken.refresh_token);
+    assert.notEqual(refreshedToken.access_token, token.access_token);
+    assert.notEqual(refreshedToken.refresh_token, token.refresh_token);
+
+    const refreshReplayResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: token.refresh_token,
+        client_id: clientId,
+        resource,
+      }),
+    });
+    assert.equal(refreshReplayResponse.status, 400);
+    assert.equal((await refreshReplayResponse.json()).error, "invalid_grant");
+    const activeAccessToken = refreshedToken.access_token;
 
     const replayResponse = await mf.dispatchFetch(`${productionOrigin}/oauth/token`, {
       method: "POST",
@@ -556,7 +603,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const discoveryResponse = await mf.dispatchFetch(resource, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token.access_token}`,
+        authorization: `Bearer ${activeAccessToken}`,
         accept: "application/json, text/event-stream",
         "content-type": "application/json",
         "mcp-protocol-version": "2026-07-28",
@@ -576,7 +623,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const rawToolsResponse = await mf.dispatchFetch(resource, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token.access_token}`,
+        authorization: `Bearer ${activeAccessToken}`,
         accept: "application/json, text/event-stream",
         "content-type": "application/json",
         "mcp-protocol-version": "2025-06-18",
@@ -591,7 +638,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const namespacedReadResponse = await mf.dispatchFetch(resource, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token.access_token}`,
+        authorization: `Bearer ${activeAccessToken}`,
         accept: "application/json, text/event-stream",
         "content-type": "application/json",
         "mcp-protocol-version": "2025-06-18",
@@ -611,7 +658,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     const namespacedBatchResponse = await mf.dispatchFetch(resource, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token.access_token}`,
+        authorization: `Bearer ${activeAccessToken}`,
         accept: "application/json, text/event-stream",
         "content-type": "application/json",
         "mcp-protocol-version": "2025-06-18",
@@ -629,33 +676,26 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(namespacedBatch[0].result.structuredContent.providerDispatch, "OFF");
 
     const transport = new StreamableHTTPClientTransport(new URL(resource), {
-      requestInit: { headers: { authorization: `Bearer ${token.access_token}` } },
+      requestInit: { headers: { authorization: `Bearer ${activeAccessToken}` } },
       fetch: (input, init) => mf.dispatchFetch(input, init),
     });
     const client = new Client({ name: "factory-oauth-e2e-test", version: "1.0.0" });
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "advance_track_g_video_1_stage",
-      "apply_track_g_video_1_stage_06_editorial_decision",
-      "diagnose_track_g_video_1_stage_12_preflight",
-      "execute_track_g_video_1_stage_00",
-      "finalize_track_g_video_1_stage_10",
-      "finalize_track_g_video_1_stage_12",
-      "get_factory_state",
-      "prepare_approved_channel",
-      "prepare_track_g_video_1_stage_04_tournament",
-      "prepare_track_g_video_1_stage_06_script_review",
-      "prepare_track_g_video_1_stage_07a_voice_tournament",
-      "prepare_track_g_video_1_stage_09_visual_review",
-      "register_qualified_voice",
-      "select_track_g_video_1_stage_04_champion",
-      "select_track_g_video_1_stage_07a_tone",
-      "select_track_g_video_1_stage_09_thumbnail",
-      "start_track_g_video_1_qualification",
-      "start_track_g_video_1_stage_10",
-      "start_track_g_video_1_stage_12",
-    ]);
+    const contract = JSON.parse(await readFile(
+      fileURLToPath(new URL("../mcp-contract-v1.json", import.meta.url)), "utf8",
+    ));
+    assert.equal(contract.contractVersion, "1");
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), contract.toolNames);
+    for (const toolName of contract.stableGatewayTools) {
+      assert.ok(tools.tools.some((tool) => tool.name === toolName));
+    }
+    for (const toolName of ["diagnose_factory_command", "execute_factory_command"]) {
+      const commandType = tools.tools.find((tool) => tool.name === toolName)
+        ?.inputSchema?.properties?.commandType;
+      assert.equal(commandType.type, "string");
+      assert.equal(commandType.enum, undefined);
+    }
     const state = await client.callTool({ name: "get_factory_state", arguments: {} });
     assert.equal(state.structuredContent.ownerAuthorized, true);
     assert.equal(state.structuredContent.providerDispatch, "OFF");

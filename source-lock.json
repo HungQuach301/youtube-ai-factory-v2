@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "7dd719801cb60df43a0185fdd9b23df35444c6755d8a7fd805300d757b08a253",
+  "aggregate_sha256": "d89300690efcf9bfbc49e14cf93af00358ef9fd53d2c1fb055daa4dd4325ac1c",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -77,11 +77,11 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "fd45f3f41ebedd576c19210494b0e6ecc5c878b202f41be8b31dac31fe5c2b4b"
+      "sha256": "7e63ef2e1063c3434adb39d49bee493946188f4324d1c8b666f552c29311634a"
     },
     {
       "path": "app/oauth-server.ts",
-      "sha256": "f7e19a5df07a11e7fcd87cf738dfd3be8a0ef14c205c40d7ce883a9ea6b9009a"
+      "sha256": "9df54ba876ac44f12d0c76052374f3a246519738984a59787b67b43d7c01d812"
     },
     {
       "path": "app/oauth/authorize/approve/route.ts",
@@ -93,7 +93,7 @@
     },
     {
       "path": "app/oauth/token/route.ts",
-      "sha256": "276ec5a841f51a330d04de70f837f5b95fa2e125a1d58895856925b3e2579960"
+      "sha256": "ce49126b1d9ba880f13fc147234375c90b8c80685cd5c716c81e2a173af3d29a"
     },
     {
       "path": "app/operate/operator-client.tsx",
@@ -149,7 +149,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "8bb356df95b6af8aee85b8ac7ac846ef5e49afccf906ab1e17bb8473dfe60799"
+      "sha256": "d687eb005e0f863fccb57e748945e20a3b5c579c09d01d85a2cd79afc95087d8"
     },
     {
       "path": "drizzle.config.ts",
@@ -244,6 +244,10 @@
       "sha256": "f3659458e582041d3bfeb0682ca6640f97d52908d105da13148b76def24204d2"
     },
     {
+      "path": "drizzle/0022_stable_mcp_oauth_refresh.sql",
+      "sha256": "ea3c57c1910d097936b00244362f8250a690ec7d9c590fd1b52d7922117a849e"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -286,6 +290,10 @@
     {
       "path": "examples/d1/db/schema.ts",
       "sha256": "d89eabd95716ce404f5f7ca2a254220435be8ddce7c899d7ef461ff22ec80454"
+    },
+    {
+      "path": "mcp-contract-v1.json",
+      "sha256": "f6a95961972af5a7380a33b019c4e345b2c98a710d8afc5778e98db8a1b6e817"
     },
     {
       "path": "next.config.ts",
@@ -401,7 +409,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "efc719460a6ff68c72d6a71b545c2398b60dafe9082a2b6ab53db25ffa59b967"
+      "sha256": "9dfc3109a97249f4fec72166592b5c251c6ad7eaeb2123e1e8eeee1290ed356f"
     },
     {
       "path": "tests/rendered-html.test.mjs",
