@@ -1340,3 +1340,14 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- 5. Mỗi trigger PHẢI có một test guardrail tương ứng chứng minh nó
 --    ABORT đúng trường hợp (05-TEST-SPEC §2). Trigger không có test
 --    coi như chưa tồn tại.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_QA_REMEDIATION — migration 0023
+-- =====================================================================
+-- stage12_qa_diagnostic_job: một job scan idempotent cho đúng failed
+-- attempt 3; READY bắt buộc có immutable receipt pointer/hash/image.
+-- stage12_qa_evidence: typed measurements + failure list + R2 hashes;
+-- UNIQUE(job_id, source), cấm UPDATE và DELETE.
+-- command_log cho phép SCAN_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3 duy nhất
+-- với FAILED → DIAGNOSTIC_PENDING. Xem drizzle/0023_stage12_qa_evidence.sql
+-- để lấy DDL/trigger thực thi canonical.

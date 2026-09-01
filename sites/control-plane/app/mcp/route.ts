@@ -19,6 +19,7 @@ import {
   applyTrackGVideoOneStage06EditorialDecision,
   diagnoseTrackGVideoOneStage12Preflight,
   diagnoseTrackGVideoOneStage12Recovery,
+  diagnoseTrackGVideoOneStage12AttemptThreeQa,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
   finalizeTrackGVideoOneStage12WithDerivedIdempotency,
@@ -27,6 +28,7 @@ import {
   prepareTrackGVideoOneStage07AVoiceTournament,
   prepareTrackGVideoOneStage09VisualReview,
   recoverTrackGVideoOneStage12AttemptThree,
+  scanTrackGVideoOneStage12AttemptThree,
   selectTrackGVideoOneStage04Champion,
   selectTrackGVideoOneStage07ATone,
   selectTrackGVideoOneStage09Thumbnail,
@@ -195,6 +197,24 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     async () => {
       if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
       const output = await diagnoseTrackGVideoOneStage12Recovery();
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
+    "get_track_g_video_1_stage_12_attempt_3_qa_diagnostic",
+    {
+      title: "Get Track G Video #1 Stage 12 attempt 3 QA diagnostic",
+      description:
+        "Read typed immutable QA measurements and gate failures for the attempt-3 pre-master. This does not mutate state, generate media, call a provider or publish.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.read"] }],
+    },
+    async () => {
+      if (!grantedScopes.has("factory.read")) return authenticationToolError(request, "factory.read");
+      const output = await diagnoseTrackGVideoOneStage12AttemptThreeQa();
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     },
   );
@@ -1146,6 +1166,36 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
   );
 
   server.registerTool(
+    "scan_track_g_video_1_stage_12_attempt_3",
+    {
+      title: "Scan Track G Video #1 Stage 12 attempt 3",
+      description:
+        "Dispatch one idempotent full-timeline diagnostic scan of the existing immutable attempt-3 pre-master and persist typed QA evidence. This does not render or generate media, call a provider, finalize Stage 12, release, or publish.",
+      inputSchema: {
+        objective: z.string().min(12).max(500),
+        confirm: z.literal(true),
+        ownerApprovalText: z.literal("SCAN STAGE 12 ATTEMPT 3"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false,
+        idempotentHint: true, openWorldHint: false },
+      securitySchemes: [{ type: "oauth2", scopes: ["factory.prepare"] }],
+    },
+    async ({ objective }) => {
+      if (!grantedScopes.has("factory.prepare")) {
+        return authenticationToolError(request, "factory.prepare");
+      }
+      const diagnosticRoute = new URL("/api/media-worker/stage12-diagnostic", request.url).toString();
+      const output = await scanTrackGVideoOneStage12AttemptThree(user, {
+        objective,
+        ownerApprovalText: "SCAN STAGE 12 ATTEMPT 3",
+        callbackUrl: diagnosticRoute,
+        objectAccessUrl: diagnosticRoute,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+    },
+  );
+
+  server.registerTool(
     "start_track_g_video_1_stage_12",
     {
       title: "Start durable Track G Video #1 Stage 12",
@@ -1308,6 +1358,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       if (commandType === "RECOVER_STAGE_12_ATTEMPT_3") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = await diagnoseTrackGVideoOneStage12Recovery() as unknown as Record<string, unknown>;
+      } else if (commandType === "SCAN_STAGE_12_ATTEMPT_3") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = await diagnoseTrackGVideoOneStage12AttemptThreeQa() as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1315,13 +1368,15 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       }
       const state = await getOperatorSnapshot(user);
       const diagnosticState = diagnostic.recoveryState === "PASS" || diagnostic.preflightState === "PASS"
+        || diagnostic.diagnosticState === "READY"
         ? "PASS" as const : "FAIL" as const;
       const output = {
         contractVersion: MCP_STABLE_CONTRACT_VERSION,
         commandType,
         diagnosticState,
         currentStep: state.trackGVideo1.currentStep,
-        operationState: String(diagnostic.jobStatus ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
+        operationState: String(diagnostic.jobStatus ?? diagnostic.diagnosticState
+          ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
         diagnosticJson: JSON.stringify(diagnostic),
         providerDispatch: "OFF" as const,
         releaseEligible: false as const,
@@ -1387,6 +1442,21 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         result = { replayed: recovery.replayed, runId: recovery.bootstrap.run.id,
           currentStep: "STAGE_12_READY", operationState: recovery.job.state,
           receipt: { attemptOrdinal: 3, jobStatus: recovery.job.state, renderExecuted: false } };
+      } else if (commandType === "SCAN_STAGE_12_ATTEMPT_3") {
+        if (attemptOrdinal !== 3 || ownerApprovalText !== "SCAN STAGE 12 ATTEMPT 3") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const diagnosticRoute = new URL("/api/media-worker/stage12-diagnostic", request.url).toString();
+        const diagnostic = await scanTrackGVideoOneStage12AttemptThree(user, {
+          objective, ownerApprovalText, callbackUrl: diagnosticRoute,
+          objectAccessUrl: diagnosticRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: diagnostic.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: diagnostic.diagnosticState,
+          receipt: { attemptOrdinal: 3, diagnosticState: diagnostic.diagnosticState,
+            generation: false, providerDispatch: "OFF", autoPublish: "OFF" } };
       } else if (commandType === "START_STAGE_12") {
         if (ownerApprovalText !== "START STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
         const start = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
@@ -1659,6 +1729,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
     if (tool.name === "diagnose_track_g_video_1_stage_12_recovery") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
     }
+    if (tool.name === "get_track_g_video_1_stage_12_attempt_3_qa_diagnostic") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
+    }
     if (tool.name === "diagnose_factory_command") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.read"] }];
     }
@@ -1666,6 +1739,9 @@ async function addToolSecuritySchemes(response: Response): Promise<Response> {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "recover_track_g_video_1_stage_12_attempt_3") {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
+    }
+    if (tool.name === "scan_track_g_video_1_stage_12_attempt_3") {
       tool.securitySchemes = [{ type: "oauth2", scopes: ["factory.prepare"] }];
     }
     if (tool.name === "prepare_approved_channel") {

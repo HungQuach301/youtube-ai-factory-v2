@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -117,16 +117,16 @@ async function authenticatedFetch(url, token, options = {}) {
 }
 
 export function buildStage12VideoFilter(payload) {
-  const filters = ['[0:v]format=yuv420p']
+  const filters = ['format=yuv420p']
   for (const shot of payload.timeline.shots) {
     const start = shot.startFrame / payload.render.fps
     const end = shot.endFrame / payload.render.fps
     filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=${color(shot.background)}:t=fill:enable='between(t,${start},${end})'`)
     filters.push(`drawtext=fontfile=${STAGE12_FONT_PATH}:text='${drawText(shot.headline)}':fontcolor=${color(shot.accent)}:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`)
   }
-  filters.push(`drawbox=x=mod(t*120\\,iw-240):y=ih-96:w=240:h=10:color=${color(payload.timeline.shots[0].signal)}:t=fill`)
-  filters.push('setpts=PTS-STARTPTS[vout]')
-  return filters.join(',')
+  const scanWidth = Math.max(1, Math.round(payload.render.width / payload.qa.nearStaticMaxSec))
+  const scanSpeed = payload.render.width
+  return `[0:v]${filters.join(',')}[base];color=c=${color(payload.timeline.shots[0].signal)}:s=${scanWidth}x${payload.render.height}:r=${payload.render.fps}:d=${payload.durationSec}[scan];[base][scan]overlay=x='mod(t*${scanSpeed}\\,W+w)-w':y=0:eval=frame:shortest=1,setpts=PTS-STARTPTS[vout]`
 }
 
 async function uploadPreMaster(payload, bytes, expectedSha256) {
@@ -207,6 +207,30 @@ async function inspectPreMaster(payload, preMasterPath, workRoot) {
   return { preMasterBytes, preMasterSha256, frameMd5Sha256, measurements }
 }
 
+function loudnessPasses(payload, loudness) {
+  return Math.abs(loudness.integratedLufs - payload.qa.loudness.integratedLufs)
+      <= payload.qa.loudness.toleranceLufs
+    && loudness.truePeakDbtp <= payload.qa.loudness.truePeakMaxDbtp
+    && loudness.loudnessRangeLu >= payload.qa.loudness.lraMin
+    && loudness.loudnessRangeLu <= payload.qa.loudness.lraMax
+}
+
+export async function correctStage12EncodedLoudness(payload, preMasterPath, workRoot) {
+  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
+  const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
+  'STAGE12_FINAL_LOUDNESS_FAILED')
+  const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
+  if (loudnessPasses(payload, measured)) return
+  const correctedPath = join(workRoot, 'pre-master-loudness-corrected.webm')
+  const correction = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false`
+  await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', preMasterPath,
+    '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-af', correction,
+    '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
+  'STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED')
+  await rename(correctedPath, preMasterPath)
+}
+
 function stage12Receipt(imageDigest, inspected, pointer) {
   const reportSha256 = sha256(Buffer.from(canonicalize({ measurements: inspected.measurements,
     preMaster: { r2Key: pointer.r2Key, sha256: inspected.preMasterSha256,
@@ -268,6 +292,7 @@ export async function executeStage12(payloadInput, imageDigest) {
       '-color_primaries', payload.render.colorPrimaries, '-color_trc', payload.render.colorPrimaries,
       '-colorspace', payload.render.colorPrimaries, preMasterPath], workRoot, 'STAGE12_RENDER_FAILED')
 
+    await correctStage12EncodedLoudness(payload, preMasterPath, workRoot)
     const inspected = await inspectPreMaster(payload, preMasterPath, workRoot)
     const uploaded = await uploadPreMaster(payload, inspected.preMasterBytes, inspected.preMasterSha256)
     return stage12Receipt(imageDigest, inspected, uploaded)

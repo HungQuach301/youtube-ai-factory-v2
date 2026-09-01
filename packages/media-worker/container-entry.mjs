@@ -589,6 +589,38 @@ function startStage12RecoveryJob(payload) {
   return job.status
 }
 
+function startStage12DiagnosticJob(payload) {
+  const existing = stage12Jobs.get(payload.idempotencyKey)
+  if (existing) return existing.status
+  if (!payload.callback || !payload.objectAccess || payload.recovery?.render !== false
+    || payload.diagnostic?.sourceAttemptOrdinal !== 3
+    || payload.diagnostic?.generation !== false || payload.diagnostic?.publish !== false) {
+    throw Object.assign(new Error('Stage 12 diagnostic endpoints are required.'), {
+      code: 'STAGE12_DIAGNOSTIC_ENDPOINTS_REQUIRED',
+    })
+  }
+  const job = { status: 'PENDING' }
+  stage12Jobs.set(payload.idempotencyKey, job)
+  void executeStage12Recovery(payload, IMAGE_DIGEST)
+    .then(async (result) => {
+      await publishStage12Callback(payload.callback, payload.idempotencyKey, result)
+      job.status = 'READY'
+    })
+    .catch(async (error) => {
+      job.status = 'FAILED'
+      console.error('STAGE12_DIAGNOSTIC_FAILED', JSON.stringify({
+        code: stage12WorkerErrorCode(error),
+        detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
+      }))
+      try {
+        await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
+      } catch (callbackError) {
+        console.error('STAGE12_DIAGNOSTIC_FAILURE_CALLBACK_FAILED', stage12WorkerErrorCode(callbackError))
+      }
+    })
+  return job.status
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -693,6 +725,34 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error
         ? String(error.code) : 'STAGE12_RECOVERY_START_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST' && request.url === '/stage12/diagnostic') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' }).end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' }).end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage12Payload(JSON.parse(body.toString('utf8')))
+      if (payload.recovery?.attemptOrdinal !== 3 || payload.recovery?.render !== false
+        || payload.diagnostic?.sourceAttemptOrdinal !== 3
+        || payload.diagnostic?.generation !== false || payload.diagnostic?.publish !== false) {
+        throw Object.assign(new Error('Invalid diagnostic envelope.'), { code: 'INVALID_STAGE12_DIAGNOSTIC_ENVELOPE' })
+      }
+      const jobStatus = startStage12DiagnosticJob(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        accepted: true, jobStatus, idempotencyKey: payload.idempotencyKey, imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : 'STAGE12_DIAGNOSTIC_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, code }))
     }
     return

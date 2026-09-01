@@ -220,3 +220,7 @@ Ghi vào kỳ vọng, không giấu:
 | Cái hệ thống không bao giờ tự làm | Nới chuẩn · đổi identity · publish · chấp nhận rủi ro chính sách |
 
 Tốc độ tiến hóa của nhà máy = nhịp publish × kỷ luật ghi nhãn thất bại. Muốn nhanh hơn: tăng nhịp hoặc ghi nhãn tốt hơn — không phải nới quy trình.
+
+### Evolution record: EVOLVE_STAGE12_QA_REMEDIATION
+
+Đây là thay đổi pipeline code `NEUTRAL` về strictness: các threshold/gate giữ nguyên. Shadow evidence bắt buộc gồm migration tests, renderer scan dài hơn cửa sổ near-static, encoded-audio measurement và full CI. Owner promotion chỉ triển khai code; diagnostic scan Production sau đó là lệnh OPERATE tách biệt và không được tự khởi chạy generation.
