@@ -108,24 +108,28 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
   }
 });
 
-test("Stage 12 verifies its render font and permits one append-only runtime retry", async () => {
-  const [dockerfile, worker, runtime, domain, schema, migration] = await Promise.all([
+test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
+  const [dockerfile, worker, runtime, smoke, domain, schema, migration] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-render-smoke.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../drizzle/0019_stage12_failed_retry.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0020_stage12_attempt_three.sql", import.meta.url)), "utf8"),
   ]);
   assert.match(dockerfile, /fonts-dejavu-core/);
   assert.match(dockerfile, /test -r \/usr\/share\/fonts\/truetype\/dejavu\/DejaVuSans-Bold\.ttf/);
   assert.match(worker, /stage12FontVerified: existsSync\(STAGE12_FONT_PATH\)/);
   assert.match(runtime, /STAGE12_RENDER_FAILED/);
+  assert.match(runtime, /mod\(t\*120\\\\,iw-240\)/);
+  assert.match(smoke, /STAGE12_RENDER_SMOKE_PASS/);
   assert.match(domain, /STAGE_12_RETRYABLE_ERROR_CODES/);
   assert.match(domain, /orderBy\(desc\(stage12MediaJobs\.attemptOrdinal\)\)/);
   assert.match(domain, /TRACK_G_STAGE_12_JOB_RETRY_NOT_ALLOWED/);
   assert.match(schema, /stage12_media_job_package_attempt_unique/);
   assert.match(migration, /STAGE12_RETRY_CONTRACT_VIOLATION/);
+  assert.match(migration, /attempt_ordinal` BETWEEN 1 AND 3/);
 });
 
 const ownerHeaders = {
