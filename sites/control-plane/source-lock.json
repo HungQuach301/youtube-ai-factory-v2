@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "90da1a94fe5e37ec76ff336e24d2b1907a954cb9e9822af06410dfd2969390d4",
+  "aggregate_sha256": "c605a8349be0d554b4921b539ef37264d3b282da9e64f021fbca10082eeab45c",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -385,7 +385,7 @@
     },
     {
       "path": "scripts/update-source-lock.mjs",
-      "sha256": "ba24bd747f6fe747208ae9ab4aeddd17c6808df5ceb4f21e2881d92d8209d7bc"
+      "sha256": "0ebcd60715e7a4e15cd90ee8c02eaac336bd275dfdc16b92d2c99eb73d588faf"
     },
     {
       "path": "scripts/verify-source-lock.mjs",
@@ -434,10 +434,6 @@
     {
       "path": "tsconfig.json",
       "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3"
-    },
-    {
-      "path": "tsconfig.tsbuildinfo",
-      "sha256": "2d9126510d9a74c87f5368a27e1ec978e0df16db18ec69136b003c53f73fa535"
     },
     {
       "path": "vite.config.ts",

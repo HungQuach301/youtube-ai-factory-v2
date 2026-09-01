@@ -5,7 +5,7 @@ import process from "node:process";
 
 const root = process.cwd();
 const ignoredDirectories = new Set([".git", ".next", ".sites-runtime", ".wrangler", "dist", "node_modules", "out", "outputs", "work"]);
-const ignoredFiles = new Set([".git", "source-lock.json"]);
+const ignoredFiles = new Set([".git", "source-lock.json", "tsconfig.tsbuildinfo"]);
 
 async function visit(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
