@@ -77,6 +77,37 @@ test("Stage 10 separates bounded start from durable receipt finalization", async
   assert.match(callback, /state = 'READY'/);
 });
 
+test("Stage 12 derives command idempotency from one hydrated preflight", async () => {
+  const domain = await readFile(
+    fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)),
+    "utf8",
+  );
+  const mcpRoute = await readFile(
+    fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const operatorRoute = await readFile(
+    fileURLToPath(new URL("../app/api/operator/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const startWrapper = domain.slice(
+    domain.indexOf("export async function startTrackGVideoOneStage12WithDerivedIdempotency"),
+    domain.indexOf("async function readBackStage12("),
+  );
+  const finalizeWrapper = domain.slice(
+    domain.indexOf("export async function finalizeTrackGVideoOneStage12WithDerivedIdempotency"),
+    domain.indexOf("export async function advanceTrackGVideoOneStage("),
+  );
+  assert.equal(startWrapper.match(/prepareStage12MediaRequest\(\)/g)?.length, 1);
+  assert.equal(finalizeWrapper.match(/readBackStage12Job\(\)/g)?.length, 1);
+  for (const route of [mcpRoute, operatorRoute]) {
+    assert.match(route, /startTrackGVideoOneStage12WithDerivedIdempotency/);
+    assert.match(route, /finalizeTrackGVideoOneStage12WithDerivedIdempotency/);
+    assert.doesNotMatch(route, /trackGVideoOneStage12StartIdempotencyKey/);
+    assert.doesNotMatch(route, /trackGVideoOneStage12FinalizeIdempotencyKey/);
+  }
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
