@@ -78,10 +78,54 @@ jobs:
           flyctl logs --app youtube-ai-factory-v2-media-worker-prod --no-tail 2>/dev/null \
             | grep -Eo 'MEDIA_IMAGE_DIGEST must be the immutable digest of the running image|ERR_MODULE_NOT_FOUND|Cannot find module|EACCES|EADDRINUSE|JavaScript heap out of memory|Killed|OOM|Out of memory' \
             | sort -u || true
-      - name: Deploy exact main commit
+      - name: Build and push exact main image
+        id: production_image
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy . --config packages/media-worker/fly.toml --dockerfile packages/media-worker/Dockerfile --remote-only --detach
+        run: |
+          image_label="commit-${GITHUB_SHA}"
+          build_log="$(mktemp)"
+          flyctl deploy . \
+            --config packages/media-worker/fly.toml \
+            --dockerfile packages/media-worker/Dockerfile \
+            --remote-only --build-only --push \
+            --image-label "${image_label}" 2>&1 | tee "${build_log}"
+          image_digest="$(sed -nE 's/.*pushing manifest for [^@]+@(sha256:[a-f0-9]{64}).*/\1/p' "${build_log}" | tail -1)"
+          test "${image_digest}" != ""
+          echo "${image_digest}" | grep -Eq '^sha256:[a-f0-9]{64}
+      - name: Verify Fly Production health
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          for attempt in $(seq 1 36); do
+            health="$(curl --fail --silent --connect-timeout 3 --max-time 8 https://youtube-ai-factory-v2-media-worker-prod.fly.dev/health || true)"
+            if echo "${health}" | jq --exit-status \
+              '.ok == true and .stage12Ready == true and .stage12FontVerified == true and .pythonRuntimeVerified == true and .jobDispatchEnabled == false' >/dev/null; then
+              echo "${health}" | jq '{ok, stage12Ready, stage12FontVerified, pythonRuntimeVerified, jobDispatchEnabled, imageDigest}'
+              exit 0
+            fi
+            sleep 10
+          done
+          flyctl status --app youtube-ai-factory-v2-media-worker-prod || true
+          flyctl machine list --app youtube-ai-factory-v2-media-worker-prod --json \
+            | jq '[.[] | {id, state, region, image_ref, created_at, updated_at}]' || true
+          flyctl logs --app youtube-ai-factory-v2-media-worker-prod --no-tail 2>/dev/null \
+            | grep -Eo 'MEDIA_IMAGE_DIGEST must be the immutable digest of the running image|ERR_MODULE_NOT_FOUND|Cannot find module|EACCES|EADDRINUSE|JavaScript heap out of memory|Killed|OOM|Out of memory' \
+            | sort -u || true
+          exit 1
+
+          echo "digest=${image_digest}" >> "${GITHUB_OUTPUT}"
+          echo "reference=registry.fly.io/youtube-ai-factory-v2-media-worker-prod@${image_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy exact main image and matching provenance digest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy . \
+            --config packages/media-worker/fly.toml \
+            --image "${{ steps.production_image.outputs.reference }}" \
+            --env "MEDIA_IMAGE_DIGEST=${{ steps.production_image.outputs.digest }}" \
+            --detach
 
       - name: Verify Fly Production health
         env:
