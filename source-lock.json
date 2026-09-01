@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "5b5fbdb1e63f84afe537dd2c6be717c2ce116e1cd5a2eb7964590c466748e6cb",
+  "aggregate_sha256": "2f7d8048345d813c81208ce5ae74e1ff64835c2b27d32cc679b47038b24a19b3",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -309,7 +309,7 @@
     },
     {
       "path": "packages/media-worker/fly.toml",
-      "sha256": "649965e6d9f49963a8c35fc1d48dd817228a6fd9e110dad45c1c695e57f8fcc3"
+      "sha256": "be4a831815d57417a027d307a43abac33c8129024d8087df5a9d98f5559b136d"
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
