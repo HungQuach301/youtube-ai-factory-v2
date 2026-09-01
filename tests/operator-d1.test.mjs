@@ -77,6 +77,57 @@ test("Stage 10 separates bounded start from durable receipt finalization", async
   assert.match(callback, /state = 'READY'/);
 });
 
+test("Stage 12 derives command idempotency from one hydrated preflight", async () => {
+  const domain = await readFile(
+    fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)),
+    "utf8",
+  );
+  const mcpRoute = await readFile(
+    fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const operatorRoute = await readFile(
+    fileURLToPath(new URL("../app/api/operator/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const startWrapper = domain.slice(
+    domain.indexOf("export async function startTrackGVideoOneStage12WithDerivedIdempotency"),
+    domain.indexOf("async function readBackStage12("),
+  );
+  const finalizeWrapper = domain.slice(
+    domain.indexOf("export async function finalizeTrackGVideoOneStage12WithDerivedIdempotency"),
+    domain.indexOf("export async function advanceTrackGVideoOneStage("),
+  );
+  assert.equal(startWrapper.match(/prepareStage12StartAttempt\(\)/g)?.length, 1);
+  assert.equal(finalizeWrapper.match(/readBackStage12Job\(\)/g)?.length, 1);
+  for (const route of [mcpRoute, operatorRoute]) {
+    assert.match(route, /startTrackGVideoOneStage12WithDerivedIdempotency/);
+    assert.match(route, /finalizeTrackGVideoOneStage12WithDerivedIdempotency/);
+    assert.doesNotMatch(route, /trackGVideoOneStage12StartIdempotencyKey/);
+    assert.doesNotMatch(route, /trackGVideoOneStage12FinalizeIdempotencyKey/);
+  }
+});
+
+test("Stage 12 verifies its render font and permits one append-only runtime retry", async () => {
+  const [dockerfile, worker, runtime, domain, schema, migration] = await Promise.all([
+    readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0019_stage12_failed_retry.sql", import.meta.url)), "utf8"),
+  ]);
+  assert.match(dockerfile, /fonts-dejavu-core/);
+  assert.match(dockerfile, /test -r \/usr\/share\/fonts\/truetype\/dejavu\/DejaVuSans-Bold\.ttf/);
+  assert.match(worker, /stage12FontVerified: existsSync\(STAGE12_FONT_PATH\)/);
+  assert.match(runtime, /STAGE12_RENDER_FAILED/);
+  assert.match(domain, /STAGE_12_RETRYABLE_ERROR_CODES/);
+  assert.match(domain, /orderBy\(desc\(stage12MediaJobs\.attemptOrdinal\)\)/);
+  assert.match(domain, /TRACK_G_STAGE_12_JOB_RETRY_NOT_ALLOWED/);
+  assert.match(schema, /stage12_media_job_package_attempt_unique/);
+  assert.match(migration, /STAGE12_RETRY_CONTRACT_VIOLATION/);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
@@ -262,6 +313,7 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
+      "diagnose_track_g_video_1_stage_12_preflight",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
       "finalize_track_g_video_1_stage_12",
@@ -428,6 +480,11 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(issuerMetadata.client_id_metadata_document_supported, true);
     assert.deepEqual(issuerMetadata.code_challenge_methods_supported, ["S256"]);
 
+    const openIdMetadataResponse = await mf.dispatchFetch(`${productionOrigin}/.well-known/openid-configuration`);
+    const openIdMetadata = await openIdMetadataResponse.json();
+    assert.equal(openIdMetadataResponse.status, 200);
+    assert.deepEqual(openIdMetadata, issuerMetadata);
+
     const authorize = new URL(`${productionOrigin}/oauth/authorize`);
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("client_id", clientId);
@@ -491,6 +548,27 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.equal(replayResponse.status, 400);
     assert.equal((await replayResponse.json()).error, "invalid_grant");
 
+    const discoveryId = "mcp-2026-discovery-probe";
+    const discoveryResponse = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.access_token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2026-07-28",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: discoveryId,
+        method: "server/discover",
+        params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+      }),
+    });
+    const discovery = await discoveryResponse.json();
+    assert.equal(discoveryResponse.status, 200);
+    assert.equal(discovery.id, discoveryId);
+    assert.equal(discovery.error.code, -32601);
+
     const rawToolsResponse = await mf.dispatchFetch(resource, {
       method: "POST",
       headers: {
@@ -506,6 +584,26 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       { type: "oauth2", scopes: ["factory.read"] },
     ]);
 
+    const namespacedReadResponse = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.access_token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-06-18",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 8,
+        method: "tools/call",
+        params: { name: "youtube_ai_factory_v2.get_factory_state", arguments: {} },
+      }),
+    });
+    const namespacedRead = await namespacedReadResponse.json();
+    assert.equal(namespacedReadResponse.status, 200);
+    assert.equal(namespacedRead.result.structuredContent.ownerAuthorized, true);
+    assert.equal(namespacedRead.result.structuredContent.providerDispatch, "OFF");
+
     const transport = new StreamableHTTPClientTransport(new URL(resource), {
       requestInit: { headers: { authorization: `Bearer ${token.access_token}` } },
       fetch: (input, init) => mf.dispatchFetch(input, init),
@@ -516,6 +614,7 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "advance_track_g_video_1_stage",
       "apply_track_g_video_1_stage_06_editorial_decision",
+      "diagnose_track_g_video_1_stage_12_preflight",
       "execute_track_g_video_1_stage_00",
       "finalize_track_g_video_1_stage_10",
       "finalize_track_g_video_1_stage_12",

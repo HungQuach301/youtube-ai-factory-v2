@@ -32,6 +32,7 @@ import type { ChatGPTUser } from "./chatgpt-auth";
 import { getFactoryEnv } from "./runtime-env";
 import {
   isStage10RetryableErrorCode,
+  isStage12RetryableErrorCode,
   trackGVideoOneStage07AVoiceModel,
   trackGVideoOneStage07BVisualGrammarModel,
   trackGVideoOneStage08ShotCueProgramModel,
@@ -290,7 +291,8 @@ async function getTrackGVideoOneWorkbench() {
     ? artifactByStageInstance.get(stage12Instance.id) ?? null
     : null;
   const [stage12Job] = await db.select().from(stage12MediaJobs)
-    .where(eq(stage12MediaJobs.packageId, productionPackage.id)).limit(1);
+    .where(eq(stage12MediaJobs.packageId, productionPackage.id))
+    .orderBy(desc(stage12MediaJobs.attemptOrdinal)).limit(1);
   const [stage12Qa] = await db.select().from(stage12PreMasterQa)
     .where(eq(stage12PreMasterQa.packageId, productionPackage.id)).limit(1);
   const stage12 = stage12Qa ? {
@@ -385,6 +387,8 @@ async function getTrackGVideoOneWorkbench() {
     stage10,
     stage11,
     stage12Job: stage12Job ? {
+      attemptOrdinal: stage12Job.attemptOrdinal,
+      retryOfJobId: stage12Job.retryOfJobId,
       state: stage12Job.state,
       receiptSha256: stage12Job.receiptSha256,
       workerImageDigest: stage12Job.workerImageDigest,
@@ -417,6 +421,9 @@ async function getTrackGVideoOneWorkbench() {
           : run.currentStep === "STAGE_11_READY"
             ? ["ADVANCE_TRACK_G_VIDEO_1_STAGE_11"]
           : run.currentStep === "STAGE_12_READY" && !stage12Job
+            ? ["START_TRACK_G_VIDEO_1_STAGE_12"]
+          : run.currentStep === "STAGE_12_READY" && stage12Job?.state === "FAILED"
+            && stage12Job.attemptOrdinal === 1 && isStage12RetryableErrorCode(stage12Job.errorCode)
             ? ["START_TRACK_G_VIDEO_1_STAGE_12"]
           : run.currentStep === "STAGE_12_READY" && stage12Job?.state === "READY"
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_12"]

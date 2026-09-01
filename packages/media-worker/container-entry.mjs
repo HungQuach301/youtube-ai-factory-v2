@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto'
 import { createServer } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,6 +32,8 @@ const stage10Executions = new Map()
 const stage10Jobs = new Map()
 const stage12Jobs = new Map()
 const PYTHON_RUNTIME_MARKER = '/app/runtime-verification/stage10-python.json'
+const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
+  ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 function pythonRuntimeVerified() {
   try {
@@ -61,6 +63,7 @@ function stage10Ready() {
 
 function stage12Ready() {
   return STAGE12_ENABLED && typeof STAGE10_VERIFY_KEY === 'string'
+    && existsSync(STAGE12_FONT_PATH)
 }
 
 function sha256(bytes) {
@@ -537,6 +540,10 @@ function startStage12Job(payload) {
     })
     .catch(async (error) => {
       job.status = 'FAILED'
+      console.error('STAGE12_JOB_FAILED', JSON.stringify({
+        code: stage10ErrorCode(error),
+        detail: typeof error?.detail === 'string' ? error.detail.slice(-2000) : null,
+      }))
       try {
         await publishStage12Failure(payload.callback, payload.idempotencyKey, error)
       } catch (callbackError) {
@@ -556,6 +563,7 @@ const server = createServer(async (request, response) => {
       stage10Ready: stage10Ready(),
       stage12Enabled: STAGE12_ENABLED,
       stage12Ready: stage12Ready(),
+      stage12FontVerified: existsSync(STAGE12_FONT_PATH),
       pythonRuntimeVerified: PYTHON_RUNTIME_VERIFIED,
       calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
     }))
