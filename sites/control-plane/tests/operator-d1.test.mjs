@@ -532,6 +532,26 @@ test("completes ChatGPT OAuth discovery, PKCE exchange and bearer-authorized MCP
       { type: "oauth2", scopes: ["factory.read"] },
     ]);
 
+    const namespacedReadResponse = await mf.dispatchFetch(resource, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token.access_token}`,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-06-18",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 8,
+        method: "tools/call",
+        params: { name: "youtube_ai_factory_v2.get_factory_state", arguments: {} },
+      }),
+    });
+    const namespacedRead = await namespacedReadResponse.json();
+    assert.equal(namespacedReadResponse.status, 200);
+    assert.equal(namespacedRead.result.structuredContent.ownerAuthorized, true);
+    assert.equal(namespacedRead.result.structuredContent.providerDispatch, "OFF");
+
     const transport = new StreamableHTTPClientTransport(new URL(resource), {
       requestInit: { headers: { authorization: `Bearer ${token.access_token}` } },
       fetch: (input, init) => mf.dispatchFetch(input, init),

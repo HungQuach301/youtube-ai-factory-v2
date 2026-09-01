@@ -1290,6 +1290,22 @@ async function legacyDiscoveryFallback(request: Request): Promise<Response | nul
   );
 }
 
+async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
+  if (request.method !== "POST") return undefined;
+  const payload = await request.clone().json().catch(() => null) as {
+    method?: unknown;
+    params?: { name?: unknown; [key: string]: unknown };
+    [key: string]: unknown;
+  } | null;
+  const prefix = "youtube_ai_factory_v2.";
+  if (payload?.method !== "tools/call" || typeof payload.params?.name !== "string"
+    || !payload.params.name.startsWith(prefix)) return undefined;
+  return {
+    ...payload,
+    params: { ...payload.params, name: payload.params.name.slice(prefix.length) },
+  };
+}
+
 async function handleMcp(request: Request): Promise<Response> {
   try {
     const chatGPTUser = await getChatGPTUser();
@@ -1310,6 +1326,7 @@ async function handleMcp(request: Request): Promise<Response> {
     requireOwner(user);
     const discoveryFallback = await legacyDiscoveryFallback(request);
     if (discoveryFallback) return discoveryFallback;
+    const normalizedBody = await normalizeNamespacedToolCall(request);
     const grantedScopes = chatGPTUser ? new Set(oauthScopes) : bearerIdentity?.scopes ?? new Set<string>();
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -1317,7 +1334,10 @@ async function handleMcp(request: Request): Promise<Response> {
     });
     const server = createFactoryServer(user, grantedScopes, request);
     await server.connect(transport);
-    const response = await addToolSecuritySchemes(await transport.handleRequest(request));
+    const response = await addToolSecuritySchemes(await transport.handleRequest(
+      request,
+      normalizedBody === undefined ? undefined : { parsedBody: normalizedBody },
+    ));
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
     return new Response(response.body, {
