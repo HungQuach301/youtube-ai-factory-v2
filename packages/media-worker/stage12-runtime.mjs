@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const HEX64 = /^[0-9a-f]{64}$/u
+const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
+  ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
@@ -23,18 +25,24 @@ function canonicalize(value) {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key.normalize('NFC'))}:${canonicalize(value[key])}`).join(',')}}`
 }
 
-function runTool(executable, args, cwd) {
+function runTool(executable, args, cwd, failureCode) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
     const stdout = []
     const stderr = []
     child.stdout.on('data', (chunk) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => stderr.push(chunk))
-    child.on('error', () => reject(Object.assign(new Error(`${executable} failed to start.`), { code: 'MEDIA_TOOL_FAILED' })))
-    child.on('close', (code) => {
+    child.on('error', (cause) => reject(Object.assign(new Error(`${executable} failed to start.`), {
+      code: failureCode,
+      detail: cause instanceof Error ? cause.message.slice(-2000) : 'spawn failed',
+    })))
+    child.on('close', (code, signal) => {
       const result = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) }
       if (code === 0) resolve(result)
-      else reject(Object.assign(new Error(`${executable} exited ${code}.`), { code: 'MEDIA_TOOL_FAILED', detail: result.stderr.toString('utf8').slice(-2000) }))
+      else reject(Object.assign(new Error(`${executable} exited ${code ?? signal ?? 'unknown'}.`), {
+        code: failureCode,
+        detail: result.stderr.toString('utf8').slice(-2000),
+      }))
     })
   })
 }
@@ -114,7 +122,7 @@ function videoFilter(payload) {
     const start = shot.startFrame / payload.render.fps
     const end = shot.endFrame / payload.render.fps
     filters.push(`drawbox=x=0:y=0:w=iw:h=ih:color=${color(shot.background)}:t=fill:enable='between(t,${start},${end})'`)
-    filters.push(`drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${drawText(shot.headline)}':fontcolor=${color(shot.accent)}:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`)
+    filters.push(`drawtext=fontfile=${STAGE12_FONT_PATH}:text='${drawText(shot.headline)}':fontcolor=${color(shot.accent)}:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`)
   }
   filters.push(`drawbox=x=mod(t*120\\,w-240):y=h-96:w=240:h=10:color=${color(payload.timeline.shots[0].signal)}:t=fill`)
   filters.push('setpts=PTS-STARTPTS[vout]')
@@ -162,11 +170,12 @@ export async function executeStage12(payloadInput, imageDigest) {
     await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', narrationPath,
       '-f', 'lavfi', '-i', `anoisesrc=color=pink:amplitude=0.002:sample_rate=${payload.render.sampleRateHz}:duration=${payload.durationSec}`,
       '-filter_complex', `[0:a]aresample=${payload.render.sampleRateHz}[n];[1:a]atrim=0:${payload.durationSec}[a];[n][a]amix=inputs=2:duration=longest,atrim=0:${payload.durationSec}[mix]`,
-      '-map', '[mix]', '-c:a', 'pcm_s24le', mixPath], workRoot)
+      '-map', '[mix]', '-c:a', 'pcm_s24le', mixPath], workRoot, 'STAGE12_AUDIO_MIX_FAILED')
 
     const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
     const passOne = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', mixPath,
-      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot)
+      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
+    'STAGE12_LOUDNESS_ANALYSIS_FAILED')
     const measured = parseLoudnorm(passOne.stderr.toString('utf8'))
     const passTwo = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=true`
     await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y',
@@ -175,23 +184,25 @@ export async function executeStage12(payloadInput, imageDigest) {
       '-af', passTwo, '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-c:a', 'libopus',
       '-ar', String(payload.render.sampleRateHz), '-t', String(payload.durationSec),
       '-color_primaries', payload.render.colorPrimaries, '-color_trc', payload.render.colorPrimaries,
-      '-colorspace', payload.render.colorPrimaries, preMasterPath], workRoot)
+      '-colorspace', payload.render.colorPrimaries, preMasterPath], workRoot, 'STAGE12_RENDER_FAILED')
 
     const probe = await runTool('ffprobe', ['-v', 'error', '-count_frames', '-show_entries',
       'format=duration:stream=index,codec_type,width,height,r_frame_rate,color_primaries,start_time,nb_read_frames',
-      '-of', 'json', preMasterPath], workRoot)
+      '-of', 'json', preMasterPath], workRoot, 'STAGE12_PROBE_FAILED')
     const probeJson = JSON.parse(probe.stdout.toString('utf8'))
     const video = probeJson.streams.find((stream) => stream.codec_type === 'video')
     const audio = probeJson.streams.find((stream) => stream.codec_type === 'audio')
     if (!video || !audio) throw Object.assign(new Error('Pre-master streams missing.'), { code: 'STAGE12_STREAM_MISSING' })
     const scan = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
       '-vf', `blackdetect,freezedetect=d=${payload.qa.nearStaticMaxSec}`,
-      '-af', 'silencedetect=n=-60dB:d=1', '-f', 'null', '-'], workRoot)
+      '-af', 'silencedetect=n=-60dB:d=1', '-f', 'null', '-'], workRoot,
+    'STAGE12_TIMELINE_SCAN_FAILED')
     const finalLoudness = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot)
+      '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
+    'STAGE12_FINAL_LOUDNESS_FAILED')
     const loudness = parseLoudnorm(finalLoudness.stderr.toString('utf8'))
     const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-map', '0:v:0', '-f', 'framemd5', '-'], workRoot)
+      '-map', '0:v:0', '-f', 'framemd5', '-'], workRoot, 'STAGE12_FRAME_HASH_FAILED')
     const preMasterBytes = await readFile(preMasterPath)
     const preMasterSha256 = sha256(preMasterBytes)
     const frameMd5Sha256 = sha256(frameMd5.stdout)
