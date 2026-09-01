@@ -1138,7 +1138,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     {
       title: "Start durable Track G Video #1 Stage 12",
       description:
-        "Start one durable pre-master render and full-timeline deterministic QA attempt from sealed Stage 09-11 inputs. A later explicit owner command may append one retry only after an eligible runtime failure. This does not call a content provider, seal Stage 12, release, or publish.",
+        "Start one durable pre-master render and full-timeline deterministic QA attempt from sealed Stage 09-11 inputs. On the exact eligible attempt-3 callback failure, this stable command recovers by re-scanning the existing immutable pre-master without rendering attempt 4. This does not call a content provider, seal Stage 12, release, or publish.",
       inputSchema: {
         objective: z.string().min(12).max(500),
         confirm: z.literal(true),
@@ -1158,10 +1158,16 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
     async ({ objective }) => {
       if (!grantedScopes.has("factory.prepare")) return authenticationToolError(request, "factory.prepare");
       const workerRoute = new URL("/api/media-worker/stage12", request.url).toString();
-      const result = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
-        objective, ownerApprovalText: "START STAGE 12",
-        callbackUrl: workerRoute, objectAccessUrl: workerRoute,
-      });
+      const recovery = await diagnoseTrackGVideoOneStage12Recovery();
+      const result = recovery.recoveryState === "PASS"
+        ? await recoverTrackGVideoOneStage12AttemptThree(user, {
+          objective, ownerApprovalText: "RECOVER STAGE 12 ATTEMPT 3",
+          callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+        })
+        : await startTrackGVideoOneStage12WithDerivedIdempotency(user, {
+          objective, ownerApprovalText: "START STAGE 12",
+          callbackUrl: workerRoute, objectAccessUrl: workerRoute,
+        });
       const output = { accepted: true, replayed: result.replayed,
         runId: result.bootstrap.run.id, currentStep: "STAGE_12_READY" as const,
         stageCode: "12" as const, jobStatus: result.job.state as "PENDING" | "READY",
@@ -1380,20 +1386,33 @@ async function legacyDiscoveryFallback(request: Request): Promise<Response | nul
   );
 }
 
-async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
-  if (request.method !== "POST") return undefined;
-  const payload = await request.clone().json().catch(() => null) as {
-    method?: unknown;
-    params?: { name?: unknown; [key: string]: unknown };
-    [key: string]: unknown;
-  } | null;
+type JsonRpcToolCall = {
+  method?: unknown;
+  params?: { name?: unknown; [key: string]: unknown };
+  [key: string]: unknown;
+};
+
+function normalizeNamespacedToolCallItem(payload: JsonRpcToolCall): JsonRpcToolCall {
   const prefix = "youtube_ai_factory_v2.";
-  if (payload?.method !== "tools/call" || typeof payload.params?.name !== "string"
-    || !payload.params.name.startsWith(prefix)) return undefined;
+  if (payload.method !== "tools/call" || typeof payload.params?.name !== "string"
+    || !payload.params.name.startsWith(prefix)) return payload;
   return {
     ...payload,
     params: { ...payload.params, name: payload.params.name.slice(prefix.length) },
   };
+}
+
+async function normalizeNamespacedToolCall(request: Request): Promise<unknown | undefined> {
+  if (request.method !== "POST") return undefined;
+  const payload = await request.clone().json().catch(() => null) as
+    JsonRpcToolCall | JsonRpcToolCall[] | null;
+  if (!payload) return undefined;
+  if (Array.isArray(payload)) {
+    const normalized = payload.map(normalizeNamespacedToolCallItem);
+    return normalized.some((item, index) => item !== payload[index]) ? normalized : undefined;
+  }
+  const normalized = normalizeNamespacedToolCallItem(payload);
+  return normalized === payload ? undefined : normalized;
 }
 
 async function handleMcp(request: Request): Promise<Response> {
