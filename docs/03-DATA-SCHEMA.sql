@@ -1381,3 +1381,14 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- typed measurements và immutable receipt. DB ép provider_call_count=0,
 -- provider_dispatch=OFF, auto_publish=OFF; terminal UPDATE/DELETE bị chặn.
 -- Xem drizzle/0026_stage12_audio_p0_correction.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_AUDIO_P0_COMMAND_CONTRACT — migration 0027
+-- =====================================================================
+-- command_log_validate_insert được thay thế theo kiểu append-only migration:
+-- toàn bộ command/transition đã có trong 0023 được giữ nguyên, đồng thời bổ sung
+-- duy nhất CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION với transition
+-- TRACK_G_VIDEO_1_STAGE_12_CORRECTED_FAIL →
+-- TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING. Mọi command, state hoặc idempotency
+-- key ngoài hợp đồng tiếp tục fail-closed bằng COMMAND_CONTRACT_VIOLATION.
+-- Xem drizzle/0027_stage12_audio_p0_command_contract.sql.

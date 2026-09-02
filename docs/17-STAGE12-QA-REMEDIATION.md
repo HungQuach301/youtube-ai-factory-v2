@@ -71,3 +71,21 @@ Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_CORRECTION`
 - Stable gateway dùng `commandType=CREATE_STAGE_12_AUDIO_P0_CORRECTION` và exact approval `CREATE STAGE 12 AUDIO P0 CORRECTION`. Việc merge/deploy evolution không tự chạy command.
 - Finalize chỉ có thể chọn ordinal 2 khi job `READY/PASS` và receipt immutable hợp lệ; nếu ordinal 2 chưa PASS thì Stage 12 tiếp tục fail-closed.
 - Evolution và CI không gọi provider, không tạo attempt 4, không chạy generation, không finalize và không publish.
+
+## Audio/P0 command-contract repair
+
+Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_COMMAND_CONTRACT`
+
+- Migration `0027` thay trigger allowlist của `command_log` và chỉ thêm command
+  `CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION` với transition
+  `TRACK_G_VIDEO_1_STAGE_12_CORRECTED_FAIL` →
+  `TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING`.
+- Toàn bộ command và transition đã có trong migration `0023` được sao chép nguyên
+  trạng; unknown command, state sai và idempotency key sai vẫn fail-closed.
+- Stable MCP gateway chuẩn hóa lỗi trigger thành
+  `STABLE_COMMAND_CONTRACT_VIOLATION`, không trả chi tiết D1/SQLite cho client.
+- Regression E2E chạy full migration chain qua `execute_factory_command`: trigger
+  legacy bị từ chối atomically; sau `0027`, đúng một command và đúng một correction
+  job được tạo trong fixture, với provider/publish OFF và không có attempt 4.
+- Evolution này chỉ sửa contract, test và mở PR. Nó không retry correction,
+  không gọi provider, không finalize và không publish.
