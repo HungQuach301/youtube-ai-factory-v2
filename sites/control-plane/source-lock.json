@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "0845ff3f3b1af1272b36e5f36eaece9f5d25a5949fa78f5b201921a7d590b31c",
+  "aggregate_sha256": "ccd271f955282f75e9c6944396b03ee5a0c779fd36e73b8e28266b3898d5fad3",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -76,6 +76,10 @@
       "sha256": "cdce3853f32dee51e6374a0040c58a88f9f36010c6857eca2fcfb9b101b4df31"
     },
     {
+      "path": "app/home-readiness.ts",
+      "sha256": "fea4acd72baf018d61e9050c1504757ad2d9628bde5c655a99cd02d666fc6f8c"
+    },
+    {
       "path": "app/layout.tsx",
       "sha256": "84606209c9cf86276e9e4953dcf26f72b1a78d4f2b429e286b38e85a51b1f42f"
     },
@@ -105,15 +109,19 @@
     },
     {
       "path": "app/operate/page.tsx",
-      "sha256": "b37cde470b72f342b10e9b8b57b60a86b6f6f55de9fd97b94eed2989caa4416a"
+      "sha256": "dfd618d1de364702c44b4ff0926e46d2a0b79618c29f36dcd4cdd894fe4a301e"
     },
     {
       "path": "app/operator-runtime.ts",
-      "sha256": "26203954aab52a3028bb0904390605aa3ee3b1ef24eff2571192449bbd3af860"
+      "sha256": "24f600468b9841a7122ef5ee6bd47a4474c76f0e6a84dbe4f05638b3108a584e"
+    },
+    {
+      "path": "app/owner-auth.ts",
+      "sha256": "4a90c4a18cf892998abea30da4b32c9b6068fe4d13e1c85201bba243898343d2"
     },
     {
       "path": "app/page.tsx",
-      "sha256": "a9f5684cd49d626ff564bd6025366b0346ea8b14711d21cb4dd61b03b54f724e"
+      "sha256": "840873333c0b6328c5e2437167cfe2a8db0cf1e6a2a9b5e1d055fb57d2ca1a30"
     },
     {
       "path": "app/runtime-env.ts",
@@ -429,11 +437,15 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "de34b7a922a6124bd34032ac6e1ecc192ff254a8653cc5de172d6a66da01e631"
+      "sha256": "3ac8349d9f13f5d8b19f413539f2745694a361ab9989394a1ee1b9b86a32a37f"
     },
     {
       "path": "tests/rendered-html.test.mjs",
       "sha256": "8bcd32eb3674dd7d50e41a65abbb453ffc155bd5d6b5da81b7025883e5854cdf"
+    },
+    {
+      "path": "tests/root-runtime-boundary.test.mjs",
+      "sha256": "deaa0242e0f9de46c0398d5ec17bae0c55155292c1553438847a05550a335269"
     },
     {
       "path": "tests/stage12-callback-error.test.mjs",

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import sourceLock from "../source-lock.json";
 import { requireChatGPTUser } from "./chatgpt-auth";
-import { getRuntimeReadiness } from "./operator-runtime";
-import { requireOwner } from "./operator-runtime";
+import { getRuntimeReadiness } from "./home-readiness";
+import { requireOwner } from "./owner-auth";
 
 const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 

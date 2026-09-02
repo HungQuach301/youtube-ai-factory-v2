@@ -1,5 +1,29 @@
 # DONE
 
+## EVOLVE_SITE_ROOT_AND_PROVIDER_GUARD · Shadow evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| `GET /` không kéo toàn bộ operational runtime vào Server Components graph | Root chỉ import `home-readiness` và `owner-auth`; source-boundary test cấm `operator-runtime`, crypto, Track G, Stage 11 và voice qualification |
+| Root render hoạt động với Production-shaped D1 binding | Miniflare áp dụng toàn bộ migration, bind D1 thật, gọi authenticated `GET /` và xác minh HTTP 200 + readiness read-back |
+| Owner authorization giữ fail-closed contract | `owner-auth` giữ nguyên hai lỗi typed `FACTORY_OWNER_ALLOWLIST_UNCONFIGURED` và `FACTORY_OWNER_AUTHORIZATION_DENIED`; operator runtime re-export để không phá MCP contract |
+| Calibration provider không còn tự chạy khi push `main` | `media-worker-deploy.yml` chỉ còn `workflow_dispatch`; regression test cấm mọi `push:` trigger |
+| Live calibration/deploy cần phê duyệt riêng | Input bắt buộc `owner_approval_text`; exact phrase `PROMOTE_CALIBRATED_MEDIA_WORKER` được kiểm tra ở step đầu tiên, trước checkout, credentials và provider; public Stage 10 verification key được lấy từ GitHub repository variable và fail-closed nếu thiếu |
+| Evolution không tạo Production side effect | Chỉ build/test local; không scan, generation, provider, finalize, publish, merge hoặc deploy |
+
+## Trigger ↔ Test
+
+| Trigger/constraint | Test |
+|---|---|
+| Root RSC boundary bị nối lại vào `operator-runtime` | `root-runtime-boundary.test.mjs` → FAIL |
+| Root không render được với D1 thật | `operator-d1.test.mjs` authenticated `GET /` → FAIL |
+| Workflow khôi phục `push:`, bỏ manual approval hoặc hard-code Stage 10 verification key | `container-contract.test.ts` → FAIL |
+| Provider step đứng trước approval gate | So sánh vị trí step trong workflow → FAIL |
+
+---
+
 ## EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK · Shadow evidence
 
 ## Mode: EVOLVE

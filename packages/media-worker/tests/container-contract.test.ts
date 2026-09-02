@@ -8,6 +8,24 @@ async function source(relativePath: string): Promise<string> {
 }
 
 describe('Stage 10 container contract', () => {
+  it('requires an explicit owner approval before live calibration can run', async () => {
+    const deployWorkflow = await source('../../../.github/workflows/media-worker-deploy.yml')
+    const approvalStep = deployWorkflow.indexOf('Require explicit calibration approval')
+    const credentialStep = deployWorkflow.indexOf('Require three scoped credentials')
+    const providerStep = deployWorkflow.indexOf('Acquire real human floor and validate qualified voice')
+
+    expect(deployWorkflow).not.toMatch(/^\s*push:\s*$/mu)
+    expect(deployWorkflow).toMatch(/^\s*workflow_dispatch:\s*$/mu)
+    expect(deployWorkflow).toMatch(/owner_approval_text:/u)
+    expect(deployWorkflow).toMatch(/PROMOTE_CALIBRATED_MEDIA_WORKER/u)
+    expect(deployWorkflow).toMatch(/MEDIA_STAGE10_VERIFY_KEY: \$\{\{ vars\.MEDIA_STAGE10_VERIFY_KEY \}\}/u)
+    expect(deployWorkflow).not.toMatch(/MEDIA_STAGE10_VERIFY_KEY:\s+MCow/u)
+    expect(deployWorkflow).toMatch(/MEDIA_STAGE10_VERIFY_KEY repository variable is not configured/u)
+    expect(approvalStep).toBeGreaterThan(-1)
+    expect(credentialStep).toBeGreaterThan(approvalStep)
+    expect(providerStep).toBeGreaterThan(approvalStep)
+  })
+
   it('exposes shared NLTK data to the non-root runtime', async () => {
     const dockerfile = await source('../Dockerfile')
     const preflight = await source('../../../scripts/verify-stage10-python-runtime.py')

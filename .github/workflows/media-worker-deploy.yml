@@ -2,20 +2,12 @@ name: media-worker-deploy
 run-name: Stage 10 calibrated media worker · ${{ github.sha }}
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "packages/media-worker/**"
-      - "packages/contracts/**"
-      - "packages/core-hash/**"
-      - "scripts/run-dual-calibration-live.py"
-      - "scripts/whisperx-phoneme-observer.py"
-      - "qualification-runs/dual-calibration-live.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/media-worker-deploy.yml"
   workflow_dispatch:
+    inputs:
+      owner_approval_text:
+        description: Type PROMOTE_CALIBRATED_MEDIA_WORKER to authorize live calibration and deployment
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -28,7 +20,6 @@ env:
   FLY_APP_NAME: youtube-ai-factory-v2-media-worker-prod
   FLY_CONFIG: packages/media-worker/fly.toml
   CALIBRATION_OUTPUT: dual-calibration-live-output
-  MEDIA_STAGE10_VERIFY_KEY: MCowBQYDK2VwAyEArYGfR2yAFXqTXBUFzwf5Eyod9MfoE405MZUQ2qAULL8=
 
 jobs:
   calibrate-build-deploy:
@@ -38,9 +29,20 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       MDC_API_KEY: ${{ secrets.MDC_API_KEY }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      MEDIA_STAGE10_VERIFY_KEY: ${{ vars.MEDIA_STAGE10_VERIFY_KEY }}
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
     steps:
+      - name: Require explicit calibration approval
+        shell: bash
+        env:
+          OWNER_APPROVAL_TEXT: ${{ inputs.owner_approval_text }}
+        run: |
+          set -euo pipefail
+          [[ "$OWNER_APPROVAL_TEXT" == "PROMOTE_CALIBRATED_MEDIA_WORKER" ]] || {
+            echo "Exact owner approval PROMOTE_CALIBRATED_MEDIA_WORKER is required" >&2
+            exit 1
+          }
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -52,6 +54,7 @@ jobs:
           [[ -n "${FLY_API_TOKEN:-}" ]] || { echo "FLY_API_TOKEN is not configured" >&2; exit 1; }
           [[ -n "${MDC_API_KEY:-}" ]] || { echo "MDC_API_KEY is not configured" >&2; exit 1; }
           [[ -n "${ELEVENLABS_API_KEY:-}" ]] || { echo "ELEVENLABS_API_KEY is not configured" >&2; exit 1; }
+          [[ -n "${MEDIA_STAGE10_VERIFY_KEY:-}" ]] || { echo "MEDIA_STAGE10_VERIFY_KEY repository variable is not configured" >&2; exit 1; }
       - name: Install pinned calibration observer
         shell: bash
         run: |
