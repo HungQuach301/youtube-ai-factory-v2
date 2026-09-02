@@ -13,7 +13,6 @@ import {
   hpDecisions,
   operationEvents,
   operationRuns,
-  ownerIdentity,
   pillars,
   predictedPerformances,
   productionPackages,
@@ -29,7 +28,7 @@ import {
 } from "../db/schema";
 import { activationBlockers, approvedChannel, trackGVideoOneContract } from "./factory-contract";
 import type { ChatGPTUser } from "./chatgpt-auth";
-import { getFactoryEnv } from "./runtime-env";
+import { requireOwner } from "./owner-auth";
 import {
   isStage10RetryableErrorCode,
   isStage12RetryableErrorCode,
@@ -41,6 +40,8 @@ import {
 } from "./track-g-video-one";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import { voiceQualificationReadBack } from "./voice-qualification";
+
+export { requireOwner };
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
@@ -429,53 +430,6 @@ async function getTrackGVideoOneWorkbench() {
             ? ["FINALIZE_TRACK_G_VIDEO_1_STAGE_12"]
           : [],
   };
-}
-
-export type RuntimeReadiness = {
-  d1: "PASS" | "BLOCKED";
-  owner: "PASS" | "BLOCKED";
-  channel: "PREPARED" | "NOT_PREPARED";
-  detail: string;
-};
-
-export function requireOwner(user: ChatGPTUser): void {
-  const configuredOwner = getFactoryEnv().FACTORY_OWNER_EMAIL?.trim().toLowerCase();
-  if (!configuredOwner) throw new Error("FACTORY_OWNER_ALLOWLIST_UNCONFIGURED");
-  if (user.email.trim().toLowerCase() !== configuredOwner) {
-    throw new Error("FACTORY_OWNER_AUTHORIZATION_DENIED");
-  }
-}
-
-export async function getRuntimeReadiness(): Promise<RuntimeReadiness> {
-  try {
-    const db = getDb();
-    const configuredOwner = getFactoryEnv().FACTORY_OWNER_EMAIL?.trim().toLowerCase();
-    const [actor] = configuredOwner
-      ? await db.select({ identity: ownerIdentity.identity })
-        .from(ownerIdentity)
-        .where(eq(ownerIdentity.identity, configuredOwner))
-        .limit(1)
-      : [];
-    const [channel] = await db.select({ status: channels.status })
-      .from(channels)
-      .where(eq(channels.id, approvedChannel.id))
-      .limit(1);
-    return {
-      d1: "PASS",
-      owner: actor ? "PASS" : "BLOCKED",
-      channel: channel?.status === "PREPARED" || channel?.status === "ACTIVE" ? "PREPARED" : "NOT_PREPARED",
-      detail: channel
-        ? `D1 is live; ${channel.status.toLowerCase()} channel state was read back from Production.`
-        : "D1 is live; the owner must issue PREPARE_CHANNEL to persist the approved strategy.",
-    };
-  } catch {
-    return {
-      d1: "BLOCKED",
-      owner: "BLOCKED",
-      channel: "NOT_PREPARED",
-      detail: "Production D1 or its operational schema is unavailable.",
-    };
-  }
 }
 
 export async function getOperatorSnapshot(user: ChatGPTUser) {

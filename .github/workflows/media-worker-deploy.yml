@@ -2,20 +2,12 @@ name: media-worker-deploy
 run-name: Stage 10 calibrated media worker · ${{ github.sha }}
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "packages/media-worker/**"
-      - "packages/contracts/**"
-      - "packages/core-hash/**"
-      - "scripts/run-dual-calibration-live.py"
-      - "scripts/whisperx-phoneme-observer.py"
-      - "qualification-runs/dual-calibration-live.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/media-worker-deploy.yml"
   workflow_dispatch:
+    inputs:
+      owner_approval_text:
+        description: Type PROMOTE_CALIBRATED_MEDIA_WORKER to authorize live calibration and deployment
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -41,6 +33,16 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
     steps:
+      - name: Require explicit calibration approval
+        shell: bash
+        env:
+          OWNER_APPROVAL_TEXT: ${{ inputs.owner_approval_text }}
+        run: |
+          set -euo pipefail
+          [[ "$OWNER_APPROVAL_TEXT" == "PROMOTE_CALIBRATED_MEDIA_WORKER" ]] || {
+            echo "Exact owner approval PROMOTE_CALIBRATED_MEDIA_WORKER is required" >&2
+            exit 1
+          }
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
