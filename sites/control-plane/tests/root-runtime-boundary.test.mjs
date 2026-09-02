@@ -24,6 +24,10 @@ test("root Server Component delegates owner authorization to the Worker boundary
   assert.match(ownerAuth, /FACTORY_OWNER_AUTHORIZATION_DENIED/u);
   assert.match(operatorRuntime, /from ["']\.\/owner-auth["']/u);
   assert.match(worker, /authorizeOwnerPageRequest/u);
+  assert.match(worker, /x-factory-root-actor/u);
+  assert.match(worker, /x-factory-root-authorization/u);
+  assert.match(worker, /platform-renderer/u);
+  assert.doesNotMatch(worker, /signature-agent[\s\S]{0,500}(allowed|return null)/u);
   assert.match(worker, /FACTORY_OWNER_ALLOWLIST_UNCONFIGURED/u);
   assert.match(worker, /FACTORY_OWNER_AUTHORIZATION_DENIED/u);
 });

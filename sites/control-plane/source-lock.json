@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "db087faf9580a041789aa799ded09a52b237d97d423188fdd5f69cddbb3d0bb6",
+  "aggregate_sha256": "bfb69765087b1fbdb6073c46487783740e7c45604320e7c0dd185d1cf9d1255d",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -437,7 +437,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "b5ede18b24dcd3f7bf8379dea1750549c2ae98e7f0554f68c72b8d3c22b26882"
+      "sha256": "ac7a29aa25a4d3fc0a10bcb84836ef91e0e02cbcb00828799b0aaabc448273a2"
     },
     {
       "path": "tests/rendered-html.test.mjs",
@@ -445,7 +445,7 @@
     },
     {
       "path": "tests/root-runtime-boundary.test.mjs",
-      "sha256": "abe22791e8102f976aa699346bb3d7d83a4be7a9bb3fc0dcca6e185340f365c0"
+      "sha256": "0b3f6aa696e3f72d1a389c4e28beba5e8d5cd4d0fbb95eed4233cf2bed6de655"
     },
     {
       "path": "tests/stage12-callback-error.test.mjs",
@@ -461,7 +461,7 @@
     },
     {
       "path": "worker/index.ts",
-      "sha256": "ab313fbb2e95673c1b1a6b14063a4a8507c0dc6b927573d98a0352afd49dd4fb"
+      "sha256": "7f49818cb214477e89bc63471b867dfe2b256940a18c8fda129ea657ebaa113a"
     }
   ]
 }
