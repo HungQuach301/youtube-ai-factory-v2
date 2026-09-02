@@ -49,3 +49,13 @@ Evolution ID: `EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK`
 - Migration `0024` giới hạn `diagnostic_ordinal BETWEEN 1 AND 2`, khóa UPDATE/DELETE terminal và bắt buộc duration cho mọi job mới.
 - Callback mới vẫn ghi canonical receipt vào R2, read-back hash, rồi commit evidence/job pointer trong D1; chỉ loại bỏ các full-read dư thừa trước bước này.
 - Việc triển khai code không đồng nghĩa phê duyệt retry scan. Retry chỉ được chạy bằng một lệnh OPERATE owner-approved riêng sau đó.
+
+## Corrected pre-master evolution
+
+Evolution ID: `EVOLVE_STAGE12_CORRECTED_PREMASTER`
+
+- Diagnostic ordinal 2 `READY` với immutable evidence `FAIL` là nguồn duy nhất được phép tạo corrected pre-master; attempt 3, diagnostic jobs và QA evidence cũ không bị sửa.
+- `stage12_corrected_pre_master_job` khóa quan hệ source job → diagnostic ordinal 2 → diagnostic evidence → corrected artifact. Corrected R2 key và SHA-256 phải mới; terminal row không thể UPDATE/DELETE.
+- Worker áp dụng strategy v1 xác định: temporal noise/motion repair cho toàn timeline, dynamic-range expansion rồi loudnorm trên encoded audio, sau đó chạy lại full Stage 12 scan.
+- Stable gateway dùng `commandType=CREATE_STAGE_12_CORRECTED_PREMASTER` và exact approval `CREATE STAGE 12 CORRECTED PRE-MASTER`; triển khai evolution không tự gọi command này.
+- Mọi QA threshold ở trên giữ nguyên. Remediation không gọi provider, không tạo attempt 4, không finalize và không publish.

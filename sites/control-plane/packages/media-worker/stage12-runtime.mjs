@@ -132,7 +132,7 @@ export function buildStage12VideoFilter(payload) {
 async function uploadPreMaster(payload, bytes, expectedSha256) {
   const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
   const response = await authenticatedFetch(
-    `${payload.objectAccess.url}${separator}kind=pre-master&idempotencyKey=${payload.idempotencyKey}`,
+    `${payload.objectAccess.url}${separator}kind=${payload.remediation ? 'corrected-pre-master' : 'pre-master'}&idempotencyKey=${payload.idempotencyKey}`,
     payload.objectAccess.token,
     { method: 'PUT', headers: { 'content-type': 'video/webm', 'x-factory-object-sha256': expectedSha256 }, body: bytes },
   )
@@ -327,6 +327,77 @@ export async function executeStage12Recovery(payloadInput, imageDigest) {
     await writeFile(preMasterPath, bytes)
     const inspected = await inspectPreMaster(payload, preMasterPath, workRoot)
     return stage12Receipt(imageDigest, inspected, recovery.preMaster)
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+export function validateStage12RemediationPayload(payload) {
+  const value = validateStage12Payload(payload)
+  const remediation = payload?.remediation
+  if (!remediation || remediation.sourceAttemptOrdinal !== 3
+    || remediation.diagnosticOrdinal !== 2 || remediation.strategyVersion !== 1
+    || remediation.providerDispatch !== 'OFF' || remediation.providerCallCount !== 0
+    || remediation.autoPublish !== 'OFF'
+    || !String(remediation.sourcePreMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(remediation.sourcePreMaster?.sha256 ?? '')
+    || !Number.isInteger(remediation.sourcePreMaster?.byteLength)
+    || remediation.sourcePreMaster.byteLength < 1
+    || !HEX64.test(remediation.diagnosticReceiptSha256 ?? '')) {
+    throw Object.assign(new Error('Invalid Stage 12 remediation envelope.'), {
+      code: 'INVALID_STAGE12_REMEDIATION_ENVELOPE',
+    })
+  }
+  return value
+}
+
+export function buildStage12RemediationVideoFilter(payload) {
+  const speed = Math.max(120, Math.round(payload.render.width / 4))
+  return `eq=brightness=0.11,noise=alls=4:allf=t+u,drawbox=x='mod(t*${speed}\\,iw+120)-120':y=0:w=120:h=ih:color=white@0.08:t=fill`
+}
+
+export function buildStage12RemediationAudioFilter(payload) {
+  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
+  return `compand=attacks=0.15:decays=0.8:points=-80/-80|-35/-43|-20/-24|-10/-10|0/-1,loudnorm=${target}:linear=false`
+}
+
+export async function executeStage12Remediation(payloadInput, imageDigest) {
+  const payload = validateStage12RemediationPayload(payloadInput)
+  const remediation = payloadInput.remediation
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-remediation-'))
+  const sourcePath = join(workRoot, 'source-pre-master.webm')
+  const correctedPath = join(workRoot, 'corrected-pre-master.webm')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=source-pre-master&idempotencyKey=${payload.idempotencyKey}&sha256=${remediation.sourcePreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== remediation.sourcePreMaster.byteLength
+      || sha256(sourceBytes) !== remediation.sourcePreMaster.sha256) {
+      throw Object.assign(new Error('Remediation source read-back mismatch.'), {
+        code: 'STAGE12_REMEDIATION_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:v:0', '-map', '0:a:0', '-vf', buildStage12RemediationVideoFilter(payload),
+      '-af', buildStage12RemediationAudioFilter(payload), '-c:v', 'libvpx-vp9',
+      '-deadline', 'realtime', '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz),
+      '-color_primaries', payload.render.colorPrimaries, '-color_trc', payload.render.colorPrimaries,
+      '-colorspace', payload.render.colorPrimaries, correctedPath], workRoot,
+    'STAGE12_REMEDIATION_TRANSCODE_FAILED')
+    await correctStage12EncodedLoudness(payload, correctedPath, workRoot)
+    const inspected = await inspectPreMaster(payload, correctedPath, workRoot)
+    if (inspected.preMasterSha256 === remediation.sourcePreMaster.sha256) {
+      throw Object.assign(new Error('Remediation did not create a distinct artifact.'), {
+        code: 'STAGE12_REMEDIATION_OUTPUT_NOT_DISTINCT',
+      })
+    }
+    const uploaded = await uploadPreMaster(payloadInput, inspected.preMasterBytes,
+      inspected.preMasterSha256)
+    return stage12Receipt(imageDigest, inspected, uploaded)
   } finally {
     await rm(workRoot, { recursive: true, force: true })
   }

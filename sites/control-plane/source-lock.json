@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "bfb69765087b1fbdb6073c46487783740e7c45604320e7c0dd185d1cf9d1255d",
+  "aggregate_sha256": "6dd65adc62325afd8fbf282b7cd6317c133225df47e5df3c7880919dbecefcef",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -52,6 +52,10 @@
       "sha256": "3ad11627a0d30e620caa5e31a1e7b1e883e92303b761dda734bbdb3e3ca7e381"
     },
     {
+      "path": "app/api/media-worker/stage12-remediation/route.ts",
+      "sha256": "d51403ff1df9196f0eb25674c6a456a1426d2b0ffb8255d52e0ef45b0c3a15ae"
+    },
+    {
       "path": "app/api/media-worker/stage12/route.ts",
       "sha256": "94624ec02a1d944304a42f5237f43d4fcafea9a4910b487ea119295d3098ac24"
     },
@@ -85,7 +89,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "e01158355dba8c994cd52a7bf31e4f0e91ebfbeab85e97a40724f7f119ea0164"
+      "sha256": "d5a2f05ba6080d2e292f33871ad84562a05853f245531933336624567b4b8d21"
     },
     {
       "path": "app/oauth-server.ts",
@@ -137,7 +141,7 @@
     },
     {
       "path": "app/stage12-media.ts",
-      "sha256": "35a886d1b7dc3c8ed6a1fc615d652d851442c56252ab406b8e9f69000aac34f0"
+      "sha256": "dc5412a648063a84957d9f59338a0add9a1651d37fd2c3c38cbfefeacccffd2c"
     },
     {
       "path": "app/stage12-pre-master.ts",
@@ -145,7 +149,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "237a1fbc22b1cc30d6164fbda12ceb26802a1380c855e5b4a809bd45c0c35a90"
+      "sha256": "85055545626f629a024ba90bdaba2ec39ac483592cab6e7c8ccacaf5f69dff16"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -161,7 +165,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "d030465838a7c18ff25799719ed6f32db888d26fb1238940007d009a84ae0920"
+      "sha256": "f97f9f031eb215c81b29ff38b067b3b91f854a23ed3d9e69af4ff1a6aeaa0306"
     },
     {
       "path": "drizzle.config.ts",
@@ -268,6 +272,10 @@
       "sha256": "2db7489fdd42bfb4d8651b11ff8bb9f69fba84f366177b02430e4a41d1bee8ea"
     },
     {
+      "path": "drizzle/0025_stage12_corrected_pre_master.sql",
+      "sha256": "1d6fb01f652ab2728934ca2691b742003127f6ff12e48f1e7014902896a8774d"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -341,7 +349,7 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "6ed57a35b2c49955ac7ab0cdb3dec89bf809cc4492d552dfb081fb7f7cd2730d"
+      "sha256": "27cda235440d0ccae199b7d925f2b02ce09eec7285ad6994cc2c846b2f76a54d"
     },
     {
       "path": "packages/media-worker/fly.toml",
@@ -356,12 +364,16 @@
       "sha256": "9c8cd35851921caa5eff461d5b25bc7603991f9a5734af84f0a0a1a9e4d79963"
     },
     {
+      "path": "packages/media-worker/stage12-remediation-smoke.mjs",
+      "sha256": "02c0895358a9fb4348a28977bf29386b0471607e36b73187386b449c37116622"
+    },
+    {
       "path": "packages/media-worker/stage12-render-smoke.mjs",
       "sha256": "ba8aba81b002145b602a1110ab9efc8b876f1fdc493973fd63e90b560a929bf4"
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
-      "sha256": "39f671a761f3dccf5470d1539727bd9ef32d5481b691a99837a5cd43f33e8628"
+      "sha256": "daca3c8041bd76c784f506f7e5ef9fd54e66499964a08336bf4669e4b17b029c"
     },
     {
       "path": "postcss.config.mjs",
@@ -437,7 +449,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "ac7a29aa25a4d3fc0a10bcb84836ef91e0e02cbcb00828799b0aaabc448273a2"
+      "sha256": "bfb560fa8afe5866aa30d620a9a255dc078376b6a6fcbc5c9d563a39446c7239"
     },
     {
       "path": "tests/rendered-html.test.mjs",

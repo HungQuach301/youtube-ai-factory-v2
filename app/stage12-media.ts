@@ -24,6 +24,19 @@ export type Stage12MediaDiagnosticRequest = Stage12MediaRecoveryRequest & {
   };
 };
 
+export type Stage12MediaRemediationRequest = Stage12MediaStartRequest & {
+  remediation: {
+    sourceAttemptOrdinal: 3;
+    diagnosticOrdinal: 2;
+    strategyVersion: 1;
+    sourcePreMaster: { r2Key: string; sha256: string; byteLength: number };
+    diagnosticReceiptSha256: string;
+    providerDispatch: "OFF";
+    providerCallCount: 0;
+    autoPublish: "OFF";
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -99,6 +112,20 @@ export async function dispatchStage12MediaDiagnostic(
     || result.idempotencyKey !== payload.idempotencyKey
     || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_DIAGNOSTIC_FAILED:${result.code ?? response.status}`);
+  }
+  return result;
+}
+
+export async function dispatchStage12MediaRemediation(
+  payload: Stage12MediaRemediationRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/remediate", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
+    throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_REMEDIATION_FAILED:${result.code ?? response.status}`);
   }
   return result;
 }

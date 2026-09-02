@@ -1,5 +1,30 @@
 # DONE
 
+## EVOLVE_STAGE12_CORRECTED_PREMASTER · Shadow evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Corrected artifact chỉ bắt nguồn từ diagnostic ordinal 2 immutable FAIL | Migration `0025` join source job, diagnostic và evidence; mọi lineage sai bị ABORT |
+| Source attempt 3/evidence cũ không bị rewrite | Corrected job là append-only table riêng; terminal correction UPDATE/DELETE bị ABORT |
+| Visual/audio được sửa trước full scan | Worker strategy v1 dùng temporal motion repair, dynamic-range expansion, loudnorm encoded output và `inspectPreMaster` |
+| Corrected artifact có pointer/hash riêng | R2 namespace `corrected-pre-master`; source/output SHA trùng nhau bị từ chối ở worker, API và D1 |
+| Threshold giữ nguyên | Không sửa `packages/contracts/src/thresholds.ts`; remediation đọc chính `payload.qa` hiện hành; `verify:g11` bắt buộc PASS |
+| Không có side effect trong evolution | Chỉ build/test/PR; command `CREATE_STAGE_12_CORRECTED_PREMASTER` chưa được gọi; provider/generation/finalize/publish đều không chạy |
+
+## Trigger ↔ Test
+
+| Trigger/constraint | Test |
+|---|---|
+| ordinal khác 2, evidence PASS hoặc pointer/hash lệch | `0025-stage12-corrected-pre-master.test.ts` → ABORT |
+| output tái dùng source SHA hoặc thiếu receipt/measurements | `stage12_corrected_pre_master_terminal_shape_update` → ABORT |
+| provider/publish bật trong remediation envelope | `stage12-remediation.test.ts` → typed rejection |
+| temporal/audio correction không vượt gate hiện hành | `stage12-remediation-smoke.mjs` trong PR image và provider-free Production workflow |
+| stable gateway schema bị thay vì thêm handler server-side | `operator-d1.test.mjs` gọi `diagnose_factory_command`; contract version vẫn `1` |
+
+---
+
 ## EVOLVE_SITE_OWNER_IDENTITY_RECONCILIATION · Shadow evidence
 
 ## Mode: EVOLVE

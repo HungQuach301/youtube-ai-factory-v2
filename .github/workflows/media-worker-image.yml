@@ -38,6 +38,8 @@ jobs:
         run: |
           docker run --rm --entrypoint sh factory-media-worker:test -c \
             'test "$(id -u)" -ne 0 && python3 /app/scripts/verify-stage10-python-runtime.py --output /tmp/stage10-python.json'
+      - name: Verify Stage 12 corrected pre-master smoke
+        run: docker run --rm --entrypoint node factory-media-worker:test stage12-remediation-smoke.mjs
       - name: Prove health and absence of D1 binding
         run: |
           docker run --detach --name factory-media-worker \

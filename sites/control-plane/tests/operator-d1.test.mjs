@@ -110,7 +110,8 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
-    qaMigration, diagnosticRetryMigration, diagnosticRoute, mcpRoute] = await Promise.all([
+    qaMigration, diagnosticRetryMigration, correctedMigration, diagnosticRoute,
+    remediationRoute, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
@@ -121,7 +122,9 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
     readFile(fileURLToPath(new URL("../drizzle/0020_stage12_attempt_three.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0023_stage12_qa_evidence.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0024_stage12_diagnostic_callback_retry.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0025_stage12_corrected_pre_master.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-remediation/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
   ]);
   assert.match(dockerfile, /fonts-dejavu-core/);
@@ -143,13 +146,20 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(qaMigration, /STAGE12_QA_DIAGNOSTIC_SOURCE_NOT_ELIGIBLE/u);
   assert.match(diagnosticRetryMigration, /STAGE12_QA_DIAGNOSTIC_TERMINAL_IMMUTABLE/u);
   assert.match(diagnosticRetryMigration, /STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT/u);
+  assert.match(correctedMigration, /stage12_corrected_pre_master_lineage_insert/u);
+  assert.match(correctedMigration, /STAGE12_CORRECTED_PRE_MASTER_TERMINAL_IMMUTABLE/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
+  assert.match(remediationRoute, /storeTrackGVideoOneStage12CorrectedPreMaster/u);
+  assert.match(runtime, /executeStage12Remediation/u);
+  assert.match(runtime, /compand=attacks=/u);
+  assert.match(worker, /request\.url === '\/stage12\/remediate'/u);
   assert.match(domain, /verifyStage12DiagnosticPreMasterPointer/u);
   assert.match(domain, /diagnosticJob\.targetDurationSec/u);
   assert.match(domain, /generation: false/u);
   assert.match(domain, /providerDispatch: "OFF"/u);
   assert.match(domain, /autoPublish: "OFF"/u);
   assert.match(mcpRoute, /commandType === "SCAN_STAGE_12_ATTEMPT_3"/u);
+  assert.match(mcpRoute, /commandType === "CREATE_STAGE_12_CORRECTED_PREMASTER"/u);
   assert.match(mcpRoute, /execute_factory_command/u);
 });
 
@@ -501,6 +511,21 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(qaDiagnostic.structuredContent.operationState, "NOT_STARTED");
     assert.equal(qaDiagnostic.structuredContent.providerDispatch, "OFF");
     assert.equal(qaDiagnostic.structuredContent.autoPublish, "OFF");
+
+    const remediationDiagnostic = await client.callTool({
+      name: "diagnose_factory_command",
+      arguments: {
+        commandType: "CREATE_STAGE_12_CORRECTED_PREMASTER",
+        trackCode: "G",
+        videoNumber: 1,
+        stageCode: "12",
+        attemptOrdinal: 3,
+      },
+    });
+    assert.equal(remediationDiagnostic.structuredContent.contractVersion, "1");
+    assert.equal(remediationDiagnostic.structuredContent.operationState, "BLOCKED");
+    assert.equal(remediationDiagnostic.structuredContent.providerDispatch, "OFF");
+    assert.equal(remediationDiagnostic.structuredContent.autoPublish, "OFF");
 
     const rejectedStableWrite = await client.callTool({
       name: "execute_factory_command",
