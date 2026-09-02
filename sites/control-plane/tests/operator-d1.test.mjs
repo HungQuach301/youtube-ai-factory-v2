@@ -160,7 +160,7 @@ const ownerHeaders = {
   "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
 };
 
-async function createFactoryFixture(databaseName) {
+async function createFactoryFixture(databaseName, bindings = { FACTORY_OWNER_EMAIL: "owner@example.com" }) {
   const serverRoot = fileURLToPath(new URL("../dist/server", import.meta.url));
   const entries = await readdir(serverRoot, { recursive: true, withFileTypes: true });
   const modulePaths = entries
@@ -179,7 +179,7 @@ async function createFactoryFixture(databaseName) {
     compatibilityFlags: ["nodejs_compat"],
     d1Databases: { DB: databaseName },
     r2Buckets: ["BUCKET"],
-    bindings: { FACTORY_OWNER_EMAIL: "owner@example.com" },
+    bindings,
   });
   const d1 = await mf.getD1Database("DB");
   const migrationRoot = fileURLToPath(new URL("../drizzle", import.meta.url));
@@ -276,6 +276,8 @@ test("renders the root Server Component with a real D1 binding", async () => {
     for (const response of responses) {
       const html = await response.text();
       assert.equal(response.status, 200);
+      assert.equal(response.headers.get("x-factory-root-actor"), "owner");
+      assert.equal(response.headers.get("x-factory-root-authorization"), "allowed");
       assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
       assert.match(html, /YouTube AI Factory V2/i);
       assert.match(html, /D1 is live; the owner must issue PREPARE_CHANNEL/i);
@@ -294,11 +296,94 @@ test("rejects a non-owner at the Worker boundary before rendering the root Serve
       headers: {
         ...ownerHeaders,
         "oai-authenticated-user-email": "not-owner@example.com",
+        "oai-authenticated-user-id": "unconfigured-identity-claim",
         accept: "text/html",
       },
     });
     assert.equal(response.status, 403);
+    assert.equal(response.headers.get("x-factory-root-actor"), "authenticated-non-owner");
+    assert.equal(response.headers.get("x-factory-root-authorization"), "denied");
     assert.equal(await response.text(), "FACTORY_OWNER_AUTHORIZATION_DENIED");
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("does not let a renderer marker override an authenticated owner decision", async () => {
+  const { mf } = await createFactoryFixture("root-owner-renderer-marker-test");
+
+  try {
+    const response = await mf.dispatchFetch("http://localhost/", {
+      headers: {
+        ...ownerHeaders,
+        "signature-agent": "https://web-bot-auth.cloudflare-browser-rendering-085.workers.dev",
+        accept: "text/html",
+      },
+    });
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-factory-root-actor"), "owner");
+    assert.equal(response.headers.get("x-factory-root-authorization"), "allowed");
+    assert.match(html, /YouTube AI Factory V2/i);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("classifies a Cloudflare rendering probe without treating it as the owner", async () => {
+  const { mf } = await createFactoryFixture("root-renderer-boundary-test");
+
+  try {
+    const response = await mf.dispatchFetch("http://localhost/", {
+      headers: {
+        ...ownerHeaders,
+        "oai-authenticated-user-email": "rendering-probe@example.com",
+        "signature-agent": "https://web-bot-auth.cloudflare-browser-rendering-085.workers.dev",
+        accept: "text/html",
+      },
+    });
+    const body = await response.text();
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("x-factory-root-actor"), "platform-renderer");
+    assert.equal(response.headers.get("x-factory-root-authorization"), "denied");
+    assert.equal(body, "FACTORY_OWNER_AUTHORIZATION_DENIED");
+    assert.doesNotMatch(body, /Server Components render/iu);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("keeps anonymous root requests on the canonical sign-in path", async () => {
+  const { mf } = await createFactoryFixture("root-anonymous-boundary-test");
+
+  try {
+    const response = await mf.dispatchFetch("http://localhost/", {
+      headers: { accept: "text/html" },
+      redirect: "manual",
+    });
+    assert.equal(response.status, 307);
+    const location = new URL(response.headers.get("location"));
+    assert.equal(location.origin, "http://localhost");
+    assert.equal(location.pathname, "/signin-with-chatgpt");
+    assert.equal(location.search, "?return_to=%2F");
+    assert.equal(response.headers.get("x-factory-root-actor"), "anonymous");
+    assert.equal(response.headers.get("x-factory-root-authorization"), "deferred");
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("fails closed with typed root evidence when the owner allowlist is absent", async () => {
+  const { mf } = await createFactoryFixture("root-owner-config-test", {});
+
+  try {
+    const response = await mf.dispatchFetch("http://localhost/", {
+      headers: { ...ownerHeaders, accept: "text/html" },
+    });
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("x-factory-root-actor"), "configuration-error");
+    assert.equal(response.headers.get("x-factory-root-authorization"), "misconfigured");
+    assert.equal(await response.text(), "FACTORY_OWNER_ALLOWLIST_UNCONFIGURED");
   } finally {
     await mf.dispose();
   }

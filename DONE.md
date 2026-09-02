@@ -1,5 +1,37 @@
 # DONE
 
+## EVOLVE_SITE_OWNER_IDENTITY_RECONCILIATION · Shadow evidence
+
+## Mode: EVOLVE
+
+Read-only Production logs separated two actors that the previous health check had
+conflated: signed Cloudflare Browser Rendering probes received the expected
+non-owner denial, while the real owner browser received HTTP 200. Production did
+not expose a stable `oai-authenticated-user-id`, so this evolution deliberately
+retains the normalized `FACTORY_OWNER_EMAIL` allowlist instead of inventing or
+guessing a new identity key.
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Owner remains the only actor allowed to render `/` | Eight concurrent owner requests and an owner request carrying a renderer marker all return 200 with `x-factory-root-actor: owner` |
+| Authenticated non-owner is denied before RSC | Wrong email, even with an unconfigured user-ID claim, returns typed 403 and contains no Server Components error |
+| Platform renderer is observable but never privileged | Cloudflare `signature-agent` is classified only after owner mismatch; response remains typed 403 and source test prevents marker-based allowance |
+| Anonymous follows canonical sign-in | Header-free `GET /` returns 307 to `/signin-with-chatgpt?return_to=%2F` with actor `anonymous` and authorization `deferred` |
+| Missing allowlist remains fail-closed | Authenticated request with no `FACTORY_OWNER_EMAIL` returns typed 503, actor `configuration-error` and authorization `misconfigured` |
+| Root health evidence contains no identity PII | Response exposes only bounded actor/result enums; neither configured nor presented email is returned or logged |
+| Evolution has no Production side effect | Read-only log diagnosis plus local build/test and PR only; no merge, deploy, retry scan, generation, provider, finalize or publish |
+
+## Trigger ↔ Test
+
+| Trigger/constraint | Test |
+|---|---|
+| Renderer probe is mistaken for owner health | `operator-d1.test.mjs` asserts `platform-renderer / denied / 403` separately from `owner / allowed / 200` |
+| Bot marker grants or removes owner access | Owner-with-marker stays 200; non-owner-with-marker stays 403; source-boundary test fails on marker-based allowance |
+| Identity ID is trusted without a configured owner-ID contract | Non-owner request carrying an arbitrary `oai-authenticated-user-id` remains 403 |
+| Root falls back into Server Components before denial | Typed denial body and absence of Server Components error are asserted before any RSC dependency |
+
+---
+
 ## EVOLVE_SITE_ROOT_AND_PROVIDER_GUARD · Shadow evidence
 
 ## Mode: EVOLVE
