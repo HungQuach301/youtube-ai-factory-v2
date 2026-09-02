@@ -285,6 +285,144 @@ function qualificationFixture() {
   };
 }
 
+async function seedStage12AudioP0CorrectionSource(client, mf, d1) {
+  const prepared = await client.callTool({
+    name: "prepare_approved_channel",
+    arguments: {
+      objective: "Prepare the approved channel for the Stage 12 command-contract regression.",
+      confirm: true,
+    },
+  });
+  assert.equal(prepared.isError, undefined, JSON.stringify(prepared));
+  const voiceRegistered = await client.callTool({
+    name: "register_qualified_voice",
+    arguments: {
+      objective: "Register the approved voice for the Stage 12 command-contract regression.",
+      confirm: true,
+      ownerApprovalText: "APPROVE VOICE",
+      ...qualificationFixture(),
+    },
+  });
+  assert.equal(voiceRegistered.isError, undefined, JSON.stringify(voiceRegistered));
+  const trackStarted = await client.callTool({
+    name: "start_track_g_video_1_qualification",
+    arguments: {
+      objective: "Open the bounded Track G run for the Stage 12 command-contract regression.",
+      confirm: true,
+      ownerApprovalText: "START VIDEO 1 QUALIFICATION",
+    },
+  });
+  assert.equal(trackStarted.isError, undefined, JSON.stringify(trackStarted));
+  const stage00Started = await client.callTool({
+    name: "execute_track_g_video_1_stage_00",
+    arguments: {
+      objective: "Create the bounded package needed by the Stage 12 command-contract regression.",
+      confirm: true,
+      ownerApprovalText: "START STAGE 00",
+    },
+  });
+  assert.equal(stage00Started.isError, undefined, JSON.stringify(stage00Started));
+
+  const contract = await d1.prepare(
+    "SELECT operation_run_id FROM track_g_run_contract WHERE episode_id = ?",
+  ).bind("episode_ai_money_defense_01").first();
+  assert.ok(contract?.operation_run_id);
+  const productionPackage = await d1.prepare(
+    "SELECT id FROM production_package WHERE episode_id = ?",
+  ).bind("episode_ai_money_defense_01").first();
+  assert.ok(productionPackage?.id);
+  await d1.prepare("UPDATE operation_run SET current_step = 'STAGE_12_READY' WHERE id = ?")
+    .bind(contract.operation_run_id).run();
+
+  const stage12Jobs = [
+    ["stage12-contract-attempt-1", 1, null, "STAGE12_RENDER_FAILED"],
+    ["stage12-contract-attempt-2", 2, "stage12-contract-attempt-1", "STAGE12_RENDER_FAILED"],
+    ["stage12-contract-attempt-3", 3, "stage12-contract-attempt-2",
+      "S12QA:CONTROL_CONTRACT.TECHNICAL_DEFECT.LOUDNESS.M0_INPUT_RIGHTS_P0"],
+  ];
+  for (const [id, ordinal, retryOf, errorCode] of stage12Jobs) {
+    await d1.prepare(`INSERT INTO stage12_media_job
+      (id, package_id, operation_run_id, stage_instance_id, idempotency_key,
+       callback_token_hash, state, error_code, attempt_ordinal, retry_of_job_id)
+      VALUES (?, ?, ?, 'stage_track_g_video_1_12_attempt_1', ?, ?, 'FAILED', ?, ?, ?)`)
+      .bind(id, productionPackage.id, contract.operation_run_id,
+        createHash("sha256").update(`${id}:key`).digest("hex"),
+        createHash("sha256").update(`${id}:token`).digest("hex"),
+        errorCode, ordinal, retryOf).run();
+  }
+
+  const sourceBytes = Buffer.from("sealed-corrected-pre-master-command-contract-regression");
+  const sourceSha256 = createHash("sha256").update(sourceBytes).digest("hex");
+  const sourceR2Key = ["prod", "channel_ai_era_money_defense_v1",
+    "episode_ai_money_defense_01", "12", "corrected-pre-master",
+    `${sourceSha256}.webm`].join("/");
+  const receiptSha256 = createHash("sha256").update("corrected-receipt").digest("hex");
+  const diagnosticReceiptSha256 = createHash("sha256")
+    .update("diagnostic-receipt").digest("hex");
+  const preMasterSha256 = createHash("sha256").update("attempt-3-pre-master").digest("hex");
+  const imageDigest = `sha256:${"a".repeat(64)}`;
+
+  await d1.prepare(`INSERT INTO stage12_qa_diagnostic_job
+    (id, stage12_job_id, idempotency_key, callback_token_hash, state, error_code,
+     diagnostic_ordinal, target_duration_sec)
+    VALUES ('stage12-contract-diagnostic-1', 'stage12-contract-attempt-3', ?, ?,
+      'FAILED', '23', 1, 510)`)
+    .bind(createHash("sha256").update("diagnostic-1:key").digest("hex"),
+      createHash("sha256").update("diagnostic-1:token").digest("hex")).run();
+  await d1.prepare(`INSERT INTO stage12_qa_diagnostic_job
+    (id, stage12_job_id, idempotency_key, callback_token_hash, state,
+     receipt_r2_key, receipt_sha256, worker_image_digest, diagnostic_ordinal,
+     retry_of_diagnostic_job_id, retry_reason_code, target_duration_sec)
+    VALUES ('stage12-contract-diagnostic-2', 'stage12-contract-attempt-3', ?, ?,
+      'READY', 'prod/diagnostic/receipt.json', ?, ?, 2,
+      'stage12-contract-diagnostic-1', 'STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT', 510)`)
+    .bind(createHash("sha256").update("diagnostic-2:key").digest("hex"),
+      createHash("sha256").update("diagnostic-2:token").digest("hex"),
+      diagnosticReceiptSha256, imageDigest).run();
+  await d1.prepare(`INSERT INTO stage12_qa_evidence
+    (id, job_id, source, outcome, pre_master_r2_key, pre_master_sha256,
+     receipt_r2_key, receipt_sha256, worker_image_digest, report_sha256,
+     failures_json, measurements_json, render_authorized, provider_call_count,
+     provider_dispatch, auto_publish)
+    VALUES ('stage12-contract-evidence-2', 'stage12-contract-attempt-3',
+      'DIAGNOSTIC', 'FAIL', 'prod/stage12/attempt-3.webm', ?,
+      'prod/stage12/diagnostic-2.json', ?, ?, ?,
+      '["TECHNICAL_DEFECT","LOUDNESS","M0_INPUT_RIGHTS_P0"]',
+      '{"clippingSampleCount":1,"truePeakDbtp":-0.48,"loudnessRangeLu":2.9,"p0DefectCount":1}',
+      0, 0, 'OFF', 'OFF')`)
+    .bind(preMasterSha256, diagnosticReceiptSha256, imageDigest,
+      createHash("sha256").update("diagnostic-report").digest("hex")).run();
+  await d1.prepare(`INSERT INTO stage12_corrected_pre_master_job
+    (id, stage12_job_id, diagnostic_job_id, diagnostic_evidence_id,
+     idempotency_key, callback_token_hash, actor_identity, owner_approval_text,
+     state, source_pre_master_r2_key, source_pre_master_sha256,
+     source_pre_master_byte_length, corrected_pre_master_r2_key,
+     corrected_pre_master_sha256, corrected_pre_master_byte_length,
+     corrected_frame_md5_sha256, receipt_r2_key, receipt_sha256,
+     worker_image_digest, report_sha256, outcome, failures_json,
+     measurements_json, provider_call_count, provider_dispatch, auto_publish)
+    VALUES ('stage12-contract-corrected-1', 'stage12-contract-attempt-3',
+      'stage12-contract-diagnostic-2', 'stage12-contract-evidence-2', ?, ?,
+      'owner@example.com', 'CREATE STAGE 12 CORRECTED PRE-MASTER', 'READY',
+      'prod/stage12/attempt-3.webm', ?, 42, ?, ?, ?, ?,
+      'prod/stage12/corrected-receipt.json', ?, ?, ?, 'FAIL',
+      '["TECHNICAL_DEFECT","LOUDNESS","M0_INPUT_RIGHTS_P0"]',
+      '{"clippingSampleCount":1,"truePeakDbtp":-0.48,"loudnessRangeLu":2.9,"p0DefectCount":1}',
+      0, 'OFF', 'OFF')`)
+    .bind(createHash("sha256").update("corrected:key").digest("hex"),
+      createHash("sha256").update("corrected:token").digest("hex"),
+      preMasterSha256, sourceR2Key, sourceSha256, sourceBytes.length,
+      createHash("sha256").update("corrected-frame-md5").digest("hex"),
+      receiptSha256, imageDigest,
+      createHash("sha256").update("corrected-report").digest("hex")).run();
+
+  const bucket = await mf.getR2Bucket("BUCKET");
+  await bucket.put(sourceR2Key, sourceBytes, {
+    httpMetadata: { contentType: "video/webm" },
+    customMetadata: { sha256: sourceSha256, namespace: "production" },
+  });
+}
+
 test("renders the root Server Component with a real D1 binding", async () => {
   const { mf } = await createFactoryFixture("root-rsc-d1-test");
 
@@ -601,6 +739,89 @@ test("exposes owner-authorized MCP tools and persists the Production command pat
     assert.equal(commandCount.count, 1);
     assert.equal(runCount.count, 1);
     assert.equal(eventCount.count, 4);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("stable MCP gateway accepts the 0027 audio/P0 command and maps legacy trigger failures", async () => {
+  const { mf, d1 } = await createFactoryFixture("g01a-stage12-audio-p0-command-contract", {
+    FACTORY_OWNER_EMAIL: "owner@example.com",
+    MEDIA_REQUEST_SIGNING_KEY: "test-only-stage12-command-contract-signing-key",
+  });
+  const transport = new StreamableHTTPClientTransport(new URL("https://factory.test/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-stage12-command-contract-test", version: "1.0.0" });
+  const command = {
+    commandType: "CREATE_STAGE_12_AUDIO_P0_CORRECTION",
+    trackCode: "G",
+    videoNumber: 1,
+    stageCode: "12",
+    attemptOrdinal: 3,
+    expectedCurrentStep: "STAGE_12_READY",
+    objective: "Create the typed Stage 12 audio and P0 correction from immutable evidence.",
+    confirm: true,
+    ownerApprovalText: "CREATE STAGE 12 AUDIO P0 CORRECTION",
+  };
+  try {
+    await client.connect(transport);
+    await seedStage12AudioP0CorrectionSource(client, mf, d1);
+    await d1.prepare("DROP TRIGGER command_log_validate_insert").run();
+    await d1.prepare(`CREATE TRIGGER command_log_validate_insert
+      BEFORE INSERT ON command_log
+      WHEN NEW.command_type = 'CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION'
+      BEGIN SELECT RAISE(ABORT, 'COMMAND_CONTRACT_VIOLATION'); END`).run();
+
+    const legacyFailure = await client.callTool({ name: "execute_factory_command", arguments: command });
+    assert.equal(legacyFailure.isError, true);
+    assert.match(legacyFailure.content[0].text, /STABLE_COMMAND_CONTRACT_VIOLATION/u);
+    assert.doesNotMatch(legacyFailure.content[0].text, /D1_ERROR|SQLITE_CONSTRAINT/u);
+    assert.equal((await d1.prepare(`SELECT count(*) AS count FROM command_log
+      WHERE command_type = 'CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION'`).first()).count, 0);
+    assert.equal((await d1.prepare("SELECT count(*) AS count FROM stage12_audio_p0_correction_job")
+      .first()).count, 0);
+
+    const migration = await readFile(
+      fileURLToPath(new URL("../drizzle/0027_stage12_audio_p0_command_contract.sql", import.meta.url)),
+      "utf8",
+    );
+    for (const statement of migration.split("--> statement-breakpoint")
+      .map((value) => value.trim()).filter(Boolean)) {
+      await d1.prepare(statement).run();
+    }
+
+    const acceptedByContract = await client.callTool({
+      name: "execute_factory_command",
+      arguments: command,
+    });
+    assert.equal(acceptedByContract.isError, true);
+    assert.doesNotMatch(acceptedByContract.content[0].text,
+      /STABLE_COMMAND_CONTRACT_VIOLATION|COMMAND_CONTRACT_VIOLATION/u);
+    assert.match(acceptedByContract.content[0].text,
+      /TRACK_G_STAGE_[0-9A-Z]+_READ_BACK_FAILED/u);
+    const commandRow = await d1.prepare(`SELECT command_type, prev_state, next_state
+      FROM command_log
+      WHERE command_type = 'CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION'`).first();
+    assert.deepEqual(commandRow, {
+      command_type: "CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION",
+      prev_state: "TRACK_G_VIDEO_1_STAGE_12_CORRECTED_FAIL",
+      next_state: "TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING",
+    });
+    const job = await d1.prepare(`SELECT state, correction_ordinal, provider_call_count,
+      provider_dispatch, auto_publish FROM stage12_audio_p0_correction_job`).first();
+    assert.deepEqual(job, {
+      state: "PENDING",
+      correction_ordinal: 2,
+      provider_call_count: 0,
+      provider_dispatch: "OFF",
+      auto_publish: "OFF",
+    });
+    assert.equal((await d1.prepare(
+      "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal = 4",
+    ).first()).count, 0);
   } finally {
     await client.close().catch(() => {});
     await mf.dispose();

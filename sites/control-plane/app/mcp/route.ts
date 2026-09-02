@@ -1496,10 +1496,15 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         const correctionRoute = new URL(
           "/api/media-worker/stage12-audio-p0-correction", request.url,
         ).toString();
-        const correction = await createTrackGVideoOneStage12AudioP0Correction(user, {
-          objective, ownerApprovalText, callbackUrl: correctionRoute,
-          objectAccessUrl: correctionRoute,
-        });
+        let correction: Awaited<ReturnType<typeof createTrackGVideoOneStage12AudioP0Correction>>;
+        try {
+          correction = await createTrackGVideoOneStage12AudioP0Correction(user, {
+            objective, ownerApprovalText, callbackUrl: correctionRoute,
+            objectAccessUrl: correctionRoute,
+          });
+        } catch (error) {
+          throw stableCommandExecutionError(error);
+        }
         const runId = before.trackGWorkbench?.run.id;
         if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
         result = { replayed: correction.replayed, runId,
@@ -1641,6 +1646,14 @@ function authenticationToolError(request: Request, scope: string) {
     _meta: { "mcp/www_authenticate": [challenge] },
     isError: true,
   };
+}
+
+function stableCommandExecutionError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : "STABLE_COMMAND_EXECUTION_FAILED";
+  if (message.includes("COMMAND_CONTRACT_VIOLATION")) {
+    return new Error("STABLE_COMMAND_CONTRACT_VIOLATION");
+  }
+  return error instanceof Error ? error : new Error("STABLE_COMMAND_EXECUTION_FAILED");
 }
 
 function errorResponse(error: unknown): Response {

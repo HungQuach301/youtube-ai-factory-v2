@@ -1,5 +1,29 @@
 # DONE
 
+## EVOLVE_STAGE12_AUDIO_P0_COMMAND_CONTRACT · Shadow evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Migration 0027 chỉ thêm đúng audio/P0 command transition | `0027-stage12-audio-p0-command-contract.test.ts` chấp nhận exact tuple và từ chối prev/next sai |
+| Mọi command contract hiện hữu được bảo toàn | Regression duyệt toàn bộ command allowlist của 0023 và đủ 15 transition `ADVANCE_TRACK_G_VIDEO_1_STAGE` |
+| Contract vẫn fail-closed | Unknown command và malformed idempotency key tiếp tục trả `COMMAND_CONTRACT_VIOLATION` |
+| Stable MCP không rò lỗi hạ tầng | E2E thay trigger legacy, gọi `execute_factory_command` và yêu cầu typed `STABLE_COMMAND_CONTRACT_VIOLATION`, không có `D1_ERROR`/`SQLITE_CONSTRAINT` |
+| Migration mới mở đúng command path | E2E áp dụng 0027 rồi xác minh một command row và một correction job `PENDING`, correction ordinal 2, provider/publish OFF |
+| Không đổi threshold hoặc thực thi Production | Không sửa `packages/contracts/src/thresholds.ts`; chỉ build/test/PR, không retry correction, attempt 4, provider, finalize hay publish |
+
+## Trigger ↔ Test
+
+| Trigger/constraint | Test |
+|---|---|
+| Existing command/transition allowlist | `tests/migrations/0027-stage12-audio-p0-command-contract.test.ts` |
+| Exact audio/P0 prev/next states | Cùng migration test: accepted tuple và hai negative state cases |
+| Stable gateway typed mapping + transaction atomicity | `sites/control-plane/tests/operator-d1.test.mjs` |
+| Source lock và packaged Worker | Sites `verify:source-lock`, production build và full integration suite |
+
+---
+
 ## EVOLVE_STAGE12_CORRECTED_PREMASTER · Shadow evidence
 
 ## Mode: EVOLVE
