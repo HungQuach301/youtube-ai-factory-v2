@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { stage12CallbackErrorCode } from '../stage12-callback-error.mjs'
+import {
+  stage12CallbackErrorCode,
+  stage12CallbackTransportErrorCode,
+  stage12WorkerErrorCode,
+} from '../stage12-callback-error.mjs'
 
 describe('Stage 12 callback error contract', () => {
   it('compacts every QA failure without losing the failing gates', () => {
@@ -36,5 +40,19 @@ describe('Stage 12 callback error contract', () => {
       .toBe('STAGE12_CALLBACK_FAILED:422')
     expect(stage12CallbackErrorCode('A'.repeat(161), 503))
       .toBe('STAGE12_CALLBACK_FAILED:503')
+  })
+
+  it('maps callback aborts to a typed timeout and never leaks DOMException code 23', () => {
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), {
+      name: 'TimeoutError',
+      code: 23,
+    })
+
+    expect(stage12CallbackTransportErrorCode(timeout)).toBe('STAGE12_CALLBACK_TIMEOUT')
+    expect(stage12WorkerErrorCode(timeout)).toBe('STAGE12_FAILED')
+    expect(stage12WorkerErrorCode({ code: '23' })).toBe('STAGE12_FAILED')
+    expect(stage12CallbackErrorCode('23', 422)).toBe('STAGE12_CALLBACK_FAILED:422')
+    expect(stage12WorkerErrorCode({ code: 'STAGE12_CALLBACK_TIMEOUT' }))
+      .toBe('STAGE12_CALLBACK_TIMEOUT')
   })
 })

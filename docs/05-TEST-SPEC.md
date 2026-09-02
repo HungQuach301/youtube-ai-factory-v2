@@ -263,3 +263,14 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | File Opus cuối nằm trong LUFS/true-peak/LRA cũ | `stage12-audio-smoke.mjs` |
 | Không nới threshold | `verify:g11` + diff `packages/contracts/src/thresholds.ts` rỗng |
 | Không generation/provider/publish | diagnostic envelope literal `generation=false`, `providerDispatch=OFF`, `autoPublish=OFF` |
+
+## 8. EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK
+
+| Acceptance | Test/evidence |
+|---|---|
+| Timeout/Abort callback thành `STAGE12_CALLBACK_TIMEOUT`; code `23` bị từ chối | `stage12-callback-error.test.ts` và mirror Sites |
+| Callback không hydrate pipeline hoặc băm lại video lớn | source contract test yêu cầu `targetDurationSec` + `verifyStage12DiagnosticPreMasterPointer` |
+| Failed diagnostic terminal immutable | migration 0024 test UPDATE/DELETE → ABORT |
+| Chỉ đúng một retry có typed lineage | migration 0024 test ordinal, predecessor, reason, duration và third-attempt rejection |
+| Không scan/generation/provider/finalize/publish | evolution chỉ sửa code/migration; không gọi Production command; envelope giữ literals OFF/false |
+| Không nới threshold | `verify:g11` + diff `packages/contracts/src/thresholds.ts` rỗng |

@@ -1351,3 +1351,14 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- command_log cho phép SCAN_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3 duy nhất
 -- với FAILED → DIAGNOSTIC_PENDING. Xem drizzle/0023_stage12_qa_evidence.sql
 -- để lấy DDL/trigger thực thi canonical.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK — migration 0024
+-- =====================================================================
+-- stage12_qa_diagnostic_job bổ sung diagnostic_ordinal 1..2,
+-- retry_of_diagnostic_job_id, typed retry_reason_code và target_duration_sec.
+-- UNIQUE(stage12_job_id, diagnostic_ordinal) giới hạn đúng một initial + một
+-- callback-timeout retry; terminal READY/FAILED cấm UPDATE và DELETE.
+-- Retry ordinal 2 chỉ được tham chiếu ordinal 1 FAILED với typed
+-- STAGE12_CALLBACK_TIMEOUT hoặc legacy Production code 23; predecessor không
+-- bị rewrite. Xem drizzle/0024_stage12_diagnostic_callback_retry.sql.

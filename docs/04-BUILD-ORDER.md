@@ -284,3 +284,9 @@ WP-00 ─┬─ WP-01 ─┬─ WP-02 ─┬─ WP-03 ─── WP-04 ─┬─ 
 **Phạm vi.** Immutable failed-QA receipt; một typed diagnostic scan cho failed attempt 3; renderer overlay evaluate theo frame; loudness correction sau encode.
 
 **DoD.** QA fail vẫn trả 422 sau khi evidence R2/D1 read-back; diagnostic không đổi job gốc, không generation/provider/publish; renderer và encoded-audio smoke PASS; `thresholds.ts` không đổi.
+
+### 🟢 WP-34 · EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK
+
+**Phạm vi.** Loại bỏ callback timeout do hydrate pipeline/băm lại pre-master; typed transport error; immutable lineage cho đúng một diagnostic callback retry.
+
+**DoD.** Callback dùng duration đã lưu và pointer/hash/size R2, receipt vẫn immutable/read-back; numeric DOMException code không lọt vào D1; failed diagnostic cũ không sửa/xóa; retry ordinal 2 chỉ nhận callback timeout typed; không tự chạy retry scan, generation, provider, finalize hoặc publish; mọi threshold giữ nguyên.

@@ -1,5 +1,29 @@
 # DONE
 
+## EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK · Shadow evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Callback không vượt wall-time vì full-read pre-master/hydrate pipeline | Diagnostic callback dùng `target_duration_sec` đã đóng trong job và `verifyStage12DiagnosticPreMasterPointer`; R2 receipt nhỏ vẫn put + read-back |
+| Typed error không rò numeric DOMException `23` | `stage12CallbackTransportErrorCode`; unit test TimeoutError/AbortError và rejection numeric code |
+| Failed diagnostic evidence không bị rewrite | migration `0024` trigger terminal UPDATE/DELETE → ABORT; legacy row `23` giữ nguyên |
+| Chỉ một callback-timeout retry có lineage | `diagnostic_ordinal` 1..2; unique source+ordinal; predecessor/reason/duration trigger và migration tests |
+| Không nới QA threshold | Không sửa `packages/contracts/src/thresholds.ts`; `verify:g11` bắt buộc PASS |
+| Không tạo Production side effect trong evolution | Không gọi scan/retry, generation, provider, finalize hoặc publish; promotion chỉ sau CI và health PASS |
+
+## Trigger ↔ Test
+
+| Trigger/constraint | Test |
+|---|---|
+| `stage12_qa_diagnostic_duration_required` | job mới thiếu/invalid duration → ABORT |
+| `stage12_qa_diagnostic_retry_insert` | reason untyped/wrong predecessor → ABORT; ordinal 2 đúng contract → PASS |
+| `stage12_qa_diagnostic_terminal_immutable_update` | UPDATE failed diagnostic → ABORT |
+| `stage12_qa_diagnostic_terminal_immutable_delete` | DELETE diagnostic → ABORT |
+
+---
+
 ## EVO-STAGE12-CALLBACK-EVIDENCE-RECOVERY · Shadow evidence
 
 ## Mode: EVOLVE
