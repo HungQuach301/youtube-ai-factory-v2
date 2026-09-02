@@ -22,6 +22,7 @@ import {
   stage10MediaJobs,
   stage11AudioPlans,
   stage12MediaJobs,
+  stage12CorrectedPreMasterJobs,
   stage12PreMasterQa,
   stage12QaDiagnosticJobs,
   stage12QaEvidence,
@@ -54,6 +55,7 @@ import {
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
   dispatchStage12MediaDiagnostic,
+  dispatchStage12MediaRemediation,
   dispatchStage12MediaRecovery,
   dispatchStage12MediaStart,
   parseStage12MediaReceipt,
@@ -184,6 +186,7 @@ const STAGE_12_QA_ID = "pre_master_qa_track_g_video_1_stage_12_v1";
 const STAGE_12_START_OWNER_APPROVAL_TEXT = "START STAGE 12";
 const STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT = "RECOVER STAGE 12 ATTEMPT 3";
 const STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT = "SCAN STAGE 12 ATTEMPT 3";
+const STAGE_12_REMEDIATION_OWNER_APPROVAL_TEXT = "CREATE STAGE 12 CORRECTED PRE-MASTER";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -253,6 +256,13 @@ export type RecoverTrackGVideoOneStage12Input = {
 export type ScanTrackGVideoOneStage12AttemptThreeInput = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type CreateTrackGVideoOneStage12CorrectedPreMasterInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_REMEDIATION_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -5538,6 +5548,202 @@ export async function scanTrackGVideoOneStage12AttemptThree(
   return { ...(await diagnoseTrackGVideoOneStage12AttemptThreeQa()), replayed: false };
 }
 
+function stage12RemediationIdempotencyKey(sourceSha256: string, diagnosticReceiptSha256: string) {
+  return createHash("sha256").update(
+    `CREATE_TRACK_G_VIDEO_1_STAGE_12_CORRECTED_PRE_MASTER\0${sourceSha256}\0${diagnosticReceiptSha256}\0strategy-v1`,
+  ).digest("hex");
+}
+
+function stage12RemediationCallbackToken(idempotencyKey: string) {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_REMEDIATION_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+async function latestStage12CorrectedPreMasterJob() {
+  const [job] = await getDb().select().from(stage12CorrectedPreMasterJobs)
+    .orderBy(desc(stage12CorrectedPreMasterJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function stage12RemediationSource() {
+  const sourceJob = await latestStage12Job();
+  const diagnosticJob = await latestStage12QaDiagnosticJob();
+  const [evidence] = sourceJob ? await getDb().select().from(stage12QaEvidence)
+    .where(and(eq(stage12QaEvidence.jobId, sourceJob.id),
+      eq(stage12QaEvidence.source, "DIAGNOSTIC"))).limit(1) : [];
+  const candidate = evidence ? (await stage12PreMasterCandidates()).find((item) =>
+    item.key === evidence.preMasterR2Key && item.sha256 === evidence.preMasterSha256) : undefined;
+  const eligible = Boolean(sourceJob && diagnosticJob && evidence && candidate
+    && sourceJob.attemptOrdinal === 3 && sourceJob.state === "FAILED"
+    && diagnosticJob.stage12JobId === sourceJob.id && diagnosticJob.diagnosticOrdinal === 2
+    && diagnosticJob.state === "READY" && diagnosticJob.receiptSha256 === evidence.receiptSha256
+    && evidence.outcome === "FAIL" && evidence.renderAuthorized === 0
+    && evidence.providerCallCount === 0 && evidence.providerDispatch === "OFF"
+    && evidence.autoPublish === "OFF");
+  return { sourceJob, diagnosticJob, evidence, candidate, eligible };
+}
+
+export async function diagnoseTrackGVideoOneStage12CorrectedPreMaster() {
+  const source = await stage12RemediationSource();
+  const job = await latestStage12CorrectedPreMasterJob();
+  return {
+    remediationState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
+    errorCode: job?.errorCode ?? (source.eligible ? null : "STAGE12_REMEDIATION_SOURCE_NOT_ELIGIBLE"),
+    sourceAttemptOrdinal: source.sourceJob?.attemptOrdinal ?? null,
+    diagnosticOrdinal: source.diagnosticJob?.diagnosticOrdinal ?? null,
+    sourcePreMasterSha256: source.evidence?.preMasterSha256 ?? null,
+    diagnosticReceiptSha256: source.evidence?.receiptSha256 ?? null,
+    correctedPreMasterSha256: job?.correctedPreMasterSha256 ?? null,
+    outcome: job?.outcome ?? null,
+    failures: job?.failuresJson ? JSON.parse(job.failuresJson) as string[] : [],
+    measurements: job?.measurementsJson
+      ? JSON.parse(job.measurementsJson) as Stage12MediaReceipt["measurements"] : null,
+    remediationExecuted: job !== null,
+    providerDispatch: "OFF" as const, providerCallCount: 0 as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
+function requireStage12RemediationToken(job: Awaited<ReturnType<typeof latestStage12CorrectedPreMasterJob>>,
+  idempotencyKey: string, token: string): asserts job is NonNullable<typeof job> {
+  if (!job || job.idempotencyKey !== idempotencyKey || !HEX64.test(token)
+    || job.callbackTokenHash !== sha256(new TextEncoder().encode(token))) {
+    throw new Error("STAGE_12_REMEDIATION_UNAUTHORIZED");
+  }
+}
+
+export async function readTrackGVideoOneStage12RemediationSource(
+  idempotencyKey: string, token: string, expectedSha256: string,
+) {
+  const job = await latestStage12CorrectedPreMasterJob();
+  requireStage12RemediationToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || expectedSha256 !== job.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_REMEDIATION_SOURCE_CONFLICT");
+  }
+  return readVerifiedProductionEvidence(job.sourcePreMasterR2Key, job.sourcePreMasterSha256);
+}
+
+export async function storeTrackGVideoOneStage12CorrectedPreMaster(
+  idempotencyKey: string, token: string, bytes: Uint8Array, expectedSha256: string,
+) {
+  const job = await latestStage12CorrectedPreMasterJob();
+  requireStage12RemediationToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || !HEX64.test(expectedSha256) || sha256(bytes) !== expectedSha256
+    || expectedSha256 === job.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_REMEDIATION_UPLOAD_INVALID");
+  }
+  const r2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "corrected-pre-master", `${expectedSha256}.webm`].join("/");
+  await putImmutableProductionEvidence(r2Key, bytes, "video/webm", expectedSha256);
+  return { r2Key, sha256: expectedSha256, byteLength: bytes.byteLength };
+}
+
+export async function recordTrackGVideoOneStage12RemediationCallback(input: {
+  idempotencyKey: string; token: string; result?: Stage12MediaReceipt; errorCode?: string;
+}) {
+  const job = await latestStage12CorrectedPreMasterJob();
+  requireStage12RemediationToken(job, input.idempotencyKey, input.token);
+  if (job.state === "READY") return { accepted: true, replayed: true, jobStatus: "READY" as const };
+  if (job.state !== "PENDING") throw new Error("STAGE_12_REMEDIATION_CALLBACK_STATE_CONFLICT");
+  if (!input.result) {
+    const code = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_REMEDIATION_FAILED";
+    await getD1().prepare(`UPDATE stage12_corrected_pre_master_job SET state='FAILED',
+      error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      code, new Date().toISOString(), job.id,
+    ).run();
+    return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+  }
+  const parsed = parseStage12MediaReceipt(input.result);
+  const prepared = await prepareStage12MediaRequest(3);
+  const evaluation = evaluateTrackGVideoOneStage12Receipt(parsed, prepared.payload.durationSec);
+  const correctedPrefix = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "corrected-pre-master", ""].join("/");
+  const correctedPointer = (await listImmutableProductionEvidence(correctedPrefix, 8))
+    .find((object) => object.key === parsed.preMaster.r2Key
+      && object.sha256 === parsed.preMaster.sha256
+      && object.size === parsed.preMaster.byteLength);
+  if (!parsed.preMaster.r2Key.startsWith(correctedPrefix)
+    || parsed.preMaster.sha256 === job.sourcePreMasterSha256
+    || !verifyStage12MeasurementReport(parsed)
+    || !correctedPointer) {
+    throw new Error("TRACK_G_STAGE_12_REMEDIATION_READ_BACK_FAILED");
+  }
+  const receiptBytes = new TextEncoder().encode(`${canonicalize({ schemaVersion: 1,
+    remediation: true, strategyVersion: 1, sourcePreMasterSha256: job.sourcePreMasterSha256,
+    diagnosticJobId: job.diagnosticJobId, diagnosticEvidenceId: job.diagnosticEvidenceId,
+    idempotencyKey: input.idempotencyKey, result: input.result })}\n`);
+  const receiptSha256 = sha256(receiptBytes);
+  const receiptR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "corrected-pre-master-receipts", `${receiptSha256}.json`].join("/");
+  await putImmutableProductionEvidence(receiptR2Key, receiptBytes, "application/json", receiptSha256);
+  const result = await getD1().prepare(`UPDATE stage12_corrected_pre_master_job SET state='READY',
+    corrected_pre_master_r2_key=?, corrected_pre_master_sha256=?, corrected_pre_master_byte_length=?,
+    corrected_frame_md5_sha256=?, receipt_r2_key=?, receipt_sha256=?, worker_image_digest=?,
+    report_sha256=?, outcome=?, failures_json=?, measurements_json=?, updated_at=?
+    WHERE id=? AND state='PENDING'`).bind(parsed.preMaster.r2Key, parsed.preMaster.sha256,
+    parsed.preMaster.byteLength, parsed.preMaster.frameMd5Sha256, receiptR2Key, receiptSha256,
+    parsed.imageDigest, parsed.reportSha256, evaluation.passed ? "PASS" : "FAIL",
+    canonicalize(evaluation.failures), canonicalize(parsed.measurements),
+    new Date().toISOString(), job.id).run();
+  if ((result.meta.changes ?? 0) !== 1) throw new Error("STAGE_12_REMEDIATION_CONCURRENT_STATE_CONFLICT");
+  return { accepted: true, replayed: false, jobStatus: "READY" as const };
+}
+
+export async function createTrackGVideoOneStage12CorrectedPreMaster(
+  user: ChatGPTUser, input: CreateTrackGVideoOneStage12CorrectedPreMasterInput,
+) {
+  if (input.ownerApprovalText !== STAGE_12_REMEDIATION_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_REMEDIATION_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.objective.trim().length < 12 || input.objective.trim().length > 500
+    || !input.callbackUrl.startsWith("https://") || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_REMEDIATION_INPUT_INVALID");
+  }
+  const source = await stage12RemediationSource();
+  if (!source.eligible || !source.sourceJob || !source.diagnosticJob
+    || !source.evidence || !source.candidate || !source.diagnosticJob.receiptSha256) {
+    throw new Error("TRACK_G_STAGE_12_REMEDIATION_SOURCE_NOT_ELIGIBLE");
+  }
+  const existing = await latestStage12CorrectedPreMasterJob();
+  if (existing) return { ...(await diagnoseTrackGVideoOneStage12CorrectedPreMaster()), replayed: true };
+  const key = stage12RemediationIdempotencyKey(source.evidence.preMasterSha256,
+    source.diagnosticJob.receiptSha256);
+  const token = stage12RemediationCallbackToken(key);
+  const id = `stage12_corrected_pre_master_${source.sourceJob.id}`;
+  const now = new Date().toISOString();
+  await getD1().prepare(`INSERT INTO stage12_corrected_pre_master_job
+    (id,stage12_job_id,diagnostic_job_id,diagnostic_evidence_id,idempotency_key,
+     callback_token_hash,actor_identity,owner_approval_text,state,source_pre_master_r2_key,source_pre_master_sha256,
+     source_pre_master_byte_length,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,'PENDING',?,?,?,?,?)`).bind(id, source.sourceJob.id,
+    source.diagnosticJob.id, source.evidence.id, key, sha256(new TextEncoder().encode(token)),
+    user.email.toLowerCase(), input.ownerApprovalText,
+    source.evidence.preMasterR2Key, source.evidence.preMasterSha256, source.candidate.size,
+    now, now).run();
+  const prepared = await prepareStage12MediaRequest(3);
+  try {
+    await dispatchStage12MediaRemediation({ ...prepared.payload, idempotencyKey: key,
+      objectAccess: { url: input.objectAccessUrl, token }, callback: { url: input.callbackUrl, token },
+      remediation: { sourceAttemptOrdinal: 3, diagnosticOrdinal: 2, strategyVersion: 1,
+        sourcePreMaster: { r2Key: source.candidate.key, sha256: source.candidate.sha256,
+          byteLength: source.candidate.size },
+        diagnosticReceiptSha256: source.diagnosticJob.receiptSha256,
+        providerDispatch: "OFF", providerCallCount: 0, autoPublish: "OFF" } });
+  } catch (error) {
+    await getD1().prepare(`UPDATE stage12_corrected_pre_master_job SET state='FAILED',
+      error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      error instanceof Error ? error.message.slice(0, 160) : "STAGE12_REMEDIATION_START_FAILED",
+      new Date().toISOString(), id,
+    ).run();
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12CorrectedPreMaster()), replayed: false };
+}
+
 async function readBackStage12(operationRunId: string) {
   const stage11 = await readBackStage11(operationRunId);
   const db = getDb();
@@ -5586,17 +5792,26 @@ async function finalizeTrackGVideoOneStage12Prepared(
     .where(eq(commandLog.idempotencyKey, input.idempotencyKey)).limit(1);
   if (existing) return { ...(await readBackStage12(prepared.bootstrap.run.id)), replayed: true };
   if (prepared.job.state === "PENDING") throw new Error("TRACK_G_STAGE_12_JOB_PENDING");
-  if (prepared.job.state === "FAILED") throw new Error(`TRACK_G_STAGE_12_JOB_FAILED:${prepared.job.errorCode ?? "UNKNOWN"}`);
-  if (!prepared.job.receiptR2Key || !prepared.job.receiptSha256) {
+  const correction = await latestStage12CorrectedPreMasterJob();
+  const useCorrection = prepared.job.state === "FAILED" && correction?.state === "READY"
+    && correction.outcome === "PASS" && Boolean(correction.receiptR2Key && correction.receiptSha256);
+  if (prepared.job.state === "FAILED" && !useCorrection) {
+    throw new Error(`TRACK_G_STAGE_12_JOB_FAILED:${prepared.job.errorCode ?? "UNKNOWN"}`);
+  }
+  const workerReceiptR2Key = useCorrection ? correction!.receiptR2Key : prepared.job.receiptR2Key;
+  const workerReceiptSha256 = useCorrection ? correction!.receiptSha256 : prepared.job.receiptSha256;
+  const expectedReceiptIdempotencyKey = useCorrection
+    ? correction!.idempotencyKey : prepared.workerIdempotencyKey;
+  if (!workerReceiptR2Key || !workerReceiptSha256) {
     throw new Error("TRACK_G_STAGE_12_JOB_RECEIPT_MISSING");
   }
   const receiptBytes = await readVerifiedProductionEvidence(
-    prepared.job.receiptR2Key, prepared.job.receiptSha256,
+    workerReceiptR2Key, workerReceiptSha256,
   );
   const envelope = JSON.parse(new TextDecoder().decode(receiptBytes)) as {
     idempotencyKey?: string; result?: Stage12MediaReceipt;
   };
-  if (envelope.idempotencyKey !== prepared.workerIdempotencyKey || !envelope.result) {
+  if (envelope.idempotencyKey !== expectedReceiptIdempotencyKey || !envelope.result) {
     throw new Error("TRACK_G_STAGE_12_JOB_RECEIPT_INVALID");
   }
   const receipt = validateTrackGVideoOneStage12Receipt(
@@ -5619,7 +5834,11 @@ async function finalizeTrackGVideoOneStage12Prepared(
       stage11ArtifactSha256: prepared.payload.provenance.stage11ArtifactSha256,
       narrationSha256: prepared.payload.narration.sha256,
       rightsEvidenceSha256: prepared.payload.provenance.rightsEvidenceSha256,
-      workerReceiptSha256: prepared.job.receiptSha256,
+      workerReceiptSha256,
+      ...(useCorrection ? { correctedPreMasterJobId: correction!.id,
+        sourcePreMasterSha256: correction!.sourcePreMasterSha256,
+        diagnosticJobId: correction!.diagnosticJobId,
+        diagnosticEvidenceId: correction!.diagnosticEvidenceId } : {}),
     },
     controls: { providerDispatch: "OFF", providerCallCount: 0,
       releaseEligible: false, autoPublish: "OFF" },

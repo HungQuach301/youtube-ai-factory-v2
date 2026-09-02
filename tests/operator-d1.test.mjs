@@ -110,19 +110,22 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
-    qaMigration, diagnosticRetryMigration, diagnosticRoute, mcpRoute] = await Promise.all([
+    qaMigration, diagnosticRetryMigration, correctedMigration, diagnosticRoute,
+    remediationRoute, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-render-smoke.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-audio-smoke.mjs", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/db/schema.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0020_stage12_attempt_three.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0023_stage12_qa_evidence.sql", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../drizzle/0024_stage12_diagnostic_callback_retry.sql", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
-    readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0024_stage12_diagnostic_callback_retry.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0025_stage12_corrected_pre_master.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/app/api/media-worker/stage12-remediation/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/app/mcp/route.ts", import.meta.url)), "utf8"),
   ]);
   assert.match(dockerfile, /fonts-dejavu-core/);
   assert.match(dockerfile, /test -r \/usr\/share\/fonts\/truetype\/dejavu\/DejaVuSans-Bold\.ttf/);
@@ -143,13 +146,20 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(qaMigration, /STAGE12_QA_DIAGNOSTIC_SOURCE_NOT_ELIGIBLE/u);
   assert.match(diagnosticRetryMigration, /STAGE12_QA_DIAGNOSTIC_TERMINAL_IMMUTABLE/u);
   assert.match(diagnosticRetryMigration, /STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT/u);
+  assert.match(correctedMigration, /stage12_corrected_pre_master_lineage_insert/u);
+  assert.match(correctedMigration, /STAGE12_CORRECTED_PRE_MASTER_TERMINAL_IMMUTABLE/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
+  assert.match(remediationRoute, /storeTrackGVideoOneStage12CorrectedPreMaster/u);
+  assert.match(runtime, /executeStage12Remediation/u);
+  assert.match(runtime, /compand=attacks=/u);
+  assert.match(worker, /request\.url === '\/stage12\/remediate'/u);
   assert.match(domain, /verifyStage12DiagnosticPreMasterPointer/u);
   assert.match(domain, /diagnosticJob\.targetDurationSec/u);
   assert.match(domain, /generation: false/u);
   assert.match(domain, /providerDispatch: "OFF"/u);
   assert.match(domain, /autoPublish: "OFF"/u);
   assert.match(mcpRoute, /commandType === "SCAN_STAGE_12_ATTEMPT_3"/u);
+  assert.match(mcpRoute, /commandType === "CREATE_STAGE_12_CORRECTED_PREMASTER"/u);
   assert.match(mcpRoute, /execute_factory_command/u);
 });
 

@@ -450,6 +450,43 @@ export const stage12QaEvidence = sqliteTable("stage12_qa_evidence", {
   uniqueIndex("stage12_qa_evidence_job_source_unique").on(table.jobId, table.source),
 ]);
 
+export const stage12CorrectedPreMasterJobs = sqliteTable("stage12_corrected_pre_master_job", {
+  id: text("id").primaryKey(),
+  stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+  diagnosticJobId: text("diagnostic_job_id").notNull().references(() => stage12QaDiagnosticJobs.id),
+  diagnosticEvidenceId: text("diagnostic_evidence_id").notNull().references(() => stage12QaEvidence.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  actorIdentity: text("actor_identity").notNull(),
+  ownerApprovalText: text("owner_approval_text").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+  sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+  sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+  correctedPreMasterR2Key: text("corrected_pre_master_r2_key"),
+  correctedPreMasterSha256: text("corrected_pre_master_sha256"),
+  correctedPreMasterByteLength: integer("corrected_pre_master_byte_length"),
+  correctedFrameMd5Sha256: text("corrected_frame_md5_sha256"),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  reportSha256: text("report_sha256"),
+  outcome: text("outcome", { enum: ["PASS", "FAIL"] }),
+  failuresJson: text("failures_json"),
+  measurementsJson: text("measurements_json"),
+  providerCallCount: integer("provider_call_count").notNull().default(0),
+  providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+  autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_corrected_pre_master_job_diagnostic_unique").on(table.diagnosticJobId),
+  uniqueIndex("stage12_corrected_pre_master_job_evidence_unique").on(table.diagnosticEvidenceId),
+  uniqueIndex("stage12_corrected_pre_master_job_key_unique").on(table.idempotencyKey),
+  uniqueIndex("stage12_corrected_pre_master_job_output_hash_unique").on(table.correctedPreMasterSha256),
+]);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),
