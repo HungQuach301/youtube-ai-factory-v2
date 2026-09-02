@@ -29,14 +29,14 @@
 | `04-BUILD-ORDER.md` | `b85726913124815f17f1079adfb066e808dd57f553913c2fa4913eec5a66cdab` | 34 work packages/two tracks; diagnostic callback evolution |
 | `09-SELF-UPGRADE.md` | `baf407f3ed29c16e7988f4ae7b273512cc3ef194ae5e4f2abe669d5d95536c3b` | Evolution governance; Stage 12 callback lineage record |
 | `ai-factory-kien-truc.md` | `0dc6355071682b73fa14accb2f1cc141664bc7a44a905a4165116200e9312115` | Base business/technical architecture |
-| `03-DATA-SCHEMA.sql` | `ee4f37ee52e8e40520e3fb07ead4c9b3473a983e4ad9715769497df34ede99c3` | Data source of truth; Stage 12 diagnostic callback lineage delta aligned |
+| `03-DATA-SCHEMA.sql` | `745885f9a9922c529e2edb783c242e5c06f5df45ca312351bc22647c606c2e29` | Data source of truth; Stage 12 corrected pre-master and audio/P0 correction lineage aligned |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
 | `02-CONTRACTS.md` | `f21e1e524b91c571b5db29e48815485b26d5c503f781686ad7954633ce05f418` | Type, mọi ngưỡng số và Stage 12 typed callback/retry contract |
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
-| `17-STAGE12-QA-REMEDIATION.md` | `a2db31ffec4510d0b6716810fd0b83342e5c6dad1432660dfab0ccb881b91f76` | Owner-approved immutable QA evidence, callback fix, diagnostic retry and corrected-pre-master lineage |
+| `17-STAGE12-QA-REMEDIATION.md` | `24c982cf714b62528142402b992c6ac54ea60c94ad92e7afd6c00ce33da2906c` | Owner-approved immutable QA evidence, diagnostic retry, corrected pre-master and audio/P0 correction lineage |
 | `DECISIONS-ANSWERED.md` | `2d074646fb165f1822b59e1f45f2e32e3913756a12542fcb5bcd183ecb5feafd` | Owner decision baseline; spend ceilings, standing authorization and WP-12B numeric PROFILE=REDUCED decision confirmed 2026-08-23; hard controls and remaining owner inputs stay fail-closed |
 
 ## Provenance rule

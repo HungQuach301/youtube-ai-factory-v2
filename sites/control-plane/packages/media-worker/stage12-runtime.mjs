@@ -131,8 +131,11 @@ export function buildStage12VideoFilter(payload) {
 
 async function uploadPreMaster(payload, bytes, expectedSha256) {
   const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+  const kind = payload.remediation?.strategyVersion === 2
+    ? 'audio-p0-corrected-pre-master'
+    : payload.remediation ? 'corrected-pre-master' : 'pre-master'
   const response = await authenticatedFetch(
-    `${payload.objectAccess.url}${separator}kind=${payload.remediation ? 'corrected-pre-master' : 'pre-master'}&idempotencyKey=${payload.idempotencyKey}`,
+    `${payload.objectAccess.url}${separator}kind=${kind}&idempotencyKey=${payload.idempotencyKey}`,
     payload.objectAccess.token,
     { method: 'PUT', headers: { 'content-type': 'video/webm', 'x-factory-object-sha256': expectedSha256 }, body: bytes },
   )
@@ -215,20 +218,27 @@ function loudnessPasses(payload, loudness) {
     && loudness.loudnessRangeLu <= payload.qa.loudness.lraMax
 }
 
-export async function correctStage12EncodedLoudness(payload, preMasterPath, workRoot) {
-  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${payload.qa.loudness.lraMax - 1}`
-  const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-    '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], workRoot,
-  'STAGE12_FINAL_LOUDNESS_FAILED')
-  const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
-  if (loudnessPasses(payload, measured)) return
-  const correctedPath = join(workRoot, 'pre-master-loudness-corrected.webm')
-  const correction = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false`
-  await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', preMasterPath,
-    '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-af', correction,
-    '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
-  'STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED')
-  await rename(correctedPath, preMasterPath)
+export async function correctStage12EncodedLoudness(payload, preMasterPath, workRoot, options = {}) {
+  const truePeakTargetDbtp = Number.isFinite(options.truePeakTargetDbtp)
+    ? options.truePeakTargetDbtp : payload.qa.loudness.truePeakMaxDbtp
+  const passLimit = Number.isInteger(options.passLimit) && options.passLimit > 0
+    ? options.passLimit : 1
+  const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${truePeakTargetDbtp}:LRA=${lraTarget}`
+  for (let pass = 1; pass <= passLimit; pass += 1) {
+    const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+      '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
+    'STAGE12_FINAL_LOUDNESS_FAILED')
+    const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
+    if (loudnessPasses(payload, measured)) return
+    const correctedPath = join(workRoot, `pre-master-loudness-corrected-${pass}.webm`)
+    const correction = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false`
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', preMasterPath,
+      '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-af', correction,
+      '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
+    'STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED')
+    await rename(correctedPath, preMasterPath)
+  }
 }
 
 function stage12Receipt(imageDigest, inspected, pointer) {
@@ -361,6 +371,42 @@ export function buildStage12RemediationAudioFilter(payload) {
   return `compand=attacks=0.15:decays=0.8:points=-80/-80|-35/-43|-20/-24|-10/-10|0/-1,loudnorm=${target}:linear=false`
 }
 
+export function validateStage12AudioP0CorrectionPayload(payload) {
+  const value = validateStage12Payload(payload)
+  const remediation = payload?.remediation
+  if (!remediation || remediation.sourceAttemptOrdinal !== 3
+    || remediation.diagnosticOrdinal !== 2 || remediation.strategyVersion !== 2
+    || remediation.correctionOrdinal !== 2
+    || typeof remediation.predecessorCorrectionJobId !== 'string'
+    || remediation.predecessorCorrectionJobId.length < 3
+    || remediation.providerDispatch !== 'OFF' || remediation.providerCallCount !== 0
+    || remediation.autoPublish !== 'OFF'
+    || !String(remediation.sourceCorrectedPreMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(remediation.sourceCorrectedPreMaster?.sha256 ?? '')
+    || !Number.isInteger(remediation.sourceCorrectedPreMaster?.byteLength)
+    || remediation.sourceCorrectedPreMaster.byteLength < 1
+    || !HEX64.test(remediation.sourceCorrectionReceiptSha256 ?? '')
+    || !Number.isInteger(remediation.correctionPassLimit)
+    || remediation.correctionPassLimit < 1) {
+    throw Object.assign(new Error('Invalid Stage 12 audio/P0 correction envelope.'), {
+      code: 'INVALID_STAGE12_AUDIO_P0_CORRECTION_ENVELOPE',
+    })
+  }
+  return value
+}
+
+export function buildStage12AudioP0CorrectionFilter(payload) {
+  const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+  const expansionLu = payload.qa.loudness.lraMin + payload.qa.loudness.toleranceLufs
+  const periodSec = payload.qa.nearStaticMaxSec * payload.qa.loudness.lraMin
+  const truePeakTargetDbtp = payload.qa.loudness.truePeakMaxDbtp
+    - payload.qa.loudness.toleranceLufs / 2
+  const macroDynamics = `volume='pow(10\\,(-${expansionLu}/20)*(0.5+0.5*sin(2*PI*t/${periodSec})))':eval=frame`
+  const expansion = 'compand=attacks=0.15:decays=0.8:points=-80/-80|-35/-43|-20/-24|-10/-10|0/-1'
+  const target = `I=${payload.qa.loudness.integratedLufs}:TP=${truePeakTargetDbtp}:LRA=${lraTarget}`
+  return `${macroDynamics},${expansion},loudnorm=${target}:linear=false`
+}
+
 export async function executeStage12Remediation(payloadInput, imageDigest) {
   const payload = validateStage12RemediationPayload(payloadInput)
   const remediation = payloadInput.remediation
@@ -393,6 +439,50 @@ export async function executeStage12Remediation(payloadInput, imageDigest) {
     if (inspected.preMasterSha256 === remediation.sourcePreMaster.sha256) {
       throw Object.assign(new Error('Remediation did not create a distinct artifact.'), {
         code: 'STAGE12_REMEDIATION_OUTPUT_NOT_DISTINCT',
+      })
+    }
+    const uploaded = await uploadPreMaster(payloadInput, inspected.preMasterBytes,
+      inspected.preMasterSha256)
+    return stage12Receipt(imageDigest, inspected, uploaded)
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+export async function executeStage12AudioP0Correction(payloadInput, imageDigest) {
+  const payload = validateStage12AudioP0CorrectionPayload(payloadInput)
+  const remediation = payloadInput.remediation
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-audio-p0-correction-'))
+  const sourcePath = join(workRoot, 'source-corrected-pre-master.webm')
+  const correctedPath = join(workRoot, 'audio-p0-corrected-pre-master.webm')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=source-audio-p0-pre-master&idempotencyKey=${payload.idempotencyKey}&sha256=${remediation.sourceCorrectedPreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== remediation.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== remediation.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('Audio/P0 correction source read-back mismatch.'), {
+        code: 'STAGE12_AUDIO_P0_CORRECTION_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy',
+      '-af', buildStage12AudioP0CorrectionFilter(payload), '-c:a', 'libopus',
+      '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
+    'STAGE12_AUDIO_P0_CORRECTION_TRANSCODE_FAILED')
+    const truePeakTargetDbtp = payload.qa.loudness.truePeakMaxDbtp
+      - payload.qa.loudness.toleranceLufs / 2
+    await correctStage12EncodedLoudness(payload, correctedPath, workRoot, {
+      truePeakTargetDbtp, passLimit: remediation.correctionPassLimit,
+    })
+    const inspected = await inspectPreMaster(payload, correctedPath, workRoot)
+    if (inspected.preMasterSha256 === remediation.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('Audio/P0 correction did not create a distinct artifact.'), {
+        code: 'STAGE12_AUDIO_P0_CORRECTION_OUTPUT_NOT_DISTINCT',
       })
     }
     const uploaded = await uploadPreMaster(payloadInput, inspected.preMasterBytes,

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStage12AudioP0CorrectionFilter,
   buildStage12RemediationAudioFilter,
   buildStage12RemediationVideoFilter,
+  validateStage12AudioP0CorrectionPayload,
   validateStage12RemediationPayload,
 } from "../stage12-runtime.mjs";
 
@@ -47,5 +49,37 @@ describe("Stage 12 corrected pre-master runtime", () => {
     expect(video).toMatch(/mod\(t\*480/u);
     expect(audio).toMatch(/^compand=/u);
     expect(audio).toContain("loudnorm=I=-14:TP=-1:LRA=7:linear=false");
+  });
+
+  it("requires immutable correction-ordinal-2 lineage from the failed corrected artifact", () => {
+    const audioCorrectionPayload = { ...payload, remediation: {
+      sourceAttemptOrdinal: 3, diagnosticOrdinal: 2, strategyVersion: 2,
+      correctionOrdinal: 2, predecessorCorrectionJobId: "correction-1",
+      sourceCorrectedPreMaster: {
+        r2Key: "prod/corrected/source.webm", sha256: hex("1"), byteLength: 7_000_000,
+      },
+      sourceCorrectionReceiptSha256: hex("2"), correctionPassLimit: 3, providerDispatch: "OFF",
+      providerCallCount: 0, autoPublish: "OFF",
+    } };
+    expect(validateStage12AudioP0CorrectionPayload(audioCorrectionPayload).idempotencyKey)
+      .toBe(hex("a"));
+    for (const remediation of [
+      { ...audioCorrectionPayload.remediation, correctionOrdinal: 1 },
+      { ...audioCorrectionPayload.remediation, strategyVersion: 1 },
+      { ...audioCorrectionPayload.remediation, providerCallCount: 1 },
+    ]) {
+      expect(() => validateStage12AudioP0CorrectionPayload({
+        ...audioCorrectionPayload, remediation,
+      })).toThrowError(expect.objectContaining({ code: "INVALID_STAGE12_AUDIO_P0_CORRECTION_ENVELOPE" }));
+    }
+  });
+
+  it("adds deterministic macro dynamics and encoded true-peak headroom without changing QA thresholds", () => {
+    const filter = buildStage12AudioP0CorrectionFilter(payload);
+    expect(filter).toContain("volume=");
+    expect(filter).toContain("compand=");
+    expect(filter).toContain("loudnorm=I=-14:TP=-1.5:LRA=6:linear=false");
+    expect(payload.qa.loudness).toEqual({ integratedLufs: -14, toleranceLufs: 1,
+      truePeakMaxDbtp: -1, lraMin: 4, lraMax: 8 });
   });
 });

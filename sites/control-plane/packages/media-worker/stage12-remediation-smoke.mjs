@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { buildStage12RemediationAudioFilter,
+import { buildStage12AudioP0CorrectionFilter, buildStage12RemediationAudioFilter,
   buildStage12RemediationVideoFilter, correctStage12EncodedLoudness } from './stage12-runtime.mjs'
 
 function run(args, cwd) {
@@ -29,7 +29,7 @@ const root = await mkdtemp(join(tmpdir(), 'factory-stage12-remediation-smoke-'))
 try {
   const output = join(root, 'corrected.webm')
   const payload = { durationSec: 12, render: { width: 640, height: 360, fps: 30, sampleRateHz: 48000 },
-    qa: { nearStaticMaxSec: 7, loudness: { integratedLufs: -14, truePeakMaxDbtp: -1,
+    qa: { nearStaticMaxSec: 7, loudness: { integratedLufs: -14, toleranceLufs: 1, truePeakMaxDbtp: -1,
       lraMin: 4, lraMax: 8 } } }
   await run(['-hide_banner', '-nostdin', '-y',
     '-f', 'lavfi', '-i', 'color=c=black:s=640x360:r=30:d=12',
@@ -48,6 +48,27 @@ try {
     || measured.lra < 4 || measured.lra > 8) {
     throw new Error(`Stage 12 remediation smoke failed: ${JSON.stringify({ measured,
       black: scan.includes('black_start:'), freeze: scan.includes('freeze_start:') })}`)
+  }
+
+  const audioSource = join(root, 'audio-p0-source.webm')
+  const audioCorrected = join(root, 'audio-p0-corrected.webm')
+  const audioPayload = { ...payload, durationSec: 36 }
+  await run(['-hide_banner', '-nostdin', '-y',
+    '-f', 'lavfi', '-i', 'color=c=black:s=640x360:r=30:d=36',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=36',
+    '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-c:a', 'libopus', audioSource], root)
+  await run(['-hide_banner', '-nostdin', '-y', '-i', audioSource,
+    '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy',
+    '-af', buildStage12AudioP0CorrectionFilter(audioPayload),
+    '-c:a', 'libopus', '-ar', '48000', audioCorrected], root)
+  await correctStage12EncodedLoudness(audioPayload, audioCorrected, root, {
+    truePeakTargetDbtp: -1.5, passLimit: 3,
+  })
+  const audioMeasured = loudness(await run(['-hide_banner', '-nostdin', '-i', audioCorrected,
+    '-af', 'loudnorm=I=-14:TP=-1:LRA=6:print_format=json', '-f', 'null', '-'], root))
+  if (Math.abs(audioMeasured.integrated + 14) > 1 || audioMeasured.peak > -1
+    || audioMeasured.lra < 4 || audioMeasured.lra > 8) {
+    throw new Error(`Stage 12 audio/P0 correction smoke failed: ${JSON.stringify(audioMeasured)}`)
   }
   process.stdout.write('STAGE12_REMEDIATION_SMOKE_PASS\n')
 } finally {

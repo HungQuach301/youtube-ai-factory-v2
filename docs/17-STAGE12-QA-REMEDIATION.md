@@ -59,3 +59,15 @@ Evolution ID: `EVOLVE_STAGE12_CORRECTED_PREMASTER`
 - Worker áp dụng strategy v1 xác định: temporal noise/motion repair cho toàn timeline, dynamic-range expansion rồi loudnorm trên encoded audio, sau đó chạy lại full Stage 12 scan.
 - Stable gateway dùng `commandType=CREATE_STAGE_12_CORRECTED_PREMASTER` và exact approval `CREATE STAGE 12 CORRECTED PRE-MASTER`; triển khai evolution không tự gọi command này.
 - Mọi QA threshold ở trên giữ nguyên. Remediation không gọi provider, không tạo attempt 4, không finalize và không publish.
+
+## Audio/P0 correction evolution
+
+Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_CORRECTION`
+
+- Nguồn duy nhất là corrected pre-master strategy v1 đã seal ở trạng thái `READY/FAIL`, còn đúng các failure `TECHNICAL_DEFECT`, `LOUDNESS` và `M0_INPUT_RIGHTS_P0`. Artifact, receipt, hash và byte length của predecessor phải khớp tuyệt đối.
+- Migration `0026` tạo `stage12_audio_p0_correction_job` append-only với `correction_ordinal=2`, liên kết trực tiếp predecessor và Stage 12 attempt 3. Output phải có R2 key/hash mới; terminal row không thể UPDATE/DELETE.
+- Strategy v2 copy nguyên video stream đã sửa ở strategy v1, chỉ xử lý audio bằng macro-dynamic shaping, downward expansion và loudnorm. Worker đo lại file Opus cuối và chỉ chạy số pass hậu encode bị chặn bởi `RETRY.MAX_ATTEMPTS` hiện hành.
+- True-peak target nội bộ có headroom `-1.5 dBTP`, được suy ra từ gate `-1 dBTP` và nửa tolerance loudness hiện hành; LRA target là trung điểm `6 LU` của gate `4..8 LU`. Đây là target xử lý, không sửa threshold QA.
+- Stable gateway dùng `commandType=CREATE_STAGE_12_AUDIO_P0_CORRECTION` và exact approval `CREATE STAGE 12 AUDIO P0 CORRECTION`. Việc merge/deploy evolution không tự chạy command.
+- Finalize chỉ có thể chọn ordinal 2 khi job `READY/PASS` và receipt immutable hợp lệ; nếu ordinal 2 chưa PASS thì Stage 12 tiếp tục fail-closed.
+- Evolution và CI không gọi provider, không tạo attempt 4, không chạy generation, không finalize và không publish.

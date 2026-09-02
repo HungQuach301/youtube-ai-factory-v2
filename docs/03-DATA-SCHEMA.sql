@@ -1362,3 +1362,22 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- Retry ordinal 2 chỉ được tham chiếu ordinal 1 FAILED với typed
 -- STAGE12_CALLBACK_TIMEOUT hoặc legacy Production code 23; predecessor không
 -- bị rewrite. Xem drizzle/0024_stage12_diagnostic_callback_retry.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_CORRECTED_PREMASTER — migration 0025
+-- =====================================================================
+-- stage12_corrected_pre_master_job liên kết immutable attempt 3 với
+-- diagnostic ordinal 2 và QA evidence đã seal. Chỉ diagnostic READY/FAIL
+-- mới được làm nguồn; corrected artifact/receipt mới được khóa hash và
+-- terminal row cấm UPDATE/DELETE. Xem
+-- drizzle/0025_stage12_corrected_pre_master.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_AUDIO_P0_CORRECTION — migration 0026
+-- =====================================================================
+-- stage12_audio_p0_correction_job là correction_ordinal=2 append-only,
+-- nhận đúng corrected pre-master strategy v1 READY/FAIL làm predecessor.
+-- Lineage khóa source pointer/hash/size/receipt; READY bắt buộc output mới,
+-- typed measurements và immutable receipt. DB ép provider_call_count=0,
+-- provider_dispatch=OFF, auto_publish=OFF; terminal UPDATE/DELETE bị chặn.
+-- Xem drizzle/0026_stage12_audio_p0_correction.sql.
