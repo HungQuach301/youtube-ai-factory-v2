@@ -20,7 +20,6 @@ env:
   FLY_APP_NAME: youtube-ai-factory-v2-media-worker-prod
   FLY_CONFIG: packages/media-worker/fly.toml
   CALIBRATION_OUTPUT: dual-calibration-live-output
-  MEDIA_STAGE10_VERIFY_KEY: MCowBQYDK2VwAyEArYGfR2yAFXqTXBUFzwf5Eyod9MfoE405MZUQ2qAULL8=
 
 jobs:
   calibrate-build-deploy:
@@ -30,6 +29,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       MDC_API_KEY: ${{ secrets.MDC_API_KEY }}
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      MEDIA_STAGE10_VERIFY_KEY: ${{ vars.MEDIA_STAGE10_VERIFY_KEY }}
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONUNBUFFERED: "1"
     steps:
@@ -54,6 +54,7 @@ jobs:
           [[ -n "${FLY_API_TOKEN:-}" ]] || { echo "FLY_API_TOKEN is not configured" >&2; exit 1; }
           [[ -n "${MDC_API_KEY:-}" ]] || { echo "MDC_API_KEY is not configured" >&2; exit 1; }
           [[ -n "${ELEVENLABS_API_KEY:-}" ]] || { echo "ELEVENLABS_API_KEY is not configured" >&2; exit 1; }
+          [[ -n "${MEDIA_STAGE10_VERIFY_KEY:-}" ]] || { echo "MEDIA_STAGE10_VERIFY_KEY repository variable is not configured" >&2; exit 1; }
       - name: Install pinned calibration observer
         shell: bash
         run: |
