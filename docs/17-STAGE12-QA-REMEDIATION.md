@@ -89,3 +89,25 @@ Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_COMMAND_CONTRACT`
   job được tạo trong fixture, với provider/publish OFF và không có attempt 4.
 - Evolution này chỉ sửa contract, test và mở PR. Nó không retry correction,
   không gọi provider, không finalize và không publish.
+
+## Audio/P0 correction ordinal 3
+
+Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_CORRECTION_ORDINAL3`
+
+- Nguồn duy nhất là correction ordinal 2 `READY/FAIL` có immutable artifact,
+  receipt và các lỗi encoded `clippingSampleCount > 0`, true peak vượt `-1 dBTP`,
+  LRA dưới `4 LU` và P0 vượt `0`. Artifact SHA nguồn hiện hành là
+  `163acb7a9d1b971afeb50b3ac935960cfe7197e9fcbe45416eebdaa8299506d2`.
+- Migration `0028` thêm bảng retry append-only với `correction_ordinal=3`,
+  `correction_strategy_version=3` và typed reason
+  `STAGE12_AUDIO_P0_ENCODED_QA_FAIL`; ordinal 2 không bị sửa hoặc xóa.
+- Strategy v3 giữ nguyên video, tạo macro-dynamics theo chu kỳ vuông khi LRA dưới
+  sàn, dùng true-peak target nội bộ `-2 dBTP`, tắt auto-level của limiter, đo lại
+  chính file Opus sau từng pass và fail-closed bằng
+  `STAGE12_ENCODED_LOUDNESS_UNRESOLVED` nếu output cuối chưa đạt contract.
+- Các target xử lý được suy ra từ threshold hiện hành; QA threshold vẫn giữ
+  nguyên: `-14 ± 1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`, P0 `0`.
+- Stable diagnostic trả đầy đủ source/output R2 key, SHA-256, byte length,
+  frame-MD5 SHA-256, receipt R2/SHA, report SHA và worker image digest.
+- Evolution này chỉ mở PR. Nó không chạy correction ordinal 3, không tạo attempt
+  4, không gọi provider, không finalize và không publish.

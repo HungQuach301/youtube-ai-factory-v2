@@ -1548,3 +1548,24 @@ source mới chỉ được triển khai sau owner promotion và phải rollback
 Work package này không chạy correction job. Generation, provider, Stage 12 finalize
 và publish chỉ có thể xảy ra qua phê duyệt OPERATE riêng sau khi PR được promote,
 triển khai và health check PASS.
+
+---
+
+## EVO-STAGE12-AUDIO-P0-CORRECTION-ORDINAL3 · Encoded QA retry lineage
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Chỉ nhận immutable ordinal 2 `READY/FAIL` đúng encoded QA defects | Migration `0028` kiểm source R2/SHA/byte/receipt, failure classes và clipping/true-peak/LRA/P0 measurements |
+| Tạo đúng một lineage ordinal 3, không sửa lịch sử | Bảng retry append-only; UNIQUE predecessor/idempotency/output; terminal UPDATE/DELETE bị chặn |
+| Sửa encoded overshoot, clipping và LRA floor | Strategy v3 tắt limiter auto-level, có full headroom, macro-dynamics có điều kiện và hậu kiểm sau mỗi Opus encode |
+| Output ngoài threshold không được upload như PASS | Worker ném typed `STAGE12_ENCODED_LOUDNESS_UNRESOLVED`; FFmpeg smoke đo file encoded cuối |
+| Không đổi QA threshold | `packages/contracts/src/thresholds.ts` không đổi; unit test đối chiếu nguyên `-14 ±1`, `≤-1`, `4..8`, P0 `0` |
+| Stable read-back trả đủ provenance | E2E MCP/D1 kiểm R2 key, byte length, artifact/frame-MD5/receipt/report SHA và image digest |
+| Không attempt 4, provider, finalize hay publish | DB/payload ép `0/OFF`; regression xác minh không có `stage12_media_job.attempt_ordinal=4`; work package chỉ mở PR |
+
+## Production boundary
+
+Không chạy correction ordinal 3 trong evolution này. Merge/deploy và lệnh OPERATE
+đều cần owner approval riêng sau khi CI hoàn tất.

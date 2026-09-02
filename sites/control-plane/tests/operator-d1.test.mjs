@@ -110,7 +110,8 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
-    qaMigration, diagnosticRetryMigration, correctedMigration, audioP0Migration, diagnosticRoute,
+    qaMigration, diagnosticRetryMigration, correctedMigration, audioP0Migration,
+    audioP0RetryMigration, diagnosticRoute,
     remediationRoute, audioP0Route, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
@@ -124,6 +125,7 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
     readFile(fileURLToPath(new URL("../drizzle/0024_stage12_diagnostic_callback_retry.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0025_stage12_corrected_pre_master.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0026_stage12_audio_p0_correction.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0028_stage12_audio_p0_correction_ordinal_three.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-remediation/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-audio-p0-correction/route.ts", import.meta.url)), "utf8"),
@@ -152,6 +154,8 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(correctedMigration, /STAGE12_CORRECTED_PRE_MASTER_TERMINAL_IMMUTABLE/u);
   assert.match(audioP0Migration, /stage12_audio_p0_correction_lineage_insert/u);
   assert.match(audioP0Migration, /STAGE12_AUDIO_P0_CORRECTION_TERMINAL_IMMUTABLE/u);
+  assert.match(audioP0RetryMigration, /stage12_audio_p0_correction_ordinal3_lineage_insert/u);
+  assert.match(audioP0RetryMigration, /STAGE12_AUDIO_P0_CORRECTION_ORDINAL3_TERMINAL_IMMUTABLE/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
   assert.match(remediationRoute, /storeTrackGVideoOneStage12CorrectedPreMaster/u);
   assert.match(audioP0Route, /storeTrackGVideoOneStage12AudioP0CorrectedPreMaster/u);
@@ -160,6 +164,8 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(worker, /request\.url === '\/stage12\/remediate'/u);
   assert.match(worker, /request\.url === '\/stage12\/audio-p0-correct'/u);
   assert.match(runtime, /executeStage12AudioP0Correction/u);
+  assert.match(runtime, /STAGE12_ENCODED_LOUDNESS_UNRESOLVED/u);
+  assert.match(domain, /correctedFrameMd5Sha256/u);
   assert.match(domain, /const useAudioP0Correction =/u);
   assert.match(domain, /audioP0CorrectionJobId: audioP0Correction!\.id/u);
   assert.match(domain, /verifyStage12DiagnosticPreMasterPointer/u);
@@ -818,6 +824,136 @@ test("stable MCP gateway accepts the 0027 audio/P0 command and maps legacy trigg
       provider_call_count: 0,
       provider_dispatch: "OFF",
       auto_publish: "OFF",
+    });
+    assert.equal((await d1.prepare(
+      "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal = 4",
+    ).first()).count, 0);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("stable MCP diagnostic reads the complete immutable ordinal-3 correction lineage", async () => {
+  const { mf, d1 } = await createFactoryFixture("g01a-stage12-audio-p0-ordinal3-readback", {
+    FACTORY_OWNER_EMAIL: "owner@example.com",
+    MEDIA_REQUEST_SIGNING_KEY: "test-only-stage12-ordinal3-signing-key",
+  });
+  const transport = new StreamableHTTPClientTransport(new URL("https://factory.test/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-stage12-ordinal3-readback-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await seedStage12AudioP0CorrectionSource(client, mf, d1);
+    const predecessor = await d1.prepare(`SELECT id, stage12_job_id,
+      corrected_pre_master_r2_key, corrected_pre_master_sha256,
+      corrected_pre_master_byte_length, receipt_sha256
+      FROM stage12_corrected_pre_master_job`).first();
+    assert.ok(predecessor);
+    const bucket = await mf.getR2Bucket("BUCKET");
+    const ordinalTwoBytes = Buffer.from("immutable-audio-p0-correction-ordinal-two");
+    const ordinalTwoSha256 = createHash("sha256").update(ordinalTwoBytes).digest("hex");
+    const ordinalTwoR2Key = ["prod", "channel_ai_era_money_defense_v1",
+      "episode_ai_money_defense_01", "12", "audio-p0-corrected-pre-master",
+      `${ordinalTwoSha256}.webm`].join("/");
+    await bucket.put(ordinalTwoR2Key, ordinalTwoBytes, {
+      httpMetadata: { contentType: "video/webm" },
+      customMetadata: { sha256: ordinalTwoSha256, namespace: "production" },
+    });
+    const ordinalTwoReceiptSha256 = createHash("sha256").update("ordinal-two-receipt").digest("hex");
+    await d1.prepare(`INSERT INTO stage12_audio_p0_correction_job
+      (id, predecessor_corrected_pre_master_job_id, stage12_job_id, correction_ordinal,
+       idempotency_key, callback_token_hash, actor_identity, owner_approval_text, state,
+       source_pre_master_r2_key, source_pre_master_sha256, source_pre_master_byte_length,
+       source_receipt_sha256, corrected_pre_master_r2_key, corrected_pre_master_sha256,
+       corrected_pre_master_byte_length, corrected_frame_md5_sha256, receipt_r2_key,
+       receipt_sha256, worker_image_digest, report_sha256, outcome, failures_json,
+       measurements_json)
+      VALUES ('stage12-audio-p0-correction-2', ?, ?, 2, ?, ?, 'owner@example.com',
+       'CREATE STAGE 12 AUDIO P0 CORRECTION', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+       'FAIL', '["TECHNICAL_DEFECT","LOUDNESS","M0_INPUT_RIGHTS_P0"]',
+       '{"clippingSampleCount":1,"truePeakDbtp":-0.9,"loudnessRangeLu":3,"p0DefectCount":1}')`)
+      .bind(predecessor.id, predecessor.stage12_job_id,
+        createHash("sha256").update("ordinal-two-key").digest("hex"),
+        createHash("sha256").update("ordinal-two-token").digest("hex"),
+        predecessor.corrected_pre_master_r2_key, predecessor.corrected_pre_master_sha256,
+        predecessor.corrected_pre_master_byte_length, predecessor.receipt_sha256,
+        ordinalTwoR2Key, ordinalTwoSha256, ordinalTwoBytes.length,
+        createHash("sha256").update("ordinal-two-frame-md5").digest("hex"),
+        "prod/receipts/ordinal-two.json", ordinalTwoReceiptSha256,
+        `sha256:${"2".repeat(64)}`,
+        createHash("sha256").update("ordinal-two-report").digest("hex")).run();
+
+    const ordinalThreeBytes = Buffer.from("immutable-audio-p0-correction-ordinal-three");
+    const ordinalThreeSha256 = createHash("sha256").update(ordinalThreeBytes).digest("hex");
+    const ordinalThreeR2Key = ["prod", "channel_ai_era_money_defense_v1",
+      "episode_ai_money_defense_01", "12", "audio-p0-corrected-pre-master",
+      `${ordinalThreeSha256}.webm`].join("/");
+    await bucket.put(ordinalThreeR2Key, ordinalThreeBytes, {
+      httpMetadata: { contentType: "video/webm" },
+      customMetadata: { sha256: ordinalThreeSha256, namespace: "production" },
+    });
+    const frameMd5Sha256 = createHash("sha256").update("ordinal-three-frame-md5").digest("hex");
+    const receiptSha256 = createHash("sha256").update("ordinal-three-receipt").digest("hex");
+    const reportSha256 = createHash("sha256").update("ordinal-three-report").digest("hex");
+    const imageDigest = `sha256:${"3".repeat(64)}`;
+    await d1.prepare(`INSERT INTO stage12_audio_p0_correction_retry_job
+      (id, predecessor_correction_job_id, stage12_job_id, correction_ordinal,
+       correction_strategy_version, retry_reason_code, idempotency_key, callback_token_hash,
+       actor_identity, owner_approval_text, state, source_pre_master_r2_key,
+       source_pre_master_sha256, source_pre_master_byte_length, source_receipt_sha256)
+      VALUES ('stage12-audio-p0-correction-3', 'stage12-audio-p0-correction-2', ?, 3, 3,
+       'STAGE12_AUDIO_P0_ENCODED_QA_FAIL', ?, ?, 'owner@example.com',
+       'CREATE STAGE 12 AUDIO P0 CORRECTION', 'PENDING', ?, ?, ?, ?)`)
+      .bind(predecessor.stage12_job_id,
+        createHash("sha256").update("ordinal-three-key").digest("hex"),
+        createHash("sha256").update("ordinal-three-token").digest("hex"),
+        ordinalTwoR2Key, ordinalTwoSha256, ordinalTwoBytes.length,
+        ordinalTwoReceiptSha256).run();
+    await d1.prepare(`UPDATE stage12_audio_p0_correction_retry_job SET state='READY',
+      corrected_pre_master_r2_key=?, corrected_pre_master_sha256=?,
+      corrected_pre_master_byte_length=?, corrected_frame_md5_sha256=?, receipt_r2_key=?,
+      receipt_sha256=?, worker_image_digest=?, report_sha256=?, outcome='PASS',
+      failures_json='[]', measurements_json='{"clippingSampleCount":0,"truePeakDbtp":-2,"loudnessRangeLu":6,"p0DefectCount":0}'
+      WHERE id='stage12-audio-p0-correction-3'`)
+      .bind(ordinalThreeR2Key, ordinalThreeSha256, ordinalThreeBytes.length,
+        frameMd5Sha256, "prod/receipts/ordinal-three.json", receiptSha256,
+        imageDigest, reportSha256).run();
+
+    const result = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "CREATE_STAGE_12_AUDIO_P0_CORRECTION", trackCode: "G",
+      videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(result.isError, undefined, JSON.stringify(result));
+    const diagnostic = JSON.parse(result.structuredContent.diagnosticJson);
+    assert.deepEqual({
+      correctionOrdinal: diagnostic.correctionOrdinal,
+      correctionStrategyVersion: diagnostic.correctionStrategyVersion,
+      predecessorCorrectionJobId: diagnostic.predecessorCorrectionJobId,
+      sourcePreMasterR2Key: diagnostic.sourcePreMasterR2Key,
+      sourcePreMasterSha256: diagnostic.sourcePreMasterSha256,
+      sourcePreMasterByteLength: diagnostic.sourcePreMasterByteLength,
+      correctedPreMasterR2Key: diagnostic.correctedPreMasterR2Key,
+      correctedPreMasterSha256: diagnostic.correctedPreMasterSha256,
+      correctedPreMasterByteLength: diagnostic.correctedPreMasterByteLength,
+      correctedFrameMd5Sha256: diagnostic.correctedFrameMd5Sha256,
+      receiptR2Key: diagnostic.receiptR2Key,
+      receiptSha256: diagnostic.receiptSha256,
+      reportSha256: diagnostic.reportSha256,
+      workerImageDigest: diagnostic.workerImageDigest,
+    }, {
+      correctionOrdinal: 3, correctionStrategyVersion: 3,
+      predecessorCorrectionJobId: "stage12-audio-p0-correction-2",
+      sourcePreMasterR2Key: ordinalTwoR2Key, sourcePreMasterSha256: ordinalTwoSha256,
+      sourcePreMasterByteLength: ordinalTwoBytes.length,
+      correctedPreMasterR2Key: ordinalThreeR2Key,
+      correctedPreMasterSha256: ordinalThreeSha256,
+      correctedPreMasterByteLength: ordinalThreeBytes.length,
+      correctedFrameMd5Sha256: frameMd5Sha256,
+      receiptR2Key: "prod/receipts/ordinal-three.json", receiptSha256,
+      reportSha256, workerImageDigest: imageDigest,
     });
     assert.equal((await d1.prepare(
       "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal = 4",

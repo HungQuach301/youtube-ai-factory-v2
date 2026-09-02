@@ -41,8 +41,8 @@ export type Stage12MediaAudioP0CorrectionRequest = Stage12MediaStartRequest & {
   remediation: {
     sourceAttemptOrdinal: 3;
     diagnosticOrdinal: 2;
-    strategyVersion: 2;
-    correctionOrdinal: 2;
+    strategyVersion: 2 | 3;
+    correctionOrdinal: 2 | 3;
     predecessorCorrectionJobId: string;
     sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number };
     sourceCorrectionReceiptSha256: string;
