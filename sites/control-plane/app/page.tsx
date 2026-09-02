@@ -2,7 +2,6 @@ import Link from "next/link";
 import sourceLock from "../source-lock.json";
 import { requireChatGPTUser } from "./chatgpt-auth";
 import { getRuntimeReadiness } from "./home-readiness";
-import { requireOwner } from "./owner-auth";
 
 const repositoryUrl = "https://github.com/HungQuach301/youtube-ai-factory-v2";
 
@@ -105,8 +104,7 @@ const controls = [
 ];
 
 export default async function Home() {
-  const user = await requireChatGPTUser("/");
-  requireOwner(user);
+  await requireChatGPTUser("/");
   const fingerprint = sourceLock.aggregate_sha256.slice(0, 16);
   const runtime = await getRuntimeReadiness();
   const trackGChecks = [
