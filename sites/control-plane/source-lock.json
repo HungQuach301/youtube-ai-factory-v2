@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "c605a8349be0d554b4921b539ef37264d3b282da9e64f021fbca10082eeab45c",
+  "aggregate_sha256": "0845ff3f3b1af1272b36e5f36eaece9f5d25a5949fa78f5b201921a7d590b31c",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -137,7 +137,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "3b69d064ea01d7ef90066c872ab999043add00f31412cd3a0098394bb8963bbc"
+      "sha256": "237a1fbc22b1cc30d6164fbda12ceb26802a1380c855e5b4a809bd45c0c35a90"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -153,7 +153,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "faa186385d855711bacc640492d6bb5beca7cd956b95adc36d359be8f6369508"
+      "sha256": "d030465838a7c18ff25799719ed6f32db888d26fb1238940007d009a84ae0920"
     },
     {
       "path": "drizzle.config.ts",
@@ -256,6 +256,10 @@
       "sha256": "60398045227f3472f5c9156e8ed5c1231900d5f41a1e32609c1bb89d7618a58c"
     },
     {
+      "path": "drizzle/0024_stage12_diagnostic_callback_retry.sql",
+      "sha256": "2db7489fdd42bfb4d8651b11ff8bb9f69fba84f366177b02430e4a41d1bee8ea"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -329,7 +333,7 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "1f7629cfbf9de78bc778b39e480e136c1603bb3b6a56f3f1dfc001e6c48b3d69"
+      "sha256": "6ed57a35b2c49955ac7ab0cdb3dec89bf809cc4492d552dfb081fb7f7cd2730d"
     },
     {
       "path": "packages/media-worker/fly.toml",
@@ -341,7 +345,7 @@
     },
     {
       "path": "packages/media-worker/stage12-callback-error.mjs",
-      "sha256": "8767448d78beefd310f1ca020623d6633f87cae15eb2e82d5148471b55d51c09"
+      "sha256": "9c8cd35851921caa5eff461d5b25bc7603991f9a5734af84f0a0a1a9e4d79963"
     },
     {
       "path": "packages/media-worker/stage12-render-smoke.mjs",
@@ -420,8 +424,12 @@
       "sha256": "6509f86c562cfe4cf4fae918f599478341b4ec29266d63eb3edc4ff006663255"
     },
     {
+      "path": "tests/migrations/0024-stage12-diagnostic-callback-retry.test.ts",
+      "sha256": "1480083ad7b3b6aabf220bdc4c6f566ffa50db8c0d8a3cadc703709921d10118"
+    },
+    {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "977c1b61fd62e6dd453603624057fd3582f4f40e659cf39f425be9077025f70d"
+      "sha256": "de34b7a922a6124bd34032ac6e1ecc192ff254a8653cc5de172d6a66da01e631"
     },
     {
       "path": "tests/rendered-html.test.mjs",
@@ -429,7 +437,7 @@
     },
     {
       "path": "tests/stage12-callback-error.test.mjs",
-      "sha256": "856d9844f2073ccf5314ddfe191ee9a47eb5d79d45c90e8ba77e47c3a792b88e"
+      "sha256": "95730d79ad14742d1c5a565d650482cf5e7eac8279cdedd1c80289e829597466"
     },
     {
       "path": "tsconfig.json",

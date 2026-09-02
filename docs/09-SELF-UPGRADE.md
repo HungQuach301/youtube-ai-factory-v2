@@ -224,3 +224,7 @@ Tốc độ tiến hóa của nhà máy = nhịp publish × kỷ luật ghi nhã
 ### Evolution record: EVOLVE_STAGE12_QA_REMEDIATION
 
 Đây là thay đổi pipeline code `NEUTRAL` về strictness: các threshold/gate giữ nguyên. Shadow evidence bắt buộc gồm migration tests, renderer scan dài hơn cửa sổ near-static, encoded-audio measurement và full CI. Owner promotion chỉ triển khai code; diagnostic scan Production sau đó là lệnh OPERATE tách biệt và không được tự khởi chạy generation.
+
+### Evolution record: EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK
+
+Thay đổi `NEUTRAL` về strictness và `STRICTER` về error/lineage: callback diagnostic không còn hydrate toàn pipeline hoặc băm lại pre-master lớn trong request; duration được đóng trong job và pointer/hash/size immutable được xác minh trước receipt read-back. DOMException numeric code bị thay bằng typed callback transport error. Failed diagnostic terminal không được rewrite; migration chỉ cho một retry ordinal 2 có predecessor và typed reason. Promotion chỉ deploy code sau CI/health PASS, tuyệt đối không tự retry scan, generation, provider, finalize hoặc publish.

@@ -110,7 +110,7 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
-    qaMigration, diagnosticRoute, mcpRoute] = await Promise.all([
+    qaMigration, diagnosticRetryMigration, diagnosticRoute, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
@@ -120,6 +120,7 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
     readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0020_stage12_attempt_three.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0023_stage12_qa_evidence.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0024_stage12_diagnostic_callback_retry.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
   ]);
@@ -140,7 +141,11 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(migration, /attempt_ordinal` BETWEEN 1 AND 3/);
   assert.match(qaMigration, /stage12_qa_evidence_immutable_update/u);
   assert.match(qaMigration, /STAGE12_QA_DIAGNOSTIC_SOURCE_NOT_ELIGIBLE/u);
+  assert.match(diagnosticRetryMigration, /STAGE12_QA_DIAGNOSTIC_TERMINAL_IMMUTABLE/u);
+  assert.match(diagnosticRetryMigration, /STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
+  assert.match(domain, /verifyStage12DiagnosticPreMasterPointer/u);
+  assert.match(domain, /diagnosticJob\.targetDurationSec/u);
   assert.match(domain, /generation: false/u);
   assert.match(domain, /providerDispatch: "OFF"/u);
   assert.match(domain, /autoPublish: "OFF"/u);

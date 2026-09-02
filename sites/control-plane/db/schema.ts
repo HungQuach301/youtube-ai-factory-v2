@@ -412,10 +412,19 @@ export const stage12QaDiagnosticJobs = sqliteTable("stage12_qa_diagnostic_job", 
   receiptSha256: text("receipt_sha256"),
   workerImageDigest: text("worker_image_digest"),
   errorCode: text("error_code"),
+  diagnosticOrdinal: integer("diagnostic_ordinal").notNull().default(1),
+  retryOfDiagnosticJobId: text("retry_of_diagnostic_job_id"),
+  retryReasonCode: text("retry_reason_code"),
+  targetDurationSec: real("target_duration_sec"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
-  uniqueIndex("stage12_qa_diagnostic_job_source_unique").on(table.stage12JobId),
+  uniqueIndex("stage12_qa_diagnostic_job_source_ordinal_unique").on(
+    table.stage12JobId, table.diagnosticOrdinal,
+  ),
+  uniqueIndex("stage12_qa_diagnostic_job_retry_of_unique").on(
+    table.retryOfDiagnosticJobId,
+  ),
   uniqueIndex("stage12_qa_diagnostic_job_key_unique").on(table.idempotencyKey),
 ]);
 

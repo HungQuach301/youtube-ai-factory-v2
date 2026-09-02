@@ -7,7 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { buildToolInvocation, MediaWorkerRuntime } from './dist/index.js'
-import { stage12CallbackErrorCode, stage12WorkerErrorCode } from './stage12-callback-error.mjs'
+import {
+  stage12CallbackErrorCode,
+  stage12CallbackTransportErrorCode,
+  stage12WorkerErrorCode,
+} from './stage12-callback-error.mjs'
 import { executeStage12, executeStage12Recovery, validateStage12Payload } from './stage12-runtime.mjs'
 
 const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
@@ -509,11 +513,19 @@ function startStage10Job(payload) {
 }
 
 async function publishStage12Callback(callback, idempotencyKey, result) {
-  const response = await fetch(callback.url, {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
-    headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ idempotencyKey, result }),
-  })
+  let response
+  try {
+    response = await fetch(callback.url, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
+      headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey, result }),
+    })
+  } catch (error) {
+    throw Object.assign(new Error('Stage 12 callback transport failed.'), {
+      code: stage12CallbackTransportErrorCode(error),
+      cause: error,
+    })
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null)
     const candidate = typeof body?.error === 'string' ? body.error : ''

@@ -722,6 +722,15 @@ type ScanStage12Attempt3Command = {
   providerDispatch: 'OFF'
   autoPublish: 'OFF'
 }
+
+type Stage12QaDiagnosticLineage = {
+  diagnosticOrdinal: 1 | 2
+  retryOfDiagnosticJobId: string | null
+  retryReasonCode: null | 'STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT'
+  targetDurationSec: number
+}
 ```
 
 Diagnostic scan chỉ đọc pre-master bất biến của attempt 3 đã fail `S12QA:*`, ghi receipt/số đo bất biến và không đổi trạng thái job gốc. `Stage12MediaReceipt.renderAuthorized` là boolean để receipt fail có thể được lưu; chỉ validator PASS mới cấp `renderAuthorized=true` cho finalize.
+
+Callback diagnostic phải dùng typed error bắt đầu bằng chữ cái; DOMException numeric `23` không được phép thoát ra contract. Job terminal `READY|FAILED` là immutable. Chỉ một retry ordinal 2 được phép khi ordinal 1 fail vì `STAGE12_CALLBACK_TIMEOUT` (legacy Production `23` được nhận diện nhưng không bị sửa), và retry phải liên kết predecessor bằng `STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT`. Callback xác minh pointer/hash/size R2 đã niêm phong và duration lưu trong job; không hydrate lại toàn pipeline hay băm lại video lớn trong request callback.
