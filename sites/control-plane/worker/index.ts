@@ -30,6 +30,11 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/") {
+      const authorizationFailure = authorizeOwnerPageRequest(request, env);
+      if (authorizationFailure) return authorizationFailure;
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
@@ -44,5 +49,22 @@ const worker = {
     return runWithFactoryEnv(env, () => handler.fetch(request, env, ctx));
   },
 };
+
+function authorizeOwnerPageRequest(request: Request, env: Env): Response | null {
+  const authenticatedEmail = request.headers
+    .get("oai-authenticated-user-email")
+    ?.trim()
+    .toLowerCase();
+  if (!authenticatedEmail) return null;
+
+  const configuredOwner = env.FACTORY_OWNER_EMAIL?.trim().toLowerCase();
+  if (!configuredOwner) {
+    return new Response("FACTORY_OWNER_ALLOWLIST_UNCONFIGURED", { status: 503 });
+  }
+  if (authenticatedEmail !== configuredOwner) {
+    return new Response("FACTORY_OWNER_AUTHORIZATION_DENIED", { status: 403 });
+  }
+  return null;
+}
 
 export default worker;

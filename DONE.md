@@ -1422,3 +1422,24 @@ Deployment must stop after CI and live health PASS; replay requires a separate l
 Owner phê duyệt build, PR, Production deployment và đúng một lần thực thi Stage 11
 ngày 2026-08-31. Command chỉ được gọi sau GitHub CI và Production health PASS;
 sau read-back phải dừng tại `STAGE_12_READY` và tuyệt đối không publish.
+
+---
+
+## EVO-SITE-V70-PRODUCTION-ROOT · Stable owner gate for the root RSC
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Root owner authorization không phụ thuộc request-local context của RSC | `worker/index.ts` kiểm allowlist trực tiếp bằng Worker `env`; `app/page.tsx` không import hoặc gọi `requireOwner` |
+| Anonymous request vẫn đi qua canonical ChatGPT sign-in redirect | Worker chỉ xử lý owner mismatch khi header xác thực tồn tại; `requireChatGPTUser("/")` giữ nguyên trong page |
+| Sai owner bị chặn trước khi render | `tests/operator-d1.test.mjs` xác minh HTTP 403 và typed body `FACTORY_OWNER_AUTHORIZATION_DENIED` |
+| Packaged Cloudflare Worker render root ổn định dưới concurrent requests | `tests/operator-d1.test.mjs` phát tám authenticated `GET /` song song qua Miniflare và yêu cầu mọi response HTTP 200, không có Server Components error |
+| Root RSC giữ dependency boundary hẹp | `tests/root-runtime-boundary.test.mjs` cấm import `operator-runtime` và `owner-auth` từ page, đồng thời yêu cầu Worker owner gate |
+| Không thay đổi Factory operation | Không migration, threshold, provider workflow hoặc command path; không scan, generation, provider, finalize hay publish |
+
+## Production boundary
+
+Evolution này chỉ mở PR. Sites v68 tiếp tục là Production rollback target; exact
+source mới chỉ được triển khai sau owner promotion và phải rollback nếu `GET /`,
+`/api/mcp` hoặc Fly Stage 12 health không PASS.

@@ -269,15 +269,36 @@ test("renders the root Server Component with a real D1 binding", async () => {
   const { mf } = await createFactoryFixture("root-rsc-d1-test");
 
   try {
+    const responses = await Promise.all(Array.from({ length: 8 }, () =>
+      mf.dispatchFetch("http://localhost/", {
+        headers: { ...ownerHeaders, accept: "text/html" },
+      })));
+    for (const response of responses) {
+      const html = await response.text();
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+      assert.match(html, /YouTube AI Factory V2/i);
+      assert.match(html, /D1 is live; the owner must issue PREPARE_CHANNEL/i);
+      assert.doesNotMatch(html, /An error occurred in the Server Components render/i);
+    }
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("rejects a non-owner at the Worker boundary before rendering the root Server Component", async () => {
+  const { mf } = await createFactoryFixture("root-owner-boundary-test");
+
+  try {
     const response = await mf.dispatchFetch("http://localhost/", {
-      headers: { ...ownerHeaders, accept: "text/html" },
+      headers: {
+        ...ownerHeaders,
+        "oai-authenticated-user-email": "not-owner@example.com",
+        accept: "text/html",
+      },
     });
-    const html = await response.text();
-    assert.equal(response.status, 200);
-    assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-    assert.match(html, /YouTube AI Factory V2/i);
-    assert.match(html, /D1 is live; the owner must issue PREPARE_CHANNEL/i);
-    assert.doesNotMatch(html, /An error occurred in the Server Components render/i);
+    assert.equal(response.status, 403);
+    assert.equal(await response.text(), "FACTORY_OWNER_AUTHORIZATION_DENIED");
   } finally {
     await mf.dispose();
   }
