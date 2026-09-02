@@ -1500,3 +1500,27 @@ sau read-back phải dừng tại `STAGE_12_READY` và tuyệt đối không pub
 Evolution này chỉ mở PR. Sites v68 tiếp tục là Production rollback target; exact
 source mới chỉ được triển khai sau owner promotion và phải rollback nếu `GET /`,
 `/api/mcp` hoặc Fly Stage 12 health không PASS.
+
+---
+
+## EVO-STAGE12-AUDIO-P0-CORRECTION · Typed correction ordinal 2
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Chỉ nhận immutable corrected pre-master strategy v1 `READY/FAIL` | `tests/migrations/0026-stage12-audio-p0-correction.test.ts` kiểm exact predecessor pointer/hash/size/receipt và failure classes |
+| Tạo lineage kế tiếp, không sửa lịch sử | Migration append-only `drizzle/0026_stage12_audio_p0_correction.sql`; `correction_ordinal=2`; terminal UPDATE/DELETE bị chặn |
+| Corrected artifact mới không thể trùng source | READY-shape trigger từ chối source SHA/R2 key bị tái sử dụng; migration regression test |
+| Giữ nguyên video đã sửa và xử lý gốc audio | `packages/media-worker/tests/stage12-remediation.test.ts` kiểm strategy v2 copy video, macro-dynamic shaping, compand và encoded loudnorm |
+| Đạt clipping/true-peak/LRA/P0 bằng threshold hiện hành | `packages/media-worker/stage12-remediation-smoke.mjs` đo output Opus cuối; target xử lý được suy ra từ threshold đang import |
+| Không thay đổi QA threshold | Unit test đối chiếu `AUDIO`/`ASSURANCE`; threshold lock trong `docs/17-STAGE12-QA-REMEDIATION.md` giữ nguyên |
+| Finalize chỉ dùng ordinal 2 khi immutable receipt `READY/PASS` | `tests/operator-d1.test.mjs` kiểm `useAudioP0Correction` và provenance `audioP0CorrectionJobId`; nếu chưa PASS thì fail-closed |
+| Stable command có approval riêng và không tự chạy | MCP diagnostic/execute dùng `CREATE_STAGE_12_AUDIO_P0_CORRECTION` + exact approval; Sites integration test chỉ diagnostic read-only |
+| Không provider, attempt 4, auto-finalize hay publish | DB CHECK + payload/receipt controls ép provider `0/OFF`, auto-publish `OFF`; evolution chỉ mở PR |
+
+## Production boundary
+
+Work package này không chạy correction job. Generation, provider, Stage 12 finalize
+và publish chỉ có thể xảy ra qua phê duyệt OPERATE riêng sau khi PR được promote,
+triển khai và health check PASS.

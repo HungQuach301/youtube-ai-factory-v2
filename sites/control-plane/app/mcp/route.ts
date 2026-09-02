@@ -20,7 +20,9 @@ import {
   diagnoseTrackGVideoOneStage12Preflight,
   diagnoseTrackGVideoOneStage12Recovery,
   diagnoseTrackGVideoOneStage12AttemptThreeQa,
+  diagnoseTrackGVideoOneStage12AudioP0Correction,
   diagnoseTrackGVideoOneStage12CorrectedPreMaster,
+  createTrackGVideoOneStage12AudioP0Correction,
   createTrackGVideoOneStage12CorrectedPreMaster,
   executeTrackGVideoOneStage00,
   finalizeTrackGVideoOneStage10,
@@ -1366,6 +1368,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       } else if (commandType === "CREATE_STAGE_12_CORRECTED_PREMASTER") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = await diagnoseTrackGVideoOneStage12CorrectedPreMaster() as unknown as Record<string, unknown>;
+      } else if (commandType === "CREATE_STAGE_12_AUDIO_P0_CORRECTION") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = await diagnoseTrackGVideoOneStage12AudioP0Correction() as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1375,6 +1380,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       const diagnosticState = diagnostic.recoveryState === "PASS" || diagnostic.preflightState === "PASS"
         || diagnostic.diagnosticState === "READY" || diagnostic.remediationState === "ELIGIBLE"
         || diagnostic.remediationState === "READY"
+        || diagnostic.correctionState === "ELIGIBLE" || diagnostic.correctionState === "READY"
         ? "PASS" as const : "FAIL" as const;
       const output = {
         contractVersion: MCP_STABLE_CONTRACT_VERSION,
@@ -1383,6 +1389,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         currentStep: state.trackGVideo1.currentStep,
         operationState: String(diagnostic.jobStatus ?? diagnostic.diagnosticState
           ?? diagnostic.remediationState
+          ?? diagnostic.correctionState
           ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
         diagnosticJson: JSON.stringify(diagnostic),
         providerDispatch: "OFF" as const,
@@ -1480,6 +1487,25 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
           currentStep: "STAGE_12_READY", operationState: remediation.remediationState,
           receipt: { attemptOrdinal: 3, diagnosticOrdinal: 2,
             remediationState: remediation.remediationState, remediationExecuted: true,
+            providerDispatch: "OFF", autoPublish: "OFF" } };
+      } else if (commandType === "CREATE_STAGE_12_AUDIO_P0_CORRECTION") {
+        if (attemptOrdinal !== 3
+          || ownerApprovalText !== "CREATE STAGE 12 AUDIO P0 CORRECTION") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const correctionRoute = new URL(
+          "/api/media-worker/stage12-audio-p0-correction", request.url,
+        ).toString();
+        const correction = await createTrackGVideoOneStage12AudioP0Correction(user, {
+          objective, ownerApprovalText, callbackUrl: correctionRoute,
+          objectAccessUrl: correctionRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: correction.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: correction.correctionState,
+          receipt: { attemptOrdinal: 3, diagnosticOrdinal: 2, correctionOrdinal: 2,
+            correctionState: correction.correctionState, correctionExecuted: true,
             providerDispatch: "OFF", autoPublish: "OFF" } };
       } else if (commandType === "START_STAGE_12") {
         if (ownerApprovalText !== "START STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");

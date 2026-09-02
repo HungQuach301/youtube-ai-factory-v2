@@ -487,6 +487,45 @@ export const stage12CorrectedPreMasterJobs = sqliteTable("stage12_corrected_pre_
   uniqueIndex("stage12_corrected_pre_master_job_output_hash_unique").on(table.correctedPreMasterSha256),
 ]);
 
+export const stage12AudioP0CorrectionJobs = sqliteTable("stage12_audio_p0_correction_job", {
+  id: text("id").primaryKey(),
+  predecessorCorrectedPreMasterJobId: text("predecessor_corrected_pre_master_job_id").notNull()
+    .references(() => stage12CorrectedPreMasterJobs.id),
+  stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+  correctionOrdinal: integer("correction_ordinal").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  actorIdentity: text("actor_identity").notNull(),
+  ownerApprovalText: text("owner_approval_text").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+  sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+  sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+  sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+  correctedPreMasterR2Key: text("corrected_pre_master_r2_key"),
+  correctedPreMasterSha256: text("corrected_pre_master_sha256"),
+  correctedPreMasterByteLength: integer("corrected_pre_master_byte_length"),
+  correctedFrameMd5Sha256: text("corrected_frame_md5_sha256"),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  reportSha256: text("report_sha256"),
+  outcome: text("outcome", { enum: ["PASS", "FAIL"] }),
+  failuresJson: text("failures_json"),
+  measurementsJson: text("measurements_json"),
+  providerCallCount: integer("provider_call_count").notNull().default(0),
+  providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+  autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_audio_p0_correction_predecessor_unique")
+    .on(table.predecessorCorrectedPreMasterJobId),
+  uniqueIndex("stage12_audio_p0_correction_key_unique").on(table.idempotencyKey),
+  uniqueIndex("stage12_audio_p0_correction_output_hash_unique").on(table.correctedPreMasterSha256),
+]);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

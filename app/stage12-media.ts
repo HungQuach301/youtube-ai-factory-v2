@@ -37,6 +37,22 @@ export type Stage12MediaRemediationRequest = Stage12MediaStartRequest & {
   };
 };
 
+export type Stage12MediaAudioP0CorrectionRequest = Stage12MediaStartRequest & {
+  remediation: {
+    sourceAttemptOrdinal: 3;
+    diagnosticOrdinal: 2;
+    strategyVersion: 2;
+    correctionOrdinal: 2;
+    predecessorCorrectionJobId: string;
+    sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number };
+    sourceCorrectionReceiptSha256: string;
+    correctionPassLimit: number;
+    providerDispatch: "OFF";
+    providerCallCount: 0;
+    autoPublish: "OFF";
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -126,6 +142,20 @@ export async function dispatchStage12MediaRemediation(
     || result.idempotencyKey !== payload.idempotencyKey
     || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_REMEDIATION_FAILED:${result.code ?? response.status}`);
+  }
+  return result;
+}
+
+export async function dispatchStage12MediaAudioP0Correction(
+  payload: Stage12MediaAudioP0CorrectionRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/audio-p0-correct", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
+    throw new Error(`TRACK_G_STAGE_12_AUDIO_P0_CORRECTION_FAILED:${result.code ?? response.status}`);
   }
   return result;
 }
