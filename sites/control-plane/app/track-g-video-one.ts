@@ -23,6 +23,8 @@ import {
   stage11AudioPlans,
   stage12MediaJobs,
   stage12PreMasterQa,
+  stage12QaDiagnosticJobs,
+  stage12QaEvidence,
   stageArtifacts,
   stageInstances,
   trackGRunContracts,
@@ -51,12 +53,14 @@ import {
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
+  dispatchStage12MediaDiagnostic,
   dispatchStage12MediaRecovery,
   dispatchStage12MediaStart,
   parseStage12MediaReceipt,
 } from "./stage12-media";
 import {
   buildTrackGVideoOneStage12Request,
+  evaluateTrackGVideoOneStage12Receipt,
   validateTrackGVideoOneStage12Receipt,
   type Stage12MediaReceipt,
 } from "./stage12-pre-master";
@@ -173,11 +177,13 @@ export const STAGE_12_RETRYABLE_ERROR_CODES = [
   "STAGE12_PROBE_FAILED",
   "STAGE12_TIMELINE_SCAN_FAILED",
   "STAGE12_FINAL_LOUDNESS_FAILED",
+  "STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED",
   "STAGE12_FRAME_HASH_FAILED",
 ] as const;
 const STAGE_12_QA_ID = "pre_master_qa_track_g_video_1_stage_12_v1";
 const STAGE_12_START_OWNER_APPROVAL_TEXT = "START STAGE 12";
 const STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT = "RECOVER STAGE 12 ATTEMPT 3";
+const STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT = "SCAN STAGE 12 ATTEMPT 3";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -240,6 +246,13 @@ export type FinalizeTrackGVideoOneStage12Input = {
 export type RecoverTrackGVideoOneStage12Input = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type ScanTrackGVideoOneStage12AttemptThreeInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -4757,11 +4770,28 @@ function stage12RecoveryIdempotencyKey(workerIdempotencyKey: string, preMasterSh
   ).digest("hex");
 }
 
+function stage12DiagnosticIdempotencyKey(
+  workerIdempotencyKey: string,
+  preMasterSha256: string,
+): string {
+  return createHash("sha256").update(
+    `SCAN_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3\0${workerIdempotencyKey}\0${preMasterSha256}`,
+  ).digest("hex");
+}
+
 function stage12CallbackToken(workerIdempotencyKey: string): string {
   const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
   if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
   return createHash("sha256").update(
     `STAGE_12_CALLBACK\0${workerIdempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+function stage12DiagnosticCallbackToken(idempotencyKey: string): string {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_QA_DIAGNOSTIC_CALLBACK\0${idempotencyKey}\0${signingKey}`,
   ).digest("hex");
 }
 
@@ -4883,6 +4913,62 @@ async function stage12PreMasterCandidates() {
   return listImmutableProductionEvidence(stage12PreMasterPrefix(), 8);
 }
 
+async function verifyStage12PreMasterReceipt(
+  preMaster: Stage12MediaReceipt["preMaster"],
+): Promise<boolean> {
+  const candidate = (await stage12PreMasterCandidates()).find((object) =>
+    object.key === preMaster.r2Key && object.sha256 === preMaster.sha256
+    && object.size === preMaster.byteLength);
+  return Boolean(candidate)
+    && await verifyImmutableEvidence(preMaster.r2Key, preMaster.sha256);
+}
+
+function verifyStage12MeasurementReport(receipt: Stage12MediaReceipt): boolean {
+  return sha256(new TextEncoder().encode(canonicalize({
+    measurements: receipt.measurements,
+    preMaster: { r2Key: receipt.preMaster.r2Key, sha256: receipt.preMaster.sha256,
+      frameMd5Sha256: receipt.preMaster.frameMd5Sha256 },
+  }))) === receipt.reportSha256;
+}
+
+async function latestStage12QaDiagnosticJob() {
+  const [job] = await getDb().select().from(stage12QaDiagnosticJobs)
+    .orderBy(desc(stage12QaDiagnosticJobs.createdAt)).limit(1);
+  return job;
+}
+
+export async function diagnoseTrackGVideoOneStage12AttemptThreeQa() {
+  const sourceJob = await latestStage12Job();
+  const diagnosticJob = await latestStage12QaDiagnosticJob();
+  const [evidence] = sourceJob ? await getDb().select().from(stage12QaEvidence)
+    .where(and(eq(stage12QaEvidence.jobId, sourceJob.id),
+      eq(stage12QaEvidence.source, "DIAGNOSTIC"))).limit(1) : [];
+  if (diagnosticJob?.state === "READY" && (!evidence
+    || diagnosticJob.receiptR2Key !== evidence.receiptR2Key
+    || diagnosticJob.receiptSha256 !== evidence.receiptSha256
+    || !await verifyImmutableEvidence(evidence.receiptR2Key, evidence.receiptSha256))) {
+    throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_READ_BACK_FAILED");
+  }
+  return {
+    diagnosticState: diagnosticJob?.state ?? "NOT_STARTED",
+    errorCode: diagnosticJob?.errorCode ?? null,
+    attemptOrdinal: sourceJob?.attemptOrdinal ?? null,
+    sourceJobStatus: sourceJob?.state ?? "NONE",
+    sourceJobErrorCode: sourceJob?.errorCode ?? null,
+    outcome: evidence?.outcome ?? null,
+    failures: evidence ? JSON.parse(evidence.failuresJson) as string[] : [],
+    measurements: evidence ? JSON.parse(evidence.measurementsJson) as Stage12MediaReceipt["measurements"] : null,
+    preMasterSha256: evidence?.preMasterSha256 ?? null,
+    receiptSha256: evidence?.receiptSha256 ?? null,
+    workerImageDigest: evidence?.workerImageDigest ?? null,
+    renderAuthorized: evidence ? evidence.renderAuthorized === 1 : false,
+    generation: false as const,
+    providerDispatch: "OFF" as const,
+    providerCallCount: 0 as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
 export async function diagnoseTrackGVideoOneStage12Recovery() {
   const job = await latestStage12Job();
   const candidates = await stage12PreMasterCandidates();
@@ -4938,6 +5024,109 @@ export async function readTrackGVideoOneStage12PreMaster(
   return readVerifiedProductionEvidence(candidate.key, candidate.sha256);
 }
 
+function requireStage12DiagnosticToken(
+  diagnosticJob: Awaited<ReturnType<typeof latestStage12QaDiagnosticJob>>,
+  idempotencyKey: string,
+  token: string,
+): asserts diagnosticJob is NonNullable<typeof diagnosticJob> {
+  if (!diagnosticJob || diagnosticJob.idempotencyKey !== idempotencyKey || !HEX64.test(token)
+    || diagnosticJob.callbackTokenHash !== sha256(new TextEncoder().encode(token))) {
+    throw new Error("STAGE_12_QA_DIAGNOSTIC_UNAUTHORIZED");
+  }
+}
+
+export async function readTrackGVideoOneStage12DiagnosticPreMaster(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+): Promise<Uint8Array> {
+  const diagnosticJob = await latestStage12QaDiagnosticJob();
+  requireStage12DiagnosticToken(diagnosticJob, idempotencyKey, token);
+  if (diagnosticJob.state !== "PENDING" || !HEX64.test(expectedSha256)) {
+    throw new Error("STAGE_12_QA_DIAGNOSTIC_STATE_CONFLICT");
+  }
+  const sourceJob = await latestStage12Job();
+  if (!sourceJob || sourceJob.id !== diagnosticJob.stage12JobId
+    || sourceJob.attemptOrdinal !== 3 || sourceJob.state !== "FAILED"
+    || !sourceJob.errorCode?.startsWith("S12QA:")) {
+    throw new Error("STAGE_12_QA_DIAGNOSTIC_SOURCE_CONFLICT");
+  }
+  const candidate = (await stage12PreMasterCandidates())
+    .find((object) => object.sha256 === expectedSha256);
+  if (!candidate) throw new Error("STAGE_12_QA_DIAGNOSTIC_PRE_MASTER_NOT_FOUND");
+  return readVerifiedProductionEvidence(candidate.key, candidate.sha256);
+}
+
+export async function recordTrackGVideoOneStage12DiagnosticCallback(input: {
+  idempotencyKey: string;
+  token: string;
+  result?: Stage12MediaReceipt;
+  errorCode?: string;
+}) {
+  const diagnosticJob = await latestStage12QaDiagnosticJob();
+  requireStage12DiagnosticToken(diagnosticJob, input.idempotencyKey, input.token);
+  if (diagnosticJob.state === "READY") {
+    return { accepted: true, replayed: true, jobStatus: "READY" as const };
+  }
+  if (diagnosticJob.state !== "PENDING") {
+    throw new Error("STAGE_12_QA_DIAGNOSTIC_CALLBACK_STATE_CONFLICT");
+  }
+  if (input.result === undefined) {
+    const errorCode = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_DIAGNOSTIC_FAILED";
+    await getD1().prepare(`UPDATE stage12_qa_diagnostic_job SET state = 'FAILED',
+      error_code = ?, updated_at = ? WHERE id = ? AND state = 'PENDING'`).bind(
+      errorCode, new Date().toISOString(), diagnosticJob.id,
+    ).run();
+    return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+  }
+  const parsed = parseStage12MediaReceipt(input.result);
+  const prepared = await prepareStage12MediaRequest(3);
+  const evaluation = evaluateTrackGVideoOneStage12Receipt(
+    parsed, prepared.payload.durationSec,
+  );
+  if (!verifyStage12MeasurementReport(parsed)
+    || !await verifyStage12PreMasterReceipt(parsed.preMaster)) {
+    throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_PRE_MASTER_READ_BACK_FAILED");
+  }
+  const receiptBytes = new TextEncoder().encode(`${canonicalize({
+    schemaVersion: 1, diagnostic: true, sourceAttemptOrdinal: 3,
+    idempotencyKey: input.idempotencyKey, result: input.result,
+  })}\n`);
+  const receiptSha256 = sha256(receiptBytes);
+  const receiptR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "qa-diagnostics", `${receiptSha256}.json`].join("/");
+  await putImmutableProductionEvidence(receiptR2Key, receiptBytes,
+    "application/json", receiptSha256);
+  const evidenceId = createHash("sha256").update(
+    `STAGE12_QA_EVIDENCE\0${diagnosticJob.stage12JobId}\0DIAGNOSTIC\0${receiptSha256}`,
+  ).digest("hex");
+  const now = new Date().toISOString();
+  const results = await getD1().batch([
+    getD1().prepare(`INSERT OR IGNORE INTO stage12_qa_evidence
+      (id, job_id, source, outcome, pre_master_r2_key, pre_master_sha256,
+       receipt_r2_key, receipt_sha256, worker_image_digest, report_sha256,
+       failures_json, measurements_json, render_authorized, provider_call_count,
+       provider_dispatch, auto_publish, created_at)
+      VALUES (?, ?, 'DIAGNOSTIC', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'OFF', 'OFF', ?)`).bind(
+      evidenceId, diagnosticJob.stage12JobId, evaluation.passed ? "PASS" : "FAIL",
+      parsed.preMaster.r2Key, parsed.preMaster.sha256, receiptR2Key, receiptSha256,
+      parsed.imageDigest, parsed.reportSha256, canonicalize(evaluation.failures),
+      canonicalize(parsed.measurements), parsed.renderAuthorized ? 1 : 0, now,
+    ),
+    getD1().prepare(`UPDATE stage12_qa_diagnostic_job SET state = 'READY',
+      receipt_r2_key = ?, receipt_sha256 = ?, worker_image_digest = ?, updated_at = ?
+      WHERE id = ? AND state = 'PENDING'`).bind(
+      receiptR2Key, receiptSha256, parsed.imageDigest, now, diagnosticJob.id,
+    ),
+  ]);
+  if ((results[1]?.meta.changes ?? 0) !== 1) {
+    throw new Error("STAGE_12_QA_DIAGNOSTIC_CONCURRENT_STATE_CONFLICT");
+  }
+  await diagnoseTrackGVideoOneStage12AttemptThreeQa();
+  return { accepted: true, replayed: false, jobStatus: "READY" as const };
+}
+
 export async function storeTrackGVideoOneStage12PreMaster(
   idempotencyKey: string,
   token: string,
@@ -4975,10 +5164,12 @@ export async function recordTrackGVideoOneStage12Callback(input: {
     ).run();
     return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
   }
-  const validated = validateTrackGVideoOneStage12Receipt(
-    parseStage12MediaReceipt(input.result), prepared.payload.durationSec,
+  const parsed = parseStage12MediaReceipt(input.result);
+  const evaluation = evaluateTrackGVideoOneStage12Receipt(
+    parsed, prepared.payload.durationSec,
   );
-  if (!await verifyImmutableEvidence(validated.preMaster.r2Key, validated.preMaster.sha256)) {
+  if (!verifyStage12MeasurementReport(parsed)
+    || !await verifyStage12PreMasterReceipt(parsed.preMaster)) {
     throw new Error("TRACK_G_STAGE_12_PRE_MASTER_READ_BACK_FAILED");
   }
   const receiptBytes = new TextEncoder().encode(`${canonicalize({
@@ -4989,6 +5180,34 @@ export async function recordTrackGVideoOneStage12Callback(input: {
     STAGE_12_CODE, "worker-receipts", `${receiptSha256}.json`].join("/");
   await putImmutableProductionEvidence(receiptR2Key, receiptBytes,
     "application/json", receiptSha256);
+  if (!evaluation.passed) {
+    const evidenceId = createHash("sha256").update(
+      `STAGE12_QA_EVIDENCE\0${job.id}\0CALLBACK\0${receiptSha256}`,
+    ).digest("hex");
+    await getD1().prepare(`INSERT OR IGNORE INTO stage12_qa_evidence
+      (id, job_id, source, outcome, pre_master_r2_key, pre_master_sha256,
+       receipt_r2_key, receipt_sha256, worker_image_digest, report_sha256,
+       failures_json, measurements_json, render_authorized, provider_call_count,
+       provider_dispatch, auto_publish, created_at)
+      VALUES (?, ?, 'CALLBACK', 'FAIL', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'OFF', 'OFF', ?)`).bind(
+      evidenceId, job.id, parsed.preMaster.r2Key, parsed.preMaster.sha256,
+      receiptR2Key, receiptSha256, parsed.imageDigest, parsed.reportSha256,
+      canonicalize(evaluation.failures), canonicalize(parsed.measurements),
+      parsed.renderAuthorized ? 1 : 0, new Date().toISOString(),
+    ).run();
+    const [stored] = await getDb().select().from(stage12QaEvidence)
+      .where(and(eq(stage12QaEvidence.jobId, job.id),
+        eq(stage12QaEvidence.source, "CALLBACK"))).limit(1);
+    if (!stored || stored.receiptSha256 !== receiptSha256
+      || stored.preMasterSha256 !== parsed.preMaster.sha256
+      || !await verifyImmutableEvidence(stored.receiptR2Key, stored.receiptSha256)) {
+      throw new Error("TRACK_G_STAGE_12_FAILED_QA_EVIDENCE_READ_BACK_FAILED");
+    }
+    throw new Error(`TRACK_G_STAGE_12_QA_FAILED:${evaluation.failures.join(",")}`);
+  }
+  const validated = validateTrackGVideoOneStage12Receipt(
+    parsed, prepared.payload.durationSec,
+  );
   const update = await getD1().prepare(`UPDATE stage12_media_job
     SET state = 'READY', receipt_r2_key = ?, receipt_sha256 = ?, worker_image_digest = ?,
       updated_at = ? WHERE id = ? AND state = 'PENDING'`).bind(
@@ -5204,6 +5423,84 @@ export async function recoverTrackGVideoOneStage12AttemptThree(
   }
   await dispatchRecovery();
   return { ...(await readBackStage12Job()), replayed: false, preMaster };
+}
+
+export async function scanTrackGVideoOneStage12AttemptThree(
+  user: ChatGPTUser,
+  input: ScanTrackGVideoOneStage12AttemptThreeInput,
+) {
+  if (input.ownerApprovalText !== STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_REQUIRED");
+  }
+  const objective = input.objective.trim();
+  if (objective.length < 12 || objective.length > 500) {
+    throw new Error("OBJECTIVE_LENGTH_OUT_OF_RANGE");
+  }
+  if (!input.callbackUrl.startsWith("https://") || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_ENDPOINT_URL_INVALID");
+  }
+  const sourceJob = await latestStage12Job();
+  if (!sourceJob || sourceJob.attemptOrdinal !== 3 || sourceJob.state !== "FAILED"
+    || !sourceJob.errorCode?.startsWith("S12QA:")) {
+    throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_SOURCE_NOT_ELIGIBLE");
+  }
+  const candidates = await stage12PreMasterCandidates();
+  if (candidates.length !== 1) {
+    throw new Error(`TRACK_G_STAGE_12_DIAGNOSTIC_PRE_MASTER_COUNT:${candidates.length}`);
+  }
+  const preMaster = candidates[0];
+  const existing = await latestStage12QaDiagnosticJob();
+  if (existing) {
+    if (existing.stage12JobId !== sourceJob.id) {
+      throw new Error("TRACK_G_STAGE_12_DIAGNOSTIC_JOB_SOURCE_MISMATCH");
+    }
+    return { ...(await diagnoseTrackGVideoOneStage12AttemptThreeQa()), replayed: true };
+  }
+  const prepared = await prepareStage12MediaRequest(3);
+  const diagnosticKey = stage12DiagnosticIdempotencyKey(
+    sourceJob.idempotencyKey, preMaster.sha256,
+  );
+  const callbackToken = stage12DiagnosticCallbackToken(diagnosticKey);
+  const diagnosticId = `stage12_qa_diagnostic_${sourceJob.id}`;
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO command_log
+      (id, command_type, payload_json, idempotency_key, actor_identity, prev_state, next_state,
+       trace_id, created_at) VALUES (?, 'SCAN_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3', ?, ?, ?,
+       'TRACK_G_VIDEO_1_STAGE_12_FAILED', 'TRACK_G_VIDEO_1_STAGE_12_DIAGNOSTIC_PENDING', ?, ?)`).bind(
+      crypto.randomUUID(), canonicalize({ objective, sourceJobId: sourceJob.id,
+        attemptOrdinal: 3, preMaster, generation: false, providerDispatch: "OFF",
+        autoPublish: "OFF" }), diagnosticKey, user.email.toLowerCase(),
+      crypto.randomUUID(), now,
+    ),
+    getD1().prepare(`INSERT INTO stage12_qa_diagnostic_job
+      (id, stage12_job_id, idempotency_key, callback_token_hash, state, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'PENDING', ?, ?)`).bind(
+      diagnosticId, sourceJob.id, diagnosticKey,
+      sha256(new TextEncoder().encode(callbackToken)), now, now,
+    ),
+  ]);
+  try {
+    await dispatchStage12MediaDiagnostic({
+      ...prepared.payload,
+      idempotencyKey: diagnosticKey,
+      objectAccess: { url: input.objectAccessUrl, token: callbackToken },
+      callback: { url: input.callbackUrl, token: callbackToken },
+      recovery: { attemptOrdinal: 3, preMaster: {
+        r2Key: preMaster.key, sha256: preMaster.sha256, byteLength: preMaster.size,
+      }, render: false },
+      diagnostic: { sourceAttemptOrdinal: 3, sourceJobId: sourceJob.id,
+        generation: false, publish: false },
+    });
+  } catch (error) {
+    await getD1().prepare(`UPDATE stage12_qa_diagnostic_job SET state = 'FAILED',
+      error_code = ?, updated_at = ? WHERE id = ? AND state = 'PENDING'`).bind(
+      error instanceof Error ? error.message : "STAGE12_DIAGNOSTIC_START_FAILED",
+      new Date().toISOString(), diagnosticId,
+    ).run();
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12AttemptThreeQa()), replayed: false };
 }
 
 async function readBackStage12(operationRunId: string) {

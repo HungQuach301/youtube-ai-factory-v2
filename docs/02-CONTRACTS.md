@@ -705,3 +705,23 @@ Xóa hằng số               → coi như RELAX
 Đổi UNCALIBRATED → dùng   → cần evidence hiệu chuẩn đính kèm (P5)
 ```
 CI so sánh mọi thay đổi `thresholds.ts` với bản seal gần nhất và phân loại chiều tự động; chiều RELAX không kèm promotion → CI fail (test `g11-no-self-relax`).
+
+---
+
+## 11. Stage 12 QA diagnostic contract
+
+```ts
+type Stage12QaEvidenceSource = 'CALLBACK' | 'DIAGNOSTIC'
+type Stage12QaOutcome = 'PASS' | 'FAIL'
+
+type ScanStage12Attempt3Command = {
+  commandType: 'SCAN_TRACK_G_VIDEO_1_STAGE_12_ATTEMPT_3'
+  ownerApprovalText: 'SCAN STAGE 12 ATTEMPT 3'
+  sourceAttemptOrdinal: 3
+  generation: false
+  providerDispatch: 'OFF'
+  autoPublish: 'OFF'
+}
+```
+
+Diagnostic scan chỉ đọc pre-master bất biến của attempt 3 đã fail `S12QA:*`, ghi receipt/số đo bất biến và không đổi trạng thái job gốc. `Stage12MediaReceipt.renderAuthorized` là boolean để receipt fail có thể được lưu; chỉ validator PASS mới cấp `renderAuthorized=true` cho finalize.

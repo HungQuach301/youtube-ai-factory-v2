@@ -278,3 +278,9 @@ WP-00 ─┬─ WP-01 ─┬─ WP-02 ─┬─ WP-03 ─── WP-04 ─┬─ 
 | WP-28 | §11 + allowlist |
 | WP-29 | §9, §10 |
 | Track G | §1–§5, §9–§11 + WP-12B |
+
+### 🟢 WP-33 · EVOLVE_STAGE12_QA_REMEDIATION
+
+**Phạm vi.** Immutable failed-QA receipt; một typed diagnostic scan cho failed attempt 3; renderer overlay evaluate theo frame; loudness correction sau encode.
+
+**DoD.** QA fail vẫn trả 422 sau khi evidence R2/D1 read-back; diagnostic không đổi job gốc, không generation/provider/publish; renderer và encoded-audio smoke PASS; `thresholds.ts` không đổi.

@@ -24,6 +24,12 @@ test('Stage 12 renderer smoke produces a valid WebM', async () => {
   assert.match(stdout, /STAGE12_RENDER_SMOKE_PASS/u)
 })
 
+test('Stage 12 encoded loudness smoke passes unchanged QA thresholds', async () => {
+  const { stdout } = await execFileAsync(process.execPath,
+    ['packages/media-worker/stage12-audio-smoke.mjs'])
+  assert.match(stdout, /STAGE12_AUDIO_SMOKE_PASS/u)
+})
+
 test('Stage 12 migration preserves history and permits only attempt three', async () => {
   const db = new DatabaseSync(':memory:')
   db.exec(`PRAGMA foreign_keys = ON;

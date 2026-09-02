@@ -65,7 +65,7 @@ export type Stage12MediaReceipt = {
   };
   measurements: Stage12Measurements;
   reportSha256: string;
-  renderAuthorized: true;
+  renderAuthorized: boolean;
   providerCallCount: 0;
   providerDispatch: "OFF";
   autoPublish: "OFF";
@@ -75,6 +75,12 @@ export type Stage12GateResult = {
   gate: string;
   state: "PASS";
   evidence: string;
+};
+
+export type Stage12ReceiptEvaluation = {
+  receipt: Stage12MediaReceipt;
+  failures: string[];
+  passed: boolean;
 };
 
 function assertHex64(value: string, code: string): void {
@@ -171,10 +177,10 @@ export function stage12GateResults(measurements: Stage12Measurements): Stage12Ga
   ];
 }
 
-export function validateTrackGVideoOneStage12Receipt(
+export function evaluateTrackGVideoOneStage12Receipt(
   receipt: Stage12MediaReceipt,
   expectedDurationSec: number,
-) {
+): Stage12ReceiptEvaluation {
   const failures: string[] = [];
   if (receipt.accepted !== true || receipt.renderAuthorized !== true
     || receipt.providerCallCount !== 0 || receipt.providerDispatch !== "OFF"
@@ -202,6 +208,16 @@ export function validateTrackGVideoOneStage12Receipt(
     || m.p0DefectCount > ASSURANCE.P0_MAX) failures.push("M0_INPUT_RIGHTS_P0");
   if (m.width !== MASTER.WIDTH || m.height !== MASTER.HEIGHT || m.fps !== MASTER.FPS
     || m.colorPrimaries !== MASTER.COLOR) failures.push("STREAM_PROFILE");
-  if (failures.length > 0) throw new Error(`TRACK_G_STAGE_12_QA_FAILED:${failures.join(",")}`);
-  return { ...receipt, gateResults: stage12GateResults(m) };
+  return { receipt, failures, passed: failures.length === 0 };
+}
+
+export function validateTrackGVideoOneStage12Receipt(
+  receipt: Stage12MediaReceipt,
+  expectedDurationSec: number,
+) {
+  const evaluation = evaluateTrackGVideoOneStage12Receipt(receipt, expectedDurationSec);
+  if (!evaluation.passed) {
+    throw new Error(`TRACK_G_STAGE_12_QA_FAILED:${evaluation.failures.join(",")}`);
+  }
+  return { ...receipt, gateResults: stage12GateResults(receipt.measurements) };
 }

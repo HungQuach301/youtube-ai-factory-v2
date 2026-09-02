@@ -402,6 +402,45 @@ export const stage12MediaJobs = sqliteTable("stage12_media_job", {
   uniqueIndex("stage12_media_job_key_unique").on(table.idempotencyKey),
 ]);
 
+export const stage12QaDiagnosticJobs = sqliteTable("stage12_qa_diagnostic_job", {
+  id: text("id").primaryKey(),
+  stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  callbackTokenHash: text("callback_token_hash").notNull(),
+  state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+  receiptR2Key: text("receipt_r2_key"),
+  receiptSha256: text("receipt_sha256"),
+  workerImageDigest: text("worker_image_digest"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_qa_diagnostic_job_source_unique").on(table.stage12JobId),
+  uniqueIndex("stage12_qa_diagnostic_job_key_unique").on(table.idempotencyKey),
+]);
+
+export const stage12QaEvidence = sqliteTable("stage12_qa_evidence", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().references(() => stage12MediaJobs.id),
+  source: text("source", { enum: ["CALLBACK", "DIAGNOSTIC"] }).notNull(),
+  outcome: text("outcome", { enum: ["PASS", "FAIL"] }).notNull(),
+  preMasterR2Key: text("pre_master_r2_key").notNull(),
+  preMasterSha256: text("pre_master_sha256").notNull(),
+  receiptR2Key: text("receipt_r2_key").notNull(),
+  receiptSha256: text("receipt_sha256").notNull(),
+  workerImageDigest: text("worker_image_digest").notNull(),
+  reportSha256: text("report_sha256").notNull(),
+  failuresJson: text("failures_json").notNull(),
+  measurementsJson: text("measurements_json").notNull(),
+  renderAuthorized: integer("render_authorized").notNull(),
+  providerCallCount: integer("provider_call_count").notNull(),
+  providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull(),
+  autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("stage12_qa_evidence_job_source_unique").on(table.jobId, table.source),
+]);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

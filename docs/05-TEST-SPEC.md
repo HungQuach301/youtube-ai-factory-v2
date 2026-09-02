@@ -251,3 +251,15 @@ Bốn dạng test vô nghĩa mà agent hay tạo ra khi bị chặn — audit ph
 | **Trigger không test** (v2) | Migration có trigger nhưng không test nào chứng minh nó ABORT |
 
 Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ không phải giá trị đo được, đó là ngưỡng giả — gate vẫn PASS/FAIL đều đặn nhưng con số nó tạo ra không có ý nghĩa. Danh sách `UNCALIBRATED` trong contracts tồn tại để làm điều này hiển thị: ngưỡng nằm trong danh sách đó **không được dùng làm gate M0/M1** cho tới khi có evidence hiệu chuẩn.
+
+## 7. EVOLVE_STAGE12_QA_REMEDIATION
+
+| Acceptance | Test/evidence |
+|---|---|
+| Failed receipt trả về typed measurements và vẫn fail validator | `0023-stage12-qa-evidence.test.ts` |
+| Evidence callback/diagnostic append-only | trigger UPDATE/DELETE abort trong migration test |
+| Diagnostic chỉ nhận failed attempt 3 `S12QA:*` | trigger source eligibility + command transition test |
+| Nền tối không tạo black/freeze interval qua cửa sổ 7s | `stage12-render-smoke.mjs` quét 9s |
+| File Opus cuối nằm trong LUFS/true-peak/LRA cũ | `stage12-audio-smoke.mjs` |
+| Không nới threshold | `verify:g11` + diff `packages/contracts/src/thresholds.ts` rỗng |
+| Không generation/provider/publish | diagnostic envelope literal `generation=false`, `providerDispatch=OFF`, `autoPublish=OFF` |
