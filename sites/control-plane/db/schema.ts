@@ -607,6 +607,107 @@ export const stage12AudioP0CorrectionFailureEvidence = sqliteTable(
   ],
 );
 
+export const stage12EncodedLoudnessDiagnosticReplayJobs = sqliteTable(
+  "stage12_encoded_loudness_diagnostic_replay_job",
+  {
+    id: text("id").primaryKey(),
+    stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+    sourceCorrectionJobId: text("source_correction_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionJobs.id),
+    historicalFailureJobId: text("historical_failure_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionRetryJobs.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    callbackTokenHash: text("callback_token_hash").notNull(),
+    actorIdentity: text("actor_identity").notNull(),
+    ownerApprovalText: text("owner_approval_text").notNull(),
+    state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL"],
+    }).notNull(),
+    sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+    sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+    sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+    sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+    correctionStrategyVersion: integer("correction_strategy_version").notNull(),
+    correctionPassLimit: integer("correction_pass_limit").notNull(),
+    expectedWorkerImageDigest: text("expected_worker_image_digest").notNull(),
+    workerImageDigest: text("worker_image_digest"),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    replayOutcome: text("replay_outcome", { enum: ["PASS", "FAIL"] }),
+    terminalCorrectionPass: integer("terminal_correction_pass"),
+    correctedOutputUploaded: integer("corrected_output_uploaded").notNull().default(0),
+    historicalBackfill: integer("historical_backfill").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+    calibrationExecuted: integer("calibration_executed").notNull().default(0),
+    finalizeExecuted: integer("finalize_executed").notNull().default(0),
+    releaseEligible: integer("release_eligible").notNull().default(0),
+    autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+    errorCode: text("error_code"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("stage12_encoded_loudness_diagnostic_replay_key_unique")
+      .on(table.idempotencyKey),
+    uniqueIndex("stage12_encoded_loudness_diagnostic_replay_failure_unique")
+      .on(table.historicalFailureJobId),
+  ],
+);
+
+export const stage12EncodedLoudnessDiagnosticReplayEvidence = sqliteTable(
+  "stage12_encoded_loudness_diagnostic_replay_evidence",
+  {
+    id: text("id").primaryKey(),
+    replayJobId: text("replay_job_id").notNull()
+      .references(() => stage12EncodedLoudnessDiagnosticReplayJobs.id),
+    stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+    sourceCorrectionJobId: text("source_correction_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionJobs.id),
+    historicalFailureJobId: text("historical_failure_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionRetryJobs.id),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL"],
+    }).notNull(),
+    sourceBaselineJson: text("source_baseline_json").notNull(),
+    measurementsByPassJson: text("measurements_by_pass_json").notNull(),
+    terminalCorrectionPass: integer("terminal_correction_pass").notNull(),
+    finalIntegratedLufs: real("final_integrated_lufs").notNull(),
+    finalIntegratedLufsExact: text("final_integrated_lufs_exact").notNull(),
+    finalTruePeakDbtp: real("final_true_peak_dbtp").notNull(),
+    finalTruePeakDbtpExact: text("final_true_peak_dbtp_exact").notNull(),
+    finalLoudnessRangeLu: real("final_loudness_range_lu").notNull(),
+    finalLoudnessRangeLuExact: text("final_loudness_range_lu_exact").notNull(),
+    failedPredicatesJson: text("failed_predicates_json").notNull(),
+    replayOutcome: text("replay_outcome", { enum: ["PASS", "FAIL"] }).notNull(),
+    expectedWorkerImageDigest: text("expected_worker_image_digest").notNull(),
+    workerImageDigest: text("worker_image_digest").notNull(),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    ffmpegVersion: text("ffmpeg_version").notNull(),
+    ffmpegBuildFingerprint: text("ffmpeg_build_fingerprint").notNull(),
+    libopusEncoderFingerprint: text("libopus_encoder_fingerprint").notNull(),
+    sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+    sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+    sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+    sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+    correctedOutputUploaded: integer("corrected_output_uploaded").notNull().default(0),
+    historicalBackfill: integer("historical_backfill").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+    calibrationExecuted: integer("calibration_executed").notNull().default(0),
+    finalizeExecuted: integer("finalize_executed").notNull().default(0),
+    releaseEligible: integer("release_eligible").notNull().default(0),
+    autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("stage12_encoded_loudness_diagnostic_replay_evidence_job_unique")
+      .on(table.replayJobId),
+  ],
+);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

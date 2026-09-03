@@ -1591,3 +1591,24 @@ Evolution chỉ bổ sung observability cho callback tương lai. Terminal ordin
 hữu vẫn immutable và không thể khôi phục exact measurements đã không được persist.
 Merge/deploy cần owner promotion sau CI; không có correction/retry hay Finalize đi
 kèm deployment này.
+
+---
+
+## EVO-STAGE12-ENCODED-LOUDNESS-DIAGNOSTIC-REPLAY · Exact reproduction evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Chỉ đọc immutable ordinal 2 gắn exact ordinal 3 failure | Typed validator, migration 0030 lineage triggers và Sites E2E |
+| Reproduction riêng, không sửa/backfill history | Separate append-only job/evidence; history snapshot regression |
+| Exact source/per-pass/final loudness evidence | Raw + numeric LUFS/true peak/LRA, predicates và frame-MD5 trong runtime/parser/DB |
+| Runtime provenance được pin | Health-before-mutation; exact image digest, algorithm/threshold, FFmpeg/libopus fingerprints |
+| Không corrected output hoặc provider side effect | Read-only source route; real FFmpeg smoke yêu cầu one GET/zero writes; controls `false/0/OFF` |
+| Không ordinal 4/attempt 4/Finalize/release/publish | Migration/static/E2E guardrails; evolution chỉ tạo PR và chạy CI |
+
+## Production boundary
+
+Work package này chỉ triển khai code trên branch riêng và mở PR. Không merge,
+deploy hoặc chạy Production replay. Mọi Production invocation cần owner OPERATE
+approval riêng sau merge/deploy/exact-tree/health PASS.

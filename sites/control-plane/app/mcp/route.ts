@@ -22,6 +22,7 @@ import {
   diagnoseTrackGVideoOneStage12AttemptThreeQa,
   diagnoseTrackGVideoOneStage12AudioP0Correction,
   diagnoseTrackGVideoOneStage12CorrectedPreMaster,
+  diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   createTrackGVideoOneStage12AudioP0Correction,
   createTrackGVideoOneStage12CorrectedPreMaster,
   executeTrackGVideoOneStage00,
@@ -32,6 +33,7 @@ import {
   prepareTrackGVideoOneStage07AVoiceTournament,
   prepareTrackGVideoOneStage09VisualReview,
   recoverTrackGVideoOneStage12AttemptThree,
+  runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   scanTrackGVideoOneStage12AttemptThree,
   selectTrackGVideoOneStage04Champion,
   selectTrackGVideoOneStage07ATone,
@@ -1371,6 +1373,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       } else if (commandType === "CREATE_STAGE_12_AUDIO_P0_CORRECTION") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = await diagnoseTrackGVideoOneStage12AudioP0Correction() as unknown as Record<string, unknown>;
+      } else if (commandType === "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = (await diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay()) as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1381,6 +1386,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         || diagnostic.diagnosticState === "READY" || diagnostic.remediationState === "ELIGIBLE"
         || diagnostic.remediationState === "READY"
         || diagnostic.correctionState === "ELIGIBLE" || diagnostic.correctionState === "READY"
+        || diagnostic.replayState === "ELIGIBLE" || diagnostic.replayState === "READY"
         ? "PASS" as const : "FAIL" as const;
       const output = {
         contractVersion: MCP_STABLE_CONTRACT_VERSION,
@@ -1390,6 +1396,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         operationState: String(diagnostic.jobStatus ?? diagnostic.diagnosticState
           ?? diagnostic.remediationState
           ?? diagnostic.correctionState
+          ?? diagnostic.replayState
           ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
         diagnosticJson: JSON.stringify(diagnostic),
         providerDispatch: "OFF" as const,
@@ -1513,6 +1520,31 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
             correctionOrdinal: correction.correctionOrdinal,
             correctionState: correction.correctionState, correctionExecuted: true,
             providerDispatch: "OFF", autoPublish: "OFF" } };
+      } else if (commandType === "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY") {
+        if (attemptOrdinal !== 3
+          || ownerApprovalText !== "RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const replayRoute = new URL(
+          "/api/media-worker/stage12-encoded-loudness-diagnostic-replay", request.url,
+        ).toString();
+        const replay = await runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay(user, {
+          objective,
+          ownerApprovalText,
+          callbackUrl: replayRoute,
+          objectAccessUrl: replayRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: replay.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: replay.replayState,
+          receipt: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+            historicalFailureCorrectionOrdinal: 3, replayState: replay.replayState,
+            replayOutcome: replay.replayOutcome,
+            evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL",
+            correctedOutputUploaded: false, historicalBackfill: false,
+            providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+            finalize: false, releaseEligible: false, autoPublish: "OFF" } };
       } else if (commandType === "START_STAGE_12") {
         if (ownerApprovalText !== "START STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
         const start = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {

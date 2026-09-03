@@ -191,3 +191,36 @@ export const OPS = {
   BUILD_AUDIT_INTERVAL_WP: 3,
 } as const
 ```
+
+---
+
+## 8. Runbook Stage 12 encoded-loudness diagnostic replay
+
+Replay là diagnostic reproduction có mutation giới hạn ở bảng job/evidence mới;
+nó không phải correction, calibration hoặc Finalize.
+
+### Preflight bắt buộc
+
+1. Owner phê duyệt chính xác typed OPERATE command riêng.
+2. Protected main, Sites source identity và Fly image provenance exact-match.
+3. Fly health trả `stage12Ready=true` và
+   `encodedLoudnessDiagnosticReplayReady=true`; image digest được pin vào job.
+4. Stage vẫn `STAGE_12_READY`; immutable ordinal 2/3 và source identity exact-match.
+5. Chứng minh chưa có replay job cùng idempotency key; provider/publish vẫn OFF.
+
+### Thực thi và điểm dừng
+
+Gửi command đúng một lần. Nếu `PENDING`, chỉ read-back; không resend. `READY` chỉ
+có nghĩa evidence reproduction đã được lưu, không có nghĩa Stage 12 QA đã PASS và
+không cấp quyền correction/Finalize. `FAILED` phải dừng để đọc typed error; không
+tạo ordinal 4 hoặc attempt 4. Dù outcome `PASS` hay `FAIL`, operator dừng sau evidence
+read-back và xin phê duyệt EVOLVE/OPERATE riêng cho bất kỳ bước kế tiếp nào.
+
+### Xác minh hậu kỳ
+
+- Source/historical identity, worker pin và algorithm/threshold hashes khớp.
+- Source baseline, pass `0..terminal`, final raw/numeric measurements và predicates
+  nhất quán; frame-MD5/provenance hiện diện.
+- `correctedOutputUploaded=false`, `historicalBackfill=false`, provider count `0`,
+  calibration/finalize/release false và auto-publish OFF.
+- Ordinal 2/3 unchanged; không có correction ordinal 4 hoặc Stage 12 attempt 4.

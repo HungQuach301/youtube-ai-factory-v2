@@ -734,3 +734,57 @@ type Stage12QaDiagnosticLineage = {
 Diagnostic scan chỉ đọc pre-master bất biến của attempt 3 đã fail `S12QA:*`, ghi receipt/số đo bất biến và không đổi trạng thái job gốc. `Stage12MediaReceipt.renderAuthorized` là boolean để receipt fail có thể được lưu; chỉ validator PASS mới cấp `renderAuthorized=true` cho finalize.
 
 Callback diagnostic phải dùng typed error bắt đầu bằng chữ cái; DOMException numeric `23` không được phép thoát ra contract. Job terminal `READY|FAILED` là immutable. Chỉ một retry ordinal 2 được phép khi ordinal 1 fail vì `STAGE12_CALLBACK_TIMEOUT` (legacy Production `23` được nhận diện nhưng không bị sửa), và retry phải liên kết predecessor bằng `STAGE12_DIAGNOSTIC_CALLBACK_TIMEOUT`. Callback xác minh pointer/hash/size R2 đã niêm phong và duration lưu trong job; không hydrate lại toàn pipeline hay băm lại video lớn trong request callback.
+
+---
+
+## 12. Stage 12 encoded-loudness diagnostic replay contract
+
+```ts
+type RunStage12EncodedLoudnessDiagnosticReplayCommand = {
+  commandType: 'RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY'
+  ownerApprovalText: 'RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY'
+  sourceAttemptOrdinal: 3
+  sourceCorrectionOrdinal: 2
+  historicalFailureCorrectionOrdinal: 3
+  correctionStrategyVersion: 3
+  correctionPassLimit: 3
+  expectedWorkerImageDigest: `sha256:${string}`
+  algorithmFingerprint: string
+  thresholdSnapshotSha256: string
+  historicalBackfill: false
+  uploadCorrectedOutput: false
+  providerDispatch: 'OFF'
+  providerCallCount: 0
+  calibration: false
+  finalize: false
+  release: false
+  autoPublish: 'OFF'
+}
+
+type EncodedLoudnessReplayMeasurement = {
+  correctionPass: 0 | 1 | 2 | 3
+  phase: 'INITIAL_ENCODED_MEASUREMENT' | 'POST_CORRECTION_PASS'
+    | 'FINAL_POST_ENCODE_VERIFICATION'
+  integratedLufs: number
+  integratedLufsExact: string
+  truePeakDbtp: number
+  truePeakDbtpExact: string
+  loudnessRangeLu: number
+  loudnessRangeLuExact: string
+  failedPredicates: string[]
+  audioFrameMd5Sha256: string
+}
+```
+
+Replay là một reproduction job mới, không phải correction ordinal mới. Nó chỉ đọc
+immutable corrected pre-master ordinal 2 qua authenticated `GET`, tái chạy đúng
+strategy v3 trong temporary workspace và gửi evidence qua authenticated `POST`.
+Source route không có `PUT`, worker không upload corrected output, và ordinal 2/3
+không được UPDATE hoặc backfill.
+
+Job pin exact worker image digest trước D1 mutation. Evidence `READY` phải khóa
+source R2/SHA-256/byte length/receipt, ordinal-3 historical failure identity,
+algorithm fingerprint, threshold snapshot, FFmpeg/libopus fingerprints, raw decimal
+strings, numeric values, per-pass frame-MD5 và predicates được tính lại từ threshold
+hiện hành. Job/evidence terminal là append-only; mismatch ở bất kỳ boundary nào
+phải fail-closed.

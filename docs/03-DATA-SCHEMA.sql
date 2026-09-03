@@ -1419,3 +1419,24 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- true peak <= -1 dBTP và LRA 4..8 LU; UPDATE/DELETE evidence bị cấm.
 -- Migration không backfill, UPDATE hay suy diễn số đo cho ordinal 2/3 cũ.
 -- Xem drizzle/0029_stage12_encoded_loudness_failure_observability.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY — migration 0030
+-- =====================================================================
+-- stage12_encoded_loudness_diagnostic_replay_job là execution lineage riêng,
+-- chỉ nhận exact source correction ordinal 2 READY/FAIL và exact historical
+-- ordinal 3 FAILED:STAGE12_ENCODED_LOUDNESS_UNRESOLVED. Nó không phải correction
+-- ordinal 4 hoặc Stage 12 attempt 4 và không thay đổi hai predecessor.
+--
+-- stage12_encoded_loudness_diagnostic_replay_evidence chỉ INSERT khi replay job
+-- chuyển READY. Row khóa source R2/SHA/bytes/receipt, ordinal-3 failure identity,
+-- raw/numeric LUFS, true peak, LRA, per-pass failed predicates và audio frame-MD5,
+-- terminal correction pass, exact worker image pin, algorithm/threshold hashes,
+-- FFmpeg build và libopus fingerprints. Trigger tự tính lại predicate từ threshold
+-- -14 ±1 LUFS-I, true peak <= -1 dBTP và LRA 4..8 LU cho source, từng pass và final.
+--
+-- Job/evidence terminal cấm UPDATE/DELETE; PENDING không được mang result; READY
+-- bắt buộc evidence nhất quán; FAILED không được giả lập evidence. Command contract
+-- chỉ thêm transition typed LOUDNESS_REPLAY_PENDING. Không provider, calibration,
+-- output upload, backfill, Finalize, release hoặc publish.
+-- Xem drizzle/0030_stage12_encoded_loudness_diagnostic_replay.sql.

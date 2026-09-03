@@ -53,11 +53,45 @@ export type Stage12MediaAudioP0CorrectionRequest = Stage12MediaStartRequest & {
   };
 };
 
+export type Stage12MediaEncodedLoudnessDiagnosticReplayRequest = Stage12MediaStartRequest & {
+  diagnosticReplay: {
+    schemaVersion: 1;
+    evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL";
+    sourceAttemptOrdinal: 3;
+    sourceCorrectionOrdinal: 2;
+    historicalFailureCorrectionOrdinal: 3;
+    correctionStrategyVersion: 3;
+    correctionPassLimit: 3;
+    sourceCorrectionJobId: string;
+    historicalFailureJobId: string;
+    sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number };
+    sourceCorrectionReceiptSha256: string;
+    expectedWorkerImageDigest: string;
+    algorithmFingerprint: string;
+    thresholdSnapshotSha256: string;
+    historicalBackfill: false;
+    uploadCorrectedOutput: false;
+    providerDispatch: "OFF";
+    providerCallCount: 0;
+    calibration: false;
+    finalize: false;
+    release: false;
+    autoPublish: "OFF";
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
   idempotencyKey: string;
   imageDigest: string;
+};
+
+export type Stage12MediaWorkerHealth = {
+  ok: true;
+  imageDigest: string;
+  stage12Ready: true;
+  encodedLoudnessDiagnosticReplayReady: true;
 };
 
 function sha256(bytes: Uint8Array): string {
@@ -88,6 +122,22 @@ async function signedMediaFetch(path: string, payload: unknown): Promise<Respons
     throw new Error("TRACK_G_STAGE_12_MEDIA_WORKER_REDIRECT_REJECTED");
   }
   return response;
+}
+
+export async function readStage12MediaWorkerHealth(): Promise<Stage12MediaWorkerHealth> {
+  const baseUrl = getFactoryEnv().MEDIA_WORKER_URL?.replace(/\/$/u, "");
+  if (!baseUrl?.startsWith("https://")) throw new Error("MEDIA_WORKER_URL_UNAVAILABLE");
+  const response = await fetch(`${baseUrl}/health`, { method: "GET", redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error("TRACK_G_STAGE_12_MEDIA_WORKER_REDIRECT_REJECTED");
+  }
+  const value = await response.json() as Partial<Stage12MediaWorkerHealth> & { code?: string };
+  if (!response.ok || value.ok !== true || value.stage12Ready !== true
+    || value.encodedLoudnessDiagnosticReplayReady !== true
+    || !/^sha256:[a-f0-9]{64}$/u.test(value.imageDigest ?? "")) {
+    throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_HEALTH_FAILED:${value.code ?? response.status}`);
+  }
+  return value as Stage12MediaWorkerHealth;
 }
 
 export async function dispatchStage12MediaStart(
@@ -156,6 +206,22 @@ export async function dispatchStage12MediaAudioP0Correction(
     || result.idempotencyKey !== payload.idempotencyKey
     || !/^sha256:[a-f0-9]{64}$/u.test(result.imageDigest)) {
     throw new Error(`TRACK_G_STAGE_12_AUDIO_P0_CORRECTION_FAILED:${result.code ?? response.status}`);
+  }
+  return result;
+}
+
+export async function dispatchStage12EncodedLoudnessDiagnosticReplay(
+  payload: Stage12MediaEncodedLoudnessDiagnosticReplayRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/encoded-loudness-diagnostic-replay", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || result.imageDigest !== payload.diagnosticReplay.expectedWorkerImageDigest) {
+    throw new Error(
+      `TRACK_G_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_FAILED:${result.code ?? response.status}`,
+    );
   }
   return result;
 }

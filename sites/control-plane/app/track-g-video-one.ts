@@ -26,6 +26,8 @@ import {
   stage12AudioP0CorrectionJobs,
   stage12AudioP0CorrectionRetryJobs,
   stage12CorrectedPreMasterJobs,
+  stage12EncodedLoudnessDiagnosticReplayEvidence,
+  stage12EncodedLoudnessDiagnosticReplayJobs,
   stage12PreMasterQa,
   stage12QaDiagnosticJobs,
   stage12QaEvidence,
@@ -57,19 +59,24 @@ import {
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
+  dispatchStage12EncodedLoudnessDiagnosticReplay,
   dispatchStage12MediaAudioP0Correction,
   dispatchStage12MediaDiagnostic,
   dispatchStage12MediaRemediation,
   dispatchStage12MediaRecovery,
   dispatchStage12MediaStart,
   parseStage12MediaReceipt,
+  readStage12MediaWorkerHealth,
 } from "./stage12-media";
 import {
   buildTrackGVideoOneStage12Request,
   evaluateTrackGVideoOneStage12Receipt,
+  parseStage12EncodedLoudnessDiagnosticReplayResult,
   parseStage12EncodedLoudnessFailureDiagnostic,
+  stage12EncodedLoudnessDiagnosticReplayFingerprints,
   validateTrackGVideoOneStage12Receipt,
   type Stage12EncodedLoudnessFailureDiagnostic,
+  type Stage12EncodedLoudnessDiagnosticReplayResult,
   type Stage12MediaReceipt,
 } from "./stage12-pre-master";
 import { ASSURANCE, AUDIO, RETRY } from "../packages/contracts/src/thresholds";
@@ -195,6 +202,8 @@ const STAGE_12_RECOVERY_OWNER_APPROVAL_TEXT = "RECOVER STAGE 12 ATTEMPT 3";
 const STAGE_12_DIAGNOSTIC_OWNER_APPROVAL_TEXT = "SCAN STAGE 12 ATTEMPT 3";
 const STAGE_12_REMEDIATION_OWNER_APPROVAL_TEXT = "CREATE STAGE 12 CORRECTED PRE-MASTER";
 const STAGE_12_AUDIO_P0_CORRECTION_OWNER_APPROVAL_TEXT = "CREATE STAGE 12 AUDIO P0 CORRECTION";
+const STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT =
+  "RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -278,6 +287,13 @@ export type CreateTrackGVideoOneStage12CorrectedPreMasterInput = {
 export type CreateTrackGVideoOneStage12AudioP0CorrectionInput = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_AUDIO_P0_CORRECTION_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type RunTrackGVideoOneStage12EncodedLoudnessDiagnosticReplayInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -6127,6 +6143,403 @@ export async function createTrackGVideoOneStage12AudioP0Correction(
     throw error;
   }
   return { ...(await diagnoseTrackGVideoOneStage12AudioP0Correction()), replayed: false };
+}
+
+function stage12EncodedLoudnessDiagnosticReplayIdempotencyKey(
+  sourceSha256: string,
+  sourceReceiptSha256: string,
+  historicalFailureJobId: string,
+  expectedWorkerImageDigest: string,
+  algorithmFingerprint: string,
+) {
+  return createHash("sha256").update(
+    ["RUN_TRACK_G_VIDEO_1_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY",
+      sourceSha256, sourceReceiptSha256, historicalFailureJobId,
+      expectedWorkerImageDigest, algorithmFingerprint].join("\0"),
+  ).digest("hex");
+}
+
+function stage12EncodedLoudnessDiagnosticReplayCallbackToken(idempotencyKey: string) {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+async function latestStage12EncodedLoudnessDiagnosticReplayJob() {
+  const [job] = await getDb().select().from(stage12EncodedLoudnessDiagnosticReplayJobs)
+    .orderBy(desc(stage12EncodedLoudnessDiagnosticReplayJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function readStage12EncodedLoudnessDiagnosticReplayEvidence(replayJobId: string) {
+  const [evidence] = await getDb().select().from(stage12EncodedLoudnessDiagnosticReplayEvidence)
+    .where(eq(stage12EncodedLoudnessDiagnosticReplayEvidence.replayJobId, replayJobId))
+    .limit(1);
+  return evidence ?? null;
+}
+
+async function stage12EncodedLoudnessDiagnosticReplaySource() {
+  const source = await latestStage12AudioP0InitialCorrectionJob();
+  const historicalFailure = await latestStage12AudioP0RetryCorrectionJob();
+  const bootstrap = await readBackForStage00();
+  const prefix = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
+    STAGE_12_CODE, "audio-p0-corrected-pre-master", ""].join("/");
+  const pointer = source?.correctedPreMasterR2Key && source.correctedPreMasterSha256
+    && source.correctedPreMasterByteLength
+    ? (await listImmutableProductionEvidence(prefix, 8)).find((candidate) =>
+      candidate.key === source.correctedPreMasterR2Key
+        && candidate.sha256 === source.correctedPreMasterSha256
+        && candidate.size === source.correctedPreMasterByteLength)
+    : undefined;
+  const eligible = Boolean(source && historicalFailure && pointer
+    && bootstrap.run.currentStep === "STAGE_12_READY"
+    && source.correctionOrdinal === 2 && source.state === "READY" && source.outcome === "FAIL"
+    && source.receiptSha256 && source.correctedPreMasterR2Key
+    && source.correctedPreMasterSha256 && source.correctedPreMasterByteLength
+    && source.providerCallCount === 0 && source.providerDispatch === "OFF"
+    && source.autoPublish === "OFF"
+    && historicalFailure.predecessorCorrectionJobId === source.id
+    && historicalFailure.stage12JobId === source.stage12JobId
+    && historicalFailure.correctionOrdinal === 3
+    && historicalFailure.correctionStrategyVersion === 3
+    && historicalFailure.state === "FAILED"
+    && historicalFailure.errorCode === "STAGE12_ENCODED_LOUDNESS_UNRESOLVED"
+    && historicalFailure.sourcePreMasterR2Key === source.correctedPreMasterR2Key
+    && historicalFailure.sourcePreMasterSha256 === source.correctedPreMasterSha256
+    && historicalFailure.sourcePreMasterByteLength === source.correctedPreMasterByteLength
+    && historicalFailure.sourceReceiptSha256 === source.receiptSha256
+    && historicalFailure.correctedPreMasterR2Key === null
+    && historicalFailure.correctedPreMasterSha256 === null
+    && historicalFailure.receiptSha256 === null
+    && historicalFailure.outcome === null
+    && historicalFailure.providerCallCount === 0
+    && historicalFailure.providerDispatch === "OFF"
+    && historicalFailure.autoPublish === "OFF");
+  return { source, historicalFailure, pointer, bootstrap, eligible };
+}
+
+function stage12EncodedLoudnessDiagnosticReplayEvidenceResult(
+  evidence: NonNullable<Awaited<ReturnType<
+    typeof readStage12EncodedLoudnessDiagnosticReplayEvidence
+  >>>,
+) {
+  return parseStage12EncodedLoudnessDiagnosticReplayResult({
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+    source: {
+      correctionOrdinal: 2,
+      correctionJobId: evidence.sourceCorrectionJobId,
+      r2Key: evidence.sourcePreMasterR2Key,
+      sha256: evidence.sourcePreMasterSha256,
+      byteLength: evidence.sourcePreMasterByteLength,
+      receiptSha256: evidence.sourceReceiptSha256,
+    },
+    historicalFailure: {
+      correctionOrdinal: 3,
+      correctionJobId: evidence.historicalFailureJobId,
+      errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+    },
+    sourceBaseline: JSON.parse(evidence.sourceBaselineJson) as unknown,
+    measurementsByPass: JSON.parse(evidence.measurementsByPassJson) as unknown,
+    terminalCorrectionPass: evidence.terminalCorrectionPass,
+    finalMeasurements: {
+      integratedLufs: evidence.finalIntegratedLufs,
+      integratedLufsExact: evidence.finalIntegratedLufsExact,
+      truePeakDbtp: evidence.finalTruePeakDbtp,
+      truePeakDbtpExact: evidence.finalTruePeakDbtpExact,
+      loudnessRangeLu: evidence.finalLoudnessRangeLu,
+      loudnessRangeLuExact: evidence.finalLoudnessRangeLuExact,
+    },
+    failedPredicates: JSON.parse(evidence.failedPredicatesJson) as unknown,
+    replayOutcome: evidence.replayOutcome,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    workerImageDigest: evidence.workerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    runtimeProvenance: {
+      ffmpegVersion: evidence.ffmpegVersion,
+      ffmpegBuildFingerprint: evidence.ffmpegBuildFingerprint,
+      libopusEncoderFingerprint: evidence.libopusEncoderFingerprint,
+    },
+    correctionStrategyVersion: 3,
+    correctionPassLimit: 3,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: "OFF",
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    autoPublish: "OFF",
+  });
+}
+
+export async function diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay() {
+  const source = await stage12EncodedLoudnessDiagnosticReplaySource();
+  const job = await latestStage12EncodedLoudnessDiagnosticReplayJob();
+  const evidence = job
+    ? await readStage12EncodedLoudnessDiagnosticReplayEvidence(job.id) : null;
+  const result = evidence ? stage12EncodedLoudnessDiagnosticReplayEvidenceResult(evidence) : null;
+  if (job?.state === "READY" && (!result
+    || result.workerImageDigest !== job.workerImageDigest
+    || result.replayOutcome !== job.replayOutcome
+    || result.terminalCorrectionPass !== job.terminalCorrectionPass)) {
+    throw new Error("TRACK_G_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_READ_BACK_FAILED");
+  }
+  return {
+    replayState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
+    errorCode: job?.errorCode ?? (source.eligible ? null
+      : "STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_SOURCE_NOT_ELIGIBLE"),
+    currentStep: source.bootstrap.run.currentStep,
+    sourceAttemptOrdinal: 3 as const,
+    sourceCorrectionOrdinal: 2 as const,
+    historicalFailureCorrectionOrdinal: 3 as const,
+    sourceCorrectionJobId: job?.sourceCorrectionJobId ?? source.source?.id ?? null,
+    historicalFailureJobId: job?.historicalFailureJobId ?? source.historicalFailure?.id ?? null,
+    sourcePreMasterR2Key: job?.sourcePreMasterR2Key
+      ?? source.source?.correctedPreMasterR2Key ?? null,
+    sourcePreMasterSha256: job?.sourcePreMasterSha256
+      ?? source.source?.correctedPreMasterSha256 ?? null,
+    sourcePreMasterByteLength: job?.sourcePreMasterByteLength
+      ?? source.source?.correctedPreMasterByteLength ?? null,
+    sourceReceiptSha256: job?.sourceReceiptSha256 ?? source.source?.receiptSha256 ?? null,
+    expectedWorkerImageDigest: job?.expectedWorkerImageDigest ?? null,
+    workerImageDigest: job?.workerImageDigest ?? null,
+    replayOutcome: job?.replayOutcome ?? null,
+    terminalCorrectionPass: job?.terminalCorrectionPass ?? null,
+    result,
+    evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL" as const,
+    replayExecuted: job !== null,
+    correctedOutputUploaded: false as const,
+    historicalBackfill: false as const,
+    providerCallCount: 0 as const,
+    providerDispatch: "OFF" as const,
+    calibration: false as const,
+    finalize: false as const,
+    releaseEligible: false as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
+function requireStage12EncodedLoudnessDiagnosticReplayToken(
+  job: Awaited<ReturnType<typeof latestStage12EncodedLoudnessDiagnosticReplayJob>>,
+  idempotencyKey: string,
+  token: string,
+): asserts job is NonNullable<typeof job> {
+  if (!job || job.idempotencyKey !== idempotencyKey || !HEX64.test(token)
+    || job.callbackTokenHash !== sha256(new TextEncoder().encode(token))) {
+    throw new Error("STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_UNAUTHORIZED");
+  }
+}
+
+export async function readTrackGVideoOneStage12EncodedLoudnessDiagnosticReplaySource(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+) {
+  const job = await latestStage12EncodedLoudnessDiagnosticReplayJob();
+  requireStage12EncodedLoudnessDiagnosticReplayToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || expectedSha256 !== job.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_SOURCE_CONFLICT");
+  }
+  return readVerifiedProductionEvidence(job.sourcePreMasterR2Key, job.sourcePreMasterSha256);
+}
+
+export async function recordTrackGVideoOneStage12EncodedLoudnessDiagnosticReplayCallback(input: {
+  idempotencyKey: string;
+  token: string;
+  result?: Stage12EncodedLoudnessDiagnosticReplayResult;
+  errorCode?: string;
+}) {
+  const job = await latestStage12EncodedLoudnessDiagnosticReplayJob();
+  requireStage12EncodedLoudnessDiagnosticReplayToken(job, input.idempotencyKey, input.token);
+  if (job.state === "READY") {
+    return { accepted: true, replayed: true, jobStatus: "READY" as const };
+  }
+  if (job.state !== "PENDING") {
+    throw new Error("STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_CALLBACK_STATE_CONFLICT");
+  }
+  if (!input.result) {
+    const code = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_FAILED";
+    await getD1().prepare(`UPDATE stage12_encoded_loudness_diagnostic_replay_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`)
+      .bind(code, new Date().toISOString(), job.id).run();
+    return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+  }
+  const result = parseStage12EncodedLoudnessDiagnosticReplayResult(input.result);
+  if (result.source.correctionJobId !== job.sourceCorrectionJobId
+    || result.historicalFailure.correctionJobId !== job.historicalFailureJobId
+    || result.source.r2Key !== job.sourcePreMasterR2Key
+    || result.source.sha256 !== job.sourcePreMasterSha256
+    || result.source.byteLength !== job.sourcePreMasterByteLength
+    || result.source.receiptSha256 !== job.sourceReceiptSha256
+    || result.expectedWorkerImageDigest !== job.expectedWorkerImageDigest
+    || result.workerImageDigest !== job.expectedWorkerImageDigest
+    || result.algorithmFingerprint !== job.algorithmFingerprint
+    || result.thresholdSnapshotSha256 !== job.thresholdSnapshotSha256) {
+    throw new Error("STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_RESULT_LINEAGE_INVALID");
+  }
+  const evidenceId = sha256(new TextEncoder().encode(canonicalize({
+    replayJobId: job.id,
+    result,
+  })));
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO stage12_encoded_loudness_diagnostic_replay_evidence
+      (id,replay_job_id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       evidence_semantics,source_baseline_json,measurements_by_pass_json,
+       terminal_correction_pass,final_integrated_lufs,final_integrated_lufs_exact,
+       final_true_peak_dbtp,final_true_peak_dbtp_exact,final_loudness_range_lu,
+       final_loudness_range_lu_exact,failed_predicates_json,replay_outcome,
+       expected_worker_image_digest,worker_image_digest,algorithm_fingerprint,
+       threshold_snapshot_sha256,ffmpeg_version,ffmpeg_build_fingerprint,
+       libopus_encoder_fingerprint,source_pre_master_r2_key,source_pre_master_sha256,
+       source_pre_master_byte_length,source_receipt_sha256)
+      SELECT ?,id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       evidence_semantics,?,?,?,?,?,?,?,?,?,?,?,expected_worker_image_digest,?,
+       algorithm_fingerprint,threshold_snapshot_sha256,?,?,?,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256
+      FROM stage12_encoded_loudness_diagnostic_replay_job WHERE id=? AND state='PENDING'`)
+      .bind(evidenceId, canonicalize(result.sourceBaseline),
+        canonicalize(result.measurementsByPass), result.terminalCorrectionPass,
+        result.finalMeasurements.integratedLufs, result.finalMeasurements.integratedLufsExact,
+        result.finalMeasurements.truePeakDbtp, result.finalMeasurements.truePeakDbtpExact,
+        result.finalMeasurements.loudnessRangeLu, result.finalMeasurements.loudnessRangeLuExact,
+        canonicalize(result.failedPredicates), result.replayOutcome, result.workerImageDigest,
+        result.runtimeProvenance.ffmpegVersion,
+        result.runtimeProvenance.ffmpegBuildFingerprint,
+        result.runtimeProvenance.libopusEncoderFingerprint, job.id),
+    getD1().prepare(`UPDATE stage12_encoded_loudness_diagnostic_replay_job SET state='READY',
+      replay_outcome=?,terminal_correction_pass=?,worker_image_digest=?,updated_at=?
+      WHERE id=? AND state='PENDING'`).bind(result.replayOutcome,
+      result.terminalCorrectionPass, result.workerImageDigest, now, job.id),
+  ]);
+  return { accepted: true, replayed: false, jobStatus: "READY" as const };
+}
+
+export async function runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay(
+  user: ChatGPTUser,
+  input: RunTrackGVideoOneStage12EncodedLoudnessDiagnosticReplayInput,
+) {
+  if (input.ownerApprovalText
+    !== STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.objective.trim().length < 12 || input.objective.trim().length > 500
+    || !input.callbackUrl.startsWith("https://")
+    || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_INPUT_INVALID");
+  }
+  const existing = await latestStage12EncodedLoudnessDiagnosticReplayJob();
+  if (existing) {
+    return { ...(await diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay()),
+      replayed: true };
+  }
+  const source = await stage12EncodedLoudnessDiagnosticReplaySource();
+  if (!source.eligible || !source.source || !source.historicalFailure || !source.pointer
+    || !source.source.correctedPreMasterR2Key || !source.source.correctedPreMasterSha256
+    || !source.source.correctedPreMasterByteLength || !source.source.receiptSha256) {
+    throw new Error("TRACK_G_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_SOURCE_NOT_ELIGIBLE");
+  }
+  const health = await readStage12MediaWorkerHealth();
+  const prepared = await prepareStage12MediaRequest(3);
+  const fingerprints = stage12EncodedLoudnessDiagnosticReplayFingerprints(
+    prepared.payload, RETRY.MAX_ATTEMPTS,
+  );
+  const key = stage12EncodedLoudnessDiagnosticReplayIdempotencyKey(
+    source.source.correctedPreMasterSha256,
+    source.source.receiptSha256,
+    source.historicalFailure.id,
+    health.imageDigest,
+    fingerprints.algorithmFingerprint,
+  );
+  const token = stage12EncodedLoudnessDiagnosticReplayCallbackToken(key);
+  const id = `stage12_encoded_loudness_diagnostic_replay_${source.historicalFailure.id}`;
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO command_log
+      (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+       trace_id,created_at)
+      VALUES (?,'RUN_TRACK_G_VIDEO_1_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY',?,?,?,
+       'TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_FAIL',
+       'TRACK_G_VIDEO_1_STAGE_12_LOUDNESS_REPLAY_PENDING',?,?)`).bind(
+      crypto.randomUUID(), canonicalize({ objective: input.objective.trim(),
+        evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL",
+        sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        sourceCorrectionJobId: source.source.id,
+        historicalFailureJobId: source.historicalFailure.id,
+        sourcePreMasterSha256: source.source.correctedPreMasterSha256,
+        expectedWorkerImageDigest: health.imageDigest,
+        ...fingerprints, correctedOutputUploaded: false, historicalBackfill: false,
+        providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+        finalize: false, releaseEligible: false, autoPublish: "OFF" }),
+      key, user.email.toLowerCase(), crypto.randomUUID(), now,
+    ),
+    getD1().prepare(`INSERT INTO stage12_encoded_loudness_diagnostic_replay_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,idempotency_key,
+       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
+       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+       source_receipt_sha256,correction_strategy_version,correction_pass_limit,
+       expected_worker_image_digest,algorithm_fingerprint,threshold_snapshot_sha256,
+       created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,'NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL',?,?,?,?,3,3,
+       ?,?,?,?,?)`).bind(id, source.source.stage12JobId, source.source.id,
+      source.historicalFailure.id, key, sha256(new TextEncoder().encode(token)),
+      user.email.toLowerCase(), input.ownerApprovalText, "PENDING",
+      source.source.correctedPreMasterR2Key, source.source.correctedPreMasterSha256,
+      source.source.correctedPreMasterByteLength, source.source.receiptSha256,
+      health.imageDigest, fingerprints.algorithmFingerprint,
+      fingerprints.thresholdSnapshotSha256, now, now),
+  ]);
+  try {
+    await dispatchStage12EncodedLoudnessDiagnosticReplay({
+      ...prepared.payload,
+      idempotencyKey: key,
+      objectAccess: { url: input.objectAccessUrl, token },
+      callback: { url: input.callbackUrl, token },
+      diagnosticReplay: {
+        schemaVersion: 1,
+        evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL",
+        sourceAttemptOrdinal: 3,
+        sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        correctionStrategyVersion: 3,
+        correctionPassLimit: RETRY.MAX_ATTEMPTS as 3,
+        sourceCorrectionJobId: source.source.id,
+        historicalFailureJobId: source.historicalFailure.id,
+        sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
+          sha256: source.source.correctedPreMasterSha256,
+          byteLength: source.source.correctedPreMasterByteLength },
+        sourceCorrectionReceiptSha256: source.source.receiptSha256,
+        expectedWorkerImageDigest: health.imageDigest,
+        ...fingerprints,
+        historicalBackfill: false,
+        uploadCorrectedOutput: false,
+        providerDispatch: "OFF",
+        providerCallCount: 0,
+        calibration: false,
+        finalize: false,
+        release: false,
+        autoPublish: "OFF",
+      },
+    });
+  } catch (error) {
+    await getD1().prepare(`UPDATE stage12_encoded_loudness_diagnostic_replay_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      error instanceof Error ? error.message.slice(0, 160)
+        : "STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_START_FAILED",
+      new Date().toISOString(), id,
+    ).run();
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay()),
+    replayed: false };
 }
 
 async function readBackStage12(operationRunId: string) {

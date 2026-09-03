@@ -133,3 +133,28 @@ Evolution ID: `EVOLVE_STAGE12_ENCODED_LOUDNESS_FAILURE_OBSERVABILITY`
 - Threshold giữ nguyên `-14 ±1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`;
   evolution không tạo ordinal 4/attempt 4, không provider, calibration, Finalize,
   release hoặc publish.
+
+## Encoded-loudness diagnostic replay
+
+Evolution ID: `EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY`
+
+- Đây là reproduction job mới trên immutable corrected pre-master ordinal 2; không
+  phải retry/correction ordinal 4 và không tạo Stage 12 attempt 4.
+- Eligibility khóa exact ordinal 2 `READY/FAIL`, source R2/SHA/byte length/receipt,
+  cùng ordinal 3 `FAILED:STAGE12_ENCODED_LOUDNESS_UNRESOLVED` trỏ về chính source đó.
+- Trước khi ghi job, control plane đọc Fly health và pin immutable image digest.
+  Worker từ chối payload nếu runtime digest thực tế khác pin.
+- Authenticated source route chỉ cung cấp ordinal 2 cho đúng idempotency/callback
+  token và SHA; route không có upload method. Worker dùng temporary copy, chạy đúng
+  strategy v3/pass limit 3, đo source baseline và mỗi encoded pass, rồi xóa workspace.
+- Evidence mới lưu cả raw decimal string và numeric integrated LUFS/true peak/LRA,
+  failed predicates, audio frame-MD5 SHA-256, terminal pass, algorithm fingerprint,
+  threshold snapshot, FFmpeg build fingerprint và libopus encoder fingerprint.
+- Parser và migration tự tính lại predicate theo threshold hiện hành; mismatched
+  source/pass/final values, history, digest hoặc fingerprint đều fail-closed.
+- Migration `0030` tách bảng job/evidence append-only. Nó không sửa hoặc backfill
+  ordinal 2/3; evidence semantics luôn
+  `NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL`.
+- Replay tuyệt đối không upload corrected output, không gọi provider/calibration,
+  không Finalize, release hoặc publish. Production replay chỉ được cân nhắc bằng
+  phê duyệt OPERATE riêng sau khi code đã merge/deploy và exact-tree/health PASS.

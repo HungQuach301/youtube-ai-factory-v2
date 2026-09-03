@@ -1,5 +1,24 @@
 # EVOLUTION QUEUE
 
+## EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
+
+- Status: `IMPLEMENTED_CI_PENDING`; local root/Sites evidence PASS, remote required
+  CI đang chờ PR; chưa merge/deploy và chưa chạy Production replay.
+- Kind: `PIPELINE_CODE`; strictness direction: `STRICTER_REPRODUCTION_EVIDENCE`.
+- Source: terminal ordinal 3 giữ typed
+  `STAGE12_ENCODED_LOUDNESS_UNRESOLVED`, nhưng failure trước migration 0029 không có
+  exact per-pass/final measurements để xác định predicate và pass không hội tụ.
+- Diff: typed replay command, authenticated read-only ordinal-2 source route,
+  migration 0030 append-only job/evidence, exact raw/numeric measurements,
+  frame-MD5, failed predicates và pinned worker/runtime/algorithm provenance.
+- Boundary: không backfill/sửa ordinal 2/3; không ordinal 4/attempt 4; không corrected
+  output upload, provider, calibration, Finalize, release hoặc publish.
+- Acceptance evidence: worker/control-plane fingerprint parity; runtime and migration
+  unit tests; real FFmpeg zero-write smoke; Sites Miniflare E2E; source-integrity,
+  root CI, Sites build/test và media-worker image CI.
+- Activation: PR/CI không cấp quyền Production replay. Sau merge/deploy cần
+  exact-tree/health read-back và phê duyệt OPERATE riêng.
+
 ## EVO-STAGE12-CALLBACK-EVIDENCE-RECOVERY
 
 - Status: `EVIDENCE_READY`; local and remote shadow evidence PASS; awaiting explicit
