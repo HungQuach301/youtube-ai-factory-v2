@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStage12AudioP0CorrectionFilter,
+  buildStage12EncodedLoudnessFailure,
   buildStage12RemediationAudioFilter,
   buildStage12RemediationVideoFilter,
+  stage12EncodedLoudnessFailureDiagnostic,
+  stage12LoudnessFailedPredicates,
   validateStage12AudioP0CorrectionPayload,
   validateStage12RemediationPayload,
 } from "../stage12-runtime.mjs";
@@ -103,5 +106,40 @@ describe("Stage 12 corrected pre-master runtime", () => {
           code: "INVALID_STAGE12_AUDIO_P0_CORRECTION_ENVELOPE",
         }));
     }
+  });
+
+  it("preserves exact per-pass encoded measurements and failed predicates on failure", () => {
+    const measurementsByPass = [
+      { correctionPass: 0, phase: "INITIAL_ENCODED_MEASUREMENT", integratedLufs: -14.51,
+        truePeakDbtp: -0.9, loudnessRangeLu: 3,
+        failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 1, phase: "POST_CORRECTION_PASS", integratedLufs: -14.2,
+        truePeakDbtp: -1.3, loudnessRangeLu: 3.4,
+        failedPredicates: ["LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 2, phase: "POST_CORRECTION_PASS", integratedLufs: -13.9,
+        truePeakDbtp: -1.5, loudnessRangeLu: 3.8,
+        failedPredicates: ["LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 3, phase: "FINAL_POST_ENCODE_VERIFICATION", integratedLufs: -13.8,
+        truePeakDbtp: -0.8, loudnessRangeLu: 3.9,
+        failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"] },
+    ];
+    const error = buildStage12EncodedLoudnessFailure(payload, 3, measurementsByPass);
+    expect(error).toMatchObject({
+      code: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+      measurements: { integratedLufs: -13.8, truePeakDbtp: -0.8, loudnessRangeLu: 3.9 },
+      failureDiagnostic: {
+        boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+        correctionPass: 3,
+        correctionPassLimit: 3,
+        measurementsByPass,
+        failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"],
+      },
+    });
+    expect(stage12LoudnessFailedPredicates(payload, error.measurements))
+      .toEqual(["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"]);
+    expect(stage12EncodedLoudnessFailureDiagnostic(error, `sha256:${hex("9")}`))
+      .toMatchObject({ workerImageDigest: `sha256:${hex("9")}`, measurementsByPass });
+    expect(stage12EncodedLoudnessFailureDiagnostic(new Error("unrelated"), `sha256:${hex("9")}`))
+      .toBeUndefined();
   });
 });

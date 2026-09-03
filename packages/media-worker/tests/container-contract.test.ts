@@ -7,7 +7,7 @@ async function source(relativePath: string): Promise<string> {
   return readFile(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8')
 }
 
-describe('Stage 10 container contract', () => {
+describe('Media worker container contract', () => {
   it('requires an explicit owner approval before live calibration can run', async () => {
     const deployWorkflow = await source('../../../.github/workflows/media-worker-deploy.yml')
     const approvalStep = deployWorkflow.indexOf('Require explicit calibration approval')
@@ -53,5 +53,17 @@ describe('Stage 10 container contract', () => {
     expect(entrypoint).toMatch(/'WHISPERX_OBSERVER_FAILED'/u)
     expect(entrypoint).toMatch(/'FFMPEG_DECODE_FAILED'/u)
     expect(entrypoint).toMatch(/'FFMPEG_ENCODE_FAILED'/u)
+  })
+
+  it('publishes structured encoded-loudness failure evidence with the running image digest', async () => {
+    const entrypoint = await source('../container-entry.mjs')
+    const runtime = await source('../stage12-runtime.mjs')
+
+    expect(runtime).toMatch(/measurementsByPass/u)
+    expect(runtime).toMatch(/FINAL_POST_ENCODE_LOUDNESS_VERIFICATION/u)
+    expect(runtime).toMatch(/stage12LoudnessFailedPredicates/u)
+    expect(entrypoint).toMatch(/stage12EncodedLoudnessFailureDiagnostic\(error, IMAGE_DIGEST\)/u)
+    expect(entrypoint).toMatch(/body: JSON\.stringify\(\{ idempotencyKey, errorCode:[\s\S]+failureDiagnostic/u)
+    expect(entrypoint).toMatch(/trace_id: payload\.idempotencyKey/u)
   })
 })

@@ -228,3 +228,13 @@ Tốc độ tiến hóa của nhà máy = nhịp publish × kỷ luật ghi nhã
 ### Evolution record: EVOLVE_STAGE12_DIAGNOSTIC_CALLBACK
 
 Thay đổi `NEUTRAL` về strictness và `STRICTER` về error/lineage: callback diagnostic không còn hydrate toàn pipeline hoặc băm lại pre-master lớn trong request; duration được đóng trong job và pointer/hash/size immutable được xác minh trước receipt read-back. DOMException numeric code bị thay bằng typed callback transport error. Failed diagnostic terminal không được rewrite; migration chỉ cho một retry ordinal 2 có predecessor và typed reason. Promotion chỉ deploy code sau CI/health PASS, tuyệt đối không tự retry scan, generation, provider, finalize hoặc publish.
+
+### Evolution record: EVOLVE_STAGE12_ENCODED_LOUDNESS_FAILURE_OBSERVABILITY
+
+Thay đổi `NEUTRAL` về QA threshold và `STRICTER_FAILURE_EVIDENCE`: worker đóng exact
+initial/post-pass/final LUFS, true peak, LRA, failed predicates, correction pass và
+image digest vào callback khi strategy v3 fail tại encoded-loudness boundary.
+Migration 0029 chỉ INSERT một evidence row mới và khóa UPDATE/DELETE; ordinal 2/3
+terminal history không bị sửa hoặc backfill bằng dữ liệu suy đoán. Promotion chỉ
+triển khai observability sau CI/health PASS, không cấp quyền ordinal 4, attempt 4,
+provider, calibration, finalize, release hoặc publish.

@@ -1404,3 +1404,18 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- UPDATE/DELETE. command_log giữ mọi transition cũ và chỉ thêm AUDIO_P0_FAIL →
 -- AUDIO_P0_PENDING cho cùng typed command. Xem
 -- drizzle/0028_stage12_audio_p0_correction_ordinal_three.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_ENCODED_LOUDNESS_FAILURE_OBSERVABILITY — migration 0029
+-- =====================================================================
+-- stage12_audio_p0_correction_failure_evidence là bảng append-only tách khỏi
+-- retry job ordinal 3 đã terminal. Mỗi correction job chỉ có tối đa một row,
+-- liên kết exact stage12/source R2/SHA/byte length/receipt và chỉ nhận error
+-- STAGE12_ENCODED_LOUDNESS_UNRESOLVED tại boundary hậu kiểm Opus cuối.
+-- Row lưu mốc initial, post-pass 1, post-pass 2 và final/pass 3 trong JSON,
+-- đồng thời lưu scalar final integrated LUFS, true peak, LRA, exact failed
+-- predicates và immutable worker image digest để truy vấn trực tiếp.
+-- Trigger kiểm các predicate cuối theo nguyên threshold -14 ±1 LUFS-I,
+-- true peak <= -1 dBTP và LRA 4..8 LU; UPDATE/DELETE evidence bị cấm.
+-- Migration không backfill, UPDATE hay suy diễn số đo cho ordinal 2/3 cũ.
+-- Xem drizzle/0029_stage12_encoded_loudness_failure_observability.sql.

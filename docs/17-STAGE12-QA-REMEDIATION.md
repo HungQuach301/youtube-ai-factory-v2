@@ -111,3 +111,25 @@ Evolution ID: `EVOLVE_STAGE12_AUDIO_P0_CORRECTION_ORDINAL3`
   frame-MD5 SHA-256, receipt R2/SHA, report SHA và worker image digest.
 - Evolution này chỉ mở PR. Nó không chạy correction ordinal 3, không tạo attempt
   4, không gọi provider, không finalize và không publish.
+
+## Encoded-loudness failure observability
+
+Evolution ID: `EVOLVE_STAGE12_ENCODED_LOUDNESS_FAILURE_OBSERVABILITY`
+
+- Worker ghi exact measurement của initial encoded stream, output sau pass 1/2 và
+  final output sau pass 3 vào typed failure diagnostic; mỗi mốc có integrated LUFS,
+  true peak, LRA và exact failed predicates.
+- Callback chỉ nhận diagnostic này cùng
+  `STAGE12_ENCODED_LOUDNESS_UNRESOLVED`, correction pass/limit `3/3`, boundary
+  `FINAL_POST_ENCODE_LOUDNESS_VERIFICATION` và immutable worker image digest.
+- Control plane tự tính lại predicate từ threshold hiện hành và từ chối payload
+  thiếu, không hữu hạn, sai pass, sai final hoặc sai digest trước khi ghi dữ liệu.
+- Migration `0029` tạo bảng evidence riêng, UNIQUE theo ordinal-3 correction job,
+  khóa exact source R2/SHA/byte length/receipt và cấm UPDATE/DELETE. Job chuyển
+  `PENDING` → `FAILED` cùng evidence INSERT trong một D1 batch nguyên tử.
+- Migration không backfill số đo đã mất của terminal ordinal 3 hiện hữu và không
+  UPDATE bất kỳ ordinal 2/3 history nào. Diagnostic read-back trả evidence mới khi
+  nó thực sự tồn tại; nếu không thì trả `null`, không suy đoán.
+- Threshold giữ nguyên `-14 ±1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`;
+  evolution không tạo ordinal 4/attempt 4, không provider, calibration, Finalize,
+  release hoặc publish.

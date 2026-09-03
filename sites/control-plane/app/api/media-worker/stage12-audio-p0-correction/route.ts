@@ -62,14 +62,19 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as {
       idempotencyKey?: string; result?: Stage12MediaReceipt; errorCode?: string;
+      failureDiagnostic?: unknown;
     };
     if (!/^[a-f0-9]{64}$/u.test(body.idempotencyKey ?? "")
-      || (body.result === undefined) === (body.errorCode === undefined)) {
+      || (body.result === undefined) === (body.errorCode === undefined)
+      || (body.errorCode === "STAGE12_ENCODED_LOUDNESS_UNRESOLVED")
+        !== (body.failureDiagnostic !== undefined)) {
       return Response.json({ error: "STAGE_12_AUDIO_P0_CORRECTION_CALLBACK_INVALID" }, { status: 400 });
     }
     const result = await recordTrackGVideoOneStage12AudioP0CorrectionCallback({
       idempotencyKey: body.idempotencyKey!, token: token(request),
-      ...(body.result ? { result: body.result } : { errorCode: body.errorCode }),
+      ...(body.result ? { result: body.result } : {
+        errorCode: body.errorCode, failureDiagnostic: body.failureDiagnostic,
+      }),
     });
     return Response.json(result, { status: result.replayed ? 200 : 201 });
   } catch (error) {
