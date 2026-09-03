@@ -22,6 +22,7 @@ import {
   diagnoseTrackGVideoOneStage12AttemptThreeQa,
   diagnoseTrackGVideoOneStage12AudioP0Correction,
   diagnoseTrackGVideoOneStage12CorrectedPreMaster,
+  diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow,
   diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   createTrackGVideoOneStage12AudioP0Correction,
   createTrackGVideoOneStage12CorrectedPreMaster,
@@ -33,6 +34,7 @@ import {
   prepareTrackGVideoOneStage07AVoiceTournament,
   prepareTrackGVideoOneStage09VisualReview,
   recoverTrackGVideoOneStage12AttemptThree,
+  runTrackGVideoOneStage12CodecSafeTruePeakShadow,
   runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   scanTrackGVideoOneStage12AttemptThree,
   selectTrackGVideoOneStage04Champion,
@@ -1376,6 +1378,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       } else if (commandType === "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = (await diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay()) as unknown as Record<string, unknown>;
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = (await diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow()) as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1387,6 +1392,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         || diagnostic.remediationState === "READY"
         || diagnostic.correctionState === "ELIGIBLE" || diagnostic.correctionState === "READY"
         || diagnostic.replayState === "ELIGIBLE" || diagnostic.replayState === "READY"
+        || diagnostic.shadowState === "ELIGIBLE" || diagnostic.shadowState === "READY"
         ? "PASS" as const : "FAIL" as const;
       const output = {
         contractVersion: MCP_STABLE_CONTRACT_VERSION,
@@ -1397,6 +1403,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
           ?? diagnostic.remediationState
           ?? diagnostic.correctionState
           ?? diagnostic.replayState
+          ?? diagnostic.shadowState
           ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
         diagnosticJson: JSON.stringify(diagnostic),
         providerDispatch: "OFF" as const,
@@ -1545,6 +1552,32 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
             correctedOutputUploaded: false, historicalBackfill: false,
             providerCallCount: 0, providerDispatch: "OFF", calibration: false,
             finalize: false, releaseEligible: false, autoPublish: "OFF" } };
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY") {
+        if (attemptOrdinal !== 3
+          || ownerApprovalText !== "RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const shadowRoute = new URL(
+          "/api/media-worker/stage12-codec-safe-true-peak-shadow-replay", request.url,
+        ).toString();
+        const shadow = await runTrackGVideoOneStage12CodecSafeTruePeakShadow(user, {
+          objective,
+          ownerApprovalText,
+          callbackUrl: shadowRoute,
+          objectAccessUrl: shadowRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: shadow.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: shadow.shadowState,
+          receipt: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+            historicalFailureCorrectionOrdinal: 3, shadowState: shadow.shadowState,
+            shadowOutcome: shadow.shadowOutcome,
+            evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+            correctedOutputUploaded: false, historicalBackfill: false,
+            providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+            finalize: false, releaseEligible: false, productionActivation: false,
+            autoPublish: "OFF" } };
       } else if (commandType === "START_STAGE_12") {
         if (ownerApprovalText !== "START STAGE 12") throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
         const start = await startTrackGVideoOneStage12WithDerivedIdempotency(user, {

@@ -80,6 +80,35 @@ export type Stage12MediaEncodedLoudnessDiagnosticReplayRequest = Stage12MediaSta
   };
 };
 
+export type Stage12MediaCodecSafeTruePeakShadowReplayRequest = Stage12MediaStartRequest & {
+  codecSafeShadowReplay: {
+    schemaVersion: 1;
+    evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION";
+    sourceAttemptOrdinal: 3;
+    sourceCorrectionOrdinal: 2;
+    historicalFailureCorrectionOrdinal: 3;
+    correctionPassLimit: 3;
+    sourceCorrectionJobId: string;
+    historicalFailureJobId: string;
+    diagnosticReplayJobId: string;
+    diagnosticReplayEvidenceId: string;
+    sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number };
+    sourceCorrectionReceiptSha256: string;
+    expectedWorkerImageDigest: string;
+    algorithmFingerprint: string;
+    thresholdSnapshotSha256: string;
+    historicalBackfill: false;
+    uploadCorrectedOutput: false;
+    providerDispatch: "OFF";
+    providerCallCount: 0;
+    calibration: false;
+    finalize: false;
+    release: false;
+    productionActivation: false;
+    autoPublish: "OFF";
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -92,6 +121,7 @@ export type Stage12MediaWorkerHealth = {
   imageDigest: string;
   stage12Ready: true;
   encodedLoudnessDiagnosticReplayReady: true;
+  codecSafeTruePeakShadowReady: true;
 };
 
 function sha256(bytes: Uint8Array): string {
@@ -134,10 +164,27 @@ export async function readStage12MediaWorkerHealth(): Promise<Stage12MediaWorker
   const value = await response.json() as Partial<Stage12MediaWorkerHealth> & { code?: string };
   if (!response.ok || value.ok !== true || value.stage12Ready !== true
     || value.encodedLoudnessDiagnosticReplayReady !== true
+    || value.codecSafeTruePeakShadowReady !== true
     || !/^sha256:[a-f0-9]{64}$/u.test(value.imageDigest ?? "")) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_HEALTH_FAILED:${value.code ?? response.status}`);
   }
   return value as Stage12MediaWorkerHealth;
+}
+
+export async function dispatchStage12CodecSafeTruePeakShadowReplay(
+  payload: Stage12MediaCodecSafeTruePeakShadowReplayRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/codec-safe-true-peak-shadow-replay", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || result.imageDigest !== payload.codecSafeShadowReplay.expectedWorkerImageDigest) {
+    throw new Error(
+      `TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY_FAILED:${result.code ?? response.status}`,
+    );
+  }
+  return result;
 }
 
 export async function dispatchStage12MediaStart(

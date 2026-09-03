@@ -788,3 +788,62 @@ algorithm fingerprint, threshold snapshot, FFmpeg/libopus fingerprints, raw deci
 strings, numeric values, per-pass frame-MD5 và predicates được tính lại từ threshold
 hiện hành. Job/evidence terminal là append-only; mismatch ở bất kỳ boundary nào
 phải fail-closed.
+
+---
+
+## 13. Stage 12 codec-safe true-peak shadow contract
+
+```ts
+type RunStage12CodecSafeTruePeakShadowCommand = {
+  commandType: 'RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY'
+  ownerApprovalText: 'RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY'
+  sourceAttemptOrdinal: 3
+  sourceCorrectionOrdinal: 2
+  historicalFailureCorrectionOrdinal: 3
+  diagnosticReplayJobId: string
+  diagnosticReplayEvidenceId: string
+  correctionPassLimit: 3
+  expectedWorkerImageDigest: `sha256:${string}`
+  algorithmFingerprint: string
+  thresholdSnapshotSha256: string
+  historicalBackfill: false
+  uploadCorrectedOutput: false
+  providerDispatch: 'OFF'
+  providerCallCount: 0
+  calibration: false
+  finalize: false
+  release: false
+  productionActivation: false
+  autoPublish: 'OFF'
+}
+
+type CodecSafeTruePeakCandidate = {
+  candidatePass: 0 | 1 | 2 | 3
+  phase: 'INITIAL_CODEC_SAFE_CANDIDATE' | 'POST_OPUS_FEEDBACK_CANDIDATE'
+  losslessReferenceSha256: string
+  integratedTargetLufs: number
+  limiterCeilingDbtp: number
+  macroDepthDb: number
+  codecOvershootDb: number
+  integratedLufs: number
+  integratedLufsExact: string
+  truePeakDbtp: number
+  truePeakDbtpExact: string
+  loudnessRangeLu: number
+  loudnessRangeLuExact: string
+  failedPredicates: string[]
+  audioFrameMd5Sha256: string
+}
+```
+
+Engine chỉ đọc exact immutable ordinal 2 đã được diagnostic replay xác nhận. Nó
+decode một lần sang canonical `pcm_f32le`/48 kHz và không bao giờ dùng candidate
+Opus trước làm input candidate sau. Mỗi vòng encode từ cùng lossless SHA, đo chính
+candidate Opus, rồi cập nhật target LUFS, limiter ceiling và macro depth theo
+feedback. Limiter ceiling chỉ được giữ nguyên hoặc hạ; mọi target đều suy ra từ
+threshold hiện hành `-14 ±1 LUFS-I`, true peak `≤-1 dBTP`, LRA `4..8 LU`.
+
+Result có semantics `CODEC_SAFE_SHADOW_NOT_CORRECTION`. Nó không có pre-master
+pointer, write URL hay đường upload. `READY/PASS` chỉ là shadow evidence, không
+kích hoạt Production algorithm, không sửa ordinal 2/3 hoặc diagnostic replay và
+không cấp quyền Finalize/release/publish.

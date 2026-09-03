@@ -300,3 +300,16 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Không ordinal 4/attempt 4/provider/calibration/output/finalize/publish | unit, migration, static guardrail và Sites E2E kiểm literals `false`, `0`, `OFF` và zero attempt 4 |
 | Control plane/worker dùng cùng deterministic fingerprints | cross-boundary unit test so exact algorithm/threshold hashes |
 | Production không tự chạy replay | CI chỉ build/test; mọi invocation cần owner OPERATE approval riêng sau merge/deploy/health PASS |
+
+## 11. EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
+
+| Acceptance | Test/evidence |
+|---|---|
+| Mọi candidate đọc cùng canonical lossless source | Runtime unit/guardrail kiểm exact lossless SHA; FFmpeg smoke kiểm một source GET và zero write |
+| Post-Opus feedback deterministic, limiter không tăng | `stage12-codec-safe-true-peak.test.ts` kiểm recurrence và monotonic ceiling |
+| Final encoded candidate giữ nguyên LUFS/TP/LRA thresholds | Real FFmpeg shadow smoke đo file Opus terminal; threshold snapshot parity worker/control plane |
+| Exact ordinal 2/3 + diagnostic replay lineage | Migration 0031 từ chối source/replay evidence drift; typed payload/parser khóa IDs và hashes |
+| Exact raw/numeric evidence và pinned runtime | Parser + D1 trigger khóa candidates/final, frame-MD5, image digest, FFmpeg/libopus fingerprints |
+| Job/evidence append-only và shadow-only | Migration test UPDATE/DELETE → ABORT; READY bắt buộc matching evidence; activation flag luôn 0 |
+| Không ordinal/attempt 4, provider, output, calibration, Finalize/release/publish | Unit, static guardrail, migration checks và smoke zero-write kiểm literals `false`, `0`, `OFF` |
+| Merge/deploy không tự chạy Production shadow | CI chỉ build/test; invocation cần owner OPERATE approval riêng sau promotion |

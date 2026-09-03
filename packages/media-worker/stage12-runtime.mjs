@@ -303,6 +303,251 @@ export function stage12EncodedLoudnessDiagnosticReplayFingerprints(payload,
   return { algorithmFingerprint, thresholdSnapshotSha256 }
 }
 
+export function stage12CodecSafeTruePeakFingerprints(payload, correctionPassLimit = 3) {
+  const thresholdSnapshot = {
+    integratedLufs: payload.qa.loudness.integratedLufs,
+    toleranceLufs: payload.qa.loudness.toleranceLufs,
+    truePeakMaxDbtp: payload.qa.loudness.truePeakMaxDbtp,
+    lraMin: payload.qa.loudness.lraMin,
+    lraMax: payload.qa.loudness.lraMax,
+    nearStaticMaxSec: payload.qa.nearStaticMaxSec,
+    sampleRateHz: payload.render.sampleRateHz,
+  }
+  const thresholdSnapshotSha256 = sha256(Buffer.from(canonicalize(thresholdSnapshot), 'utf8'))
+  const algorithmFingerprint = sha256(Buffer.from(canonicalize({
+    algorithmVersion: 'stage12-codec-safe-true-peak-shadow-v1',
+    correctionPassLimit,
+    losslessCodec: 'pcm_f32le',
+    candidateInput: 'CANONICAL_LOSSLESS_REFERENCE',
+    feedback: 'POST_OPUS_TRUE_PEAK',
+    thresholdSnapshotSha256,
+  }), 'utf8'))
+  return { algorithmFingerprint, thresholdSnapshotSha256 }
+}
+
+export function initialStage12CodecSafeTruePeakController(payload) {
+  return {
+    integratedTargetLufs: payload.qa.loudness.integratedLufs,
+    limiterCeilingDbtp: payload.qa.loudness.truePeakMaxDbtp
+      - payload.qa.loudness.toleranceLufs,
+    macroDepthDb: payload.qa.loudness.lraMin + payload.qa.loudness.toleranceLufs,
+    lowLraDepthDb: null,
+    highLraDepthDb: null,
+  }
+}
+
+function finiteCodecSafeController(value) {
+  return value && Number.isFinite(value.integratedTargetLufs)
+    && Number.isFinite(value.limiterCeilingDbtp)
+    && Number.isFinite(value.macroDepthDb) && value.macroDepthDb >= 0
+    && (value.lowLraDepthDb === null || Number.isFinite(value.lowLraDepthDb))
+    && (value.highLraDepthDb === null || Number.isFinite(value.highLraDepthDb))
+}
+
+export function nextStage12CodecSafeTruePeakController(payload, controller, measurement) {
+  if (!finiteCodecSafeController(controller) || !measurement
+    || !Number.isFinite(measurement.integratedLufs)
+    || !Number.isFinite(measurement.truePeakDbtp)
+    || !Number.isFinite(measurement.loudnessRangeLu)) {
+    throw Object.assign(new Error('Invalid Stage 12 codec-safe controller state.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_TRUE_PEAK_CONTROLLER',
+    })
+  }
+  const integratedMinimum = payload.qa.loudness.integratedLufs
+    - payload.qa.loudness.toleranceLufs
+  const integratedMaximum = payload.qa.loudness.integratedLufs
+    + payload.qa.loudness.toleranceLufs
+  const integratedOutside = measurement.integratedLufs < integratedMinimum
+    || measurement.integratedLufs > integratedMaximum
+  const integratedTargetLufs = integratedOutside
+    ? controller.integratedTargetLufs
+      + payload.qa.loudness.integratedLufs - measurement.integratedLufs
+    : controller.integratedTargetLufs
+  const codecOvershootDb = Math.max(0,
+    measurement.truePeakDbtp - controller.limiterCeilingDbtp)
+  const limiterCeilingDbtp = Math.min(controller.limiterCeilingDbtp,
+    payload.qa.loudness.truePeakMaxDbtp - codecOvershootDb)
+  const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+  let lowLraDepthDb = controller.lowLraDepthDb
+  let highLraDepthDb = controller.highLraDepthDb
+  let macroDepthDb = controller.macroDepthDb
+  if (measurement.loudnessRangeLu < payload.qa.loudness.lraMin) {
+    lowLraDepthDb = lowLraDepthDb === null
+      ? controller.macroDepthDb : Math.max(lowLraDepthDb, controller.macroDepthDb)
+    macroDepthDb = highLraDepthDb === null
+      ? controller.macroDepthDb + lraTarget - measurement.loudnessRangeLu
+      : (lowLraDepthDb + highLraDepthDb) / 2
+  } else if (measurement.loudnessRangeLu > payload.qa.loudness.lraMax) {
+    highLraDepthDb = highLraDepthDb === null
+      ? controller.macroDepthDb : Math.min(highLraDepthDb, controller.macroDepthDb)
+    macroDepthDb = lowLraDepthDb === null
+      ? Math.max(0, controller.macroDepthDb
+        - (measurement.loudnessRangeLu - lraTarget))
+      : (lowLraDepthDb + highLraDepthDb) / 2
+  }
+  const next = { integratedTargetLufs, limiterCeilingDbtp, macroDepthDb,
+    lowLraDepthDb, highLraDepthDb }
+  if (!finiteCodecSafeController(next)) {
+    throw Object.assign(new Error('Stage 12 codec-safe controller did not converge finitely.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_TRUE_PEAK_CONTROLLER',
+    })
+  }
+  return next
+}
+
+function validateCodecSafeCandidate(payload, candidate, candidatePass, losslessReferenceSha256,
+  expectedController) {
+  const phase = candidatePass === 0
+    ? 'INITIAL_CODEC_SAFE_CANDIDATE' : 'POST_OPUS_FEEDBACK_CANDIDATE'
+  const expectedOvershoot = Math.max(0,
+    candidate.truePeakDbtp - candidate.limiterCeilingDbtp)
+  if (!candidate || candidate.candidatePass !== candidatePass || candidate.phase !== phase
+    || candidate.losslessReferenceSha256 !== losslessReferenceSha256
+    || candidate.integratedTargetLufs !== expectedController.integratedTargetLufs
+    || candidate.limiterCeilingDbtp !== expectedController.limiterCeilingDbtp
+    || candidate.macroDepthDb !== expectedController.macroDepthDb
+    || !Number.isFinite(candidate.codecOvershootDb)
+    || candidate.codecOvershootDb !== expectedOvershoot
+    || !Number.isFinite(candidate.integratedLufs) || !Number.isFinite(candidate.truePeakDbtp)
+    || !Number.isFinite(candidate.loudnessRangeLu)
+    || !/^-?\d+(?:\.\d+)?$/u.test(candidate.integratedLufsExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(candidate.truePeakDbtpExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(candidate.loudnessRangeLuExact ?? '')
+    || Number(candidate.integratedLufsExact) !== candidate.integratedLufs
+    || Number(candidate.truePeakDbtpExact) !== candidate.truePeakDbtp
+    || Number(candidate.loudnessRangeLuExact) !== candidate.loudnessRangeLu
+    || !HEX64.test(candidate.audioFrameMd5Sha256 ?? '')
+    || canonicalize(candidate.failedPredicates) !== canonicalize(
+      stage12LoudnessFailedPredicates(payload, candidate),
+    )) {
+    throw Object.assign(new Error('Invalid Stage 12 codec-safe shadow candidate.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_EVIDENCE',
+    })
+  }
+}
+
+export function buildStage12CodecSafeTruePeakShadowEvidence(payload, evidence) {
+  const invalid = () => Object.assign(new Error('Invalid Stage 12 codec-safe shadow evidence.'), {
+    code: 'INVALID_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_EVIDENCE',
+  })
+  const candidates = evidence?.candidates
+  const terminalCandidatePass = Array.isArray(candidates) ? candidates.length - 1 : -1
+  if (evidence?.evidenceSemantics !== 'CODEC_SAFE_SHADOW_NOT_CORRECTION'
+    || evidence?.source?.correctionOrdinal !== 2
+    || typeof evidence.source.correctionJobId !== 'string'
+    || !String(evidence.source.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(evidence.source.sha256 ?? '')
+    || !Number.isInteger(evidence.source.byteLength) || evidence.source.byteLength < 1
+    || !HEX64.test(evidence.source.receiptSha256 ?? '')
+    || evidence?.historicalFailure?.correctionOrdinal !== 3
+    || typeof evidence.historicalFailure.correctionJobId !== 'string'
+    || evidence.historicalFailure.errorCode !== 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED'
+    || typeof evidence?.diagnosticReplay?.jobId !== 'string'
+    || !HEX64.test(evidence?.diagnosticReplay?.evidenceId ?? '')
+    || !evidence.losslessReference || !HEX64.test(evidence.losslessReference.sha256 ?? '')
+    || !HEX64.test(evidence.losslessReference.audioFrameMd5Sha256 ?? '')
+    || !Number.isInteger(evidence.losslessReference.byteLength)
+    || evidence.losslessReference.byteLength < 1
+    || evidence.losslessReference.codec !== 'pcm_f32le'
+    || evidence.losslessReference.sampleRateHz !== payload.render.sampleRateHz
+    || !Array.isArray(candidates) || candidates.length < 1 || candidates.length > 4
+    || !/^sha256:[a-f0-9]{64}$/u.test(evidence.workerImageDigest ?? '')
+    || evidence.workerImageDigest !== evidence.expectedWorkerImageDigest
+    || !HEX64.test(evidence.algorithmFingerprint ?? '')
+    || !HEX64.test(evidence.thresholdSnapshotSha256 ?? '')
+    || typeof evidence.runtimeProvenance?.ffmpegVersion !== 'string'
+    || evidence.runtimeProvenance.ffmpegVersion.length < 8
+    || !HEX64.test(evidence.runtimeProvenance.ffmpegBuildFingerprint ?? '')
+    || !HEX64.test(evidence.runtimeProvenance.libopusEncoderFingerprint ?? '')) throw invalid()
+  let controller = initialStage12CodecSafeTruePeakController(payload)
+  for (let index = 0; index < candidates.length; index += 1) {
+    validateCodecSafeCandidate(payload, candidates[index], index,
+      evidence.losslessReference.sha256, controller)
+    if (index < candidates.length - 1) {
+      controller = nextStage12CodecSafeTruePeakController(payload, controller, candidates[index])
+    }
+  }
+  const finalObservation = candidates.at(-1)
+  const failedPredicates = stage12LoudnessFailedPredicates(payload, finalObservation)
+  if (terminalCandidatePass < 3 && failedPredicates.length > 0) throw invalid()
+  const shadowOutcome = failedPredicates.length === 0 ? 'PASS' : 'FAIL'
+  return {
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: 'POST_OPUS_TRUE_PEAK_FEEDBACK',
+    source: evidence.source,
+    historicalFailure: evidence.historicalFailure,
+    diagnosticReplay: evidence.diagnosticReplay,
+    losslessReference: evidence.losslessReference,
+    candidates,
+    terminalCandidatePass,
+    finalMeasurements: {
+      integratedLufs: finalObservation.integratedLufs,
+      integratedLufsExact: finalObservation.integratedLufsExact,
+      truePeakDbtp: finalObservation.truePeakDbtp,
+      truePeakDbtpExact: finalObservation.truePeakDbtpExact,
+      loudnessRangeLu: finalObservation.loudnessRangeLu,
+      loudnessRangeLuExact: finalObservation.loudnessRangeLuExact,
+    },
+    failedPredicates,
+    shadowOutcome,
+    workerImageDigest: evidence.workerImageDigest,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    runtimeProvenance: evidence.runtimeProvenance,
+    correctionPassLimit: 3,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: 'OFF',
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    productionActivation: false,
+    autoPublish: 'OFF',
+  }
+}
+
+export function validateStage12CodecSafeTruePeakShadowPayload(payload, imageDigest) {
+  const value = validateStage12Payload(payload)
+  const replay = payload?.codecSafeShadowReplay
+  const fingerprints = stage12CodecSafeTruePeakFingerprints(
+    payload, Number.isInteger(replay?.correctionPassLimit) ? replay.correctionPassLimit : 3,
+  )
+  if (!replay || replay.schemaVersion !== 1
+    || replay.evidenceSemantics !== 'CODEC_SAFE_SHADOW_NOT_CORRECTION'
+    || replay.sourceAttemptOrdinal !== 3 || replay.sourceCorrectionOrdinal !== 2
+    || replay.historicalFailureCorrectionOrdinal !== 3 || replay.correctionPassLimit !== 3
+    || typeof replay.sourceCorrectionJobId !== 'string'
+    || typeof replay.historicalFailureJobId !== 'string'
+    || typeof replay.diagnosticReplayJobId !== 'string'
+    || !HEX64.test(replay.diagnosticReplayEvidenceId ?? '')
+    || !String(replay.sourceCorrectedPreMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(replay.sourceCorrectedPreMaster?.sha256 ?? '')
+    || !Number.isInteger(replay.sourceCorrectedPreMaster?.byteLength)
+    || replay.sourceCorrectedPreMaster.byteLength < 1
+    || !HEX64.test(replay.sourceCorrectionReceiptSha256 ?? '')
+    || !/^sha256:[a-f0-9]{64}$/u.test(replay.expectedWorkerImageDigest ?? '')
+    || replay.algorithmFingerprint !== fingerprints.algorithmFingerprint
+    || replay.thresholdSnapshotSha256 !== fingerprints.thresholdSnapshotSha256
+    || replay.historicalBackfill !== false || replay.uploadCorrectedOutput !== false
+    || replay.providerDispatch !== 'OFF' || replay.providerCallCount !== 0
+    || replay.calibration !== false || replay.finalize !== false || replay.release !== false
+    || replay.productionActivation !== false || replay.autoPublish !== 'OFF') {
+    throw Object.assign(new Error('Invalid Stage 12 codec-safe true-peak shadow envelope.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_ENVELOPE',
+    })
+  }
+  if (imageDigest !== undefined && replay.expectedWorkerImageDigest !== imageDigest) {
+    throw Object.assign(new Error('Codec-safe shadow worker image does not match the pin.'), {
+      code: 'STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_WORKER_IMAGE_MISMATCH',
+    })
+  }
+  return value
+}
+
 export function buildStage12EncodedLoudnessFailure(payload, correctionPassLimit,
   measurementsByPass) {
   const finalObservation = measurementsByPass.at(-1)
@@ -606,6 +851,125 @@ export async function executeStage12EncodedLoudnessDiagnosticReplay(payloadInput
       runtimeProvenance,
     })
     return { ...evidence, correctedOutputUploaded: false }
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+function stage12CodecSafeMacroDynamics(payload, macroDepthDb) {
+  if (macroDepthDb === 0) return ''
+  const periodSec = payload.qa.nearStaticMaxSec * payload.qa.loudness.lraMin
+  const halfPeriodSec = periodSec / 2
+  const attenuatedGain = 10 ** (-macroDepthDb / 20)
+  return `volume='if(lt(mod(t\\,${periodSec})\\,${halfPeriodSec})\\,${attenuatedGain.toFixed(6)}\\,1)':eval=frame,`
+}
+
+async function renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+  workRoot, controller) {
+  const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+  const target = `I=${controller.integratedTargetLufs.toFixed(6)}:TP=${controller.limiterCeilingDbtp.toFixed(6)}:LRA=${lraTarget}`
+  const macroDynamics = stage12CodecSafeMacroDynamics(payload, controller.macroDepthDb)
+  const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin',
+    '-i', losslessReferencePath, '-af', `${macroDynamics}loudnorm=${target}:print_format=json`,
+    '-f', 'null', '-'], workRoot, 'STAGE12_CODEC_SAFE_TRUE_PEAK_ANALYSIS_FAILED')
+  const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
+  const limiter = 10 ** (controller.limiterCeilingDbtp / 20)
+  const correction = `${macroDynamics}loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false,alimiter=limit=${limiter.toFixed(6)}:level=false`
+  await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', losslessReferencePath,
+    '-map', '0:a:0', '-map_metadata', '-1', '-fflags', '+bitexact',
+    '-flags:a', '+bitexact', '-af', correction, '-c:a', 'libopus',
+    '-ar', String(payload.render.sampleRateHz), candidatePath], workRoot,
+  'STAGE12_CODEC_SAFE_TRUE_PEAK_CANDIDATE_ENCODE_FAILED')
+}
+
+export async function executeStage12CodecSafeTruePeakShadowReplay(payloadInput, imageDigest) {
+  const payload = validateStage12CodecSafeTruePeakShadowPayload(payloadInput, imageDigest)
+  const replay = payloadInput.codecSafeShadowReplay
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-codec-safe-shadow-'))
+  const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
+  const losslessReferencePath = join(workRoot, 'canonical-lossless-reference.wav')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=codec-safe-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${replay.sourceCorrectedPreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== replay.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== replay.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('Codec-safe shadow source read-back mismatch.'), {
+        code: 'STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:a:0', '-map_metadata', '-1', '-fflags', '+bitexact',
+      '-flags:a', '+bitexact', '-c:a', 'pcm_f32le',
+      '-ar', String(payload.render.sampleRateHz), losslessReferencePath], workRoot,
+    'STAGE12_CODEC_SAFE_TRUE_PEAK_LOSSLESS_DECODE_FAILED')
+    const losslessBytes = await readFile(losslessReferencePath)
+    const losslessReference = {
+      sha256: sha256(losslessBytes),
+      byteLength: losslessBytes.byteLength,
+      audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(losslessReferencePath, workRoot),
+      codec: 'pcm_f32le',
+      sampleRateHz: payload.render.sampleRateHz,
+    }
+    const candidates = []
+    let controller = initialStage12CodecSafeTruePeakController(payload)
+    const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+    for (let candidatePass = 0; candidatePass <= replay.correctionPassLimit;
+      candidatePass += 1) {
+      const candidatePath = join(workRoot, `codec-safe-candidate-${candidatePass}.webm`)
+      await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+        workRoot, controller)
+      const measured = await measureStage12EncodedLoudness(
+        payload, candidatePath, workRoot, lraTarget,
+      )
+      candidates.push({
+        candidatePass,
+        phase: candidatePass === 0
+          ? 'INITIAL_CODEC_SAFE_CANDIDATE' : 'POST_OPUS_FEEDBACK_CANDIDATE',
+        losslessReferenceSha256: losslessReference.sha256,
+        integratedTargetLufs: controller.integratedTargetLufs,
+        limiterCeilingDbtp: controller.limiterCeilingDbtp,
+        macroDepthDb: controller.macroDepthDb,
+        codecOvershootDb: Math.max(0, measured.truePeakDbtp - controller.limiterCeilingDbtp),
+        integratedLufs: measured.integratedLufs,
+        integratedLufsExact: measured.integratedLufsExact,
+        truePeakDbtp: measured.truePeakDbtp,
+        truePeakDbtpExact: measured.truePeakDbtpExact,
+        loudnessRangeLu: measured.loudnessRangeLu,
+        loudnessRangeLuExact: measured.loudnessRangeLuExact,
+        failedPredicates: stage12LoudnessFailedPredicates(payload, measured),
+        audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(candidatePath, workRoot),
+      })
+      if (loudnessPasses(payload, measured)) break
+      if (candidatePass < replay.correctionPassLimit) {
+        controller = nextStage12CodecSafeTruePeakController(payload, controller, measured)
+      }
+    }
+    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    return buildStage12CodecSafeTruePeakShadowEvidence(payload, {
+      evidenceSemantics: replay.evidenceSemantics,
+      source: { correctionOrdinal: 2, correctionJobId: replay.sourceCorrectionJobId,
+        r2Key: replay.sourceCorrectedPreMaster.r2Key,
+        sha256: replay.sourceCorrectedPreMaster.sha256,
+        byteLength: replay.sourceCorrectedPreMaster.byteLength,
+        receiptSha256: replay.sourceCorrectionReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: replay.historicalFailureJobId,
+        errorCode: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED' },
+      diagnosticReplay: { jobId: replay.diagnosticReplayJobId,
+        evidenceId: replay.diagnosticReplayEvidenceId },
+      losslessReference,
+      candidates,
+      workerImageDigest: imageDigest,
+      expectedWorkerImageDigest: replay.expectedWorkerImageDigest,
+      algorithmFingerprint: replay.algorithmFingerprint,
+      thresholdSnapshotSha256: replay.thresholdSnapshotSha256,
+      runtimeProvenance,
+    })
   } finally {
     await rm(workRoot, { recursive: true, force: true })
   }

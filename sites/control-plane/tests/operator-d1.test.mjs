@@ -212,6 +212,37 @@ test("Stage 12 encoded-loudness replay is separate, pinned and read-only at the 
   assert.match(mcpRoute, /RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY/u);
 });
 
+test("Stage 12 codec-safe true-peak engine remains shadow-only and lossless-source based", async () => {
+  const [runtime, worker, domain, schema, migration, route, mcpRoute, workflow] =
+    await Promise.all([
+      readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../drizzle/0031_stage12_codec_safe_true_peak_shadow.sql", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-codec-safe-true-peak-shadow-replay/route.ts", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+      readFile(fileURLToPath(new URL("../../../.github/workflows/media-worker-image.yml", import.meta.url)), "utf8"),
+    ]);
+  assert.match(runtime, /executeStage12CodecSafeTruePeakShadowReplay/u);
+  assert.match(runtime, /canonical-lossless-reference\.wav/u);
+  assert.match(runtime, /POST_OPUS_TRUE_PEAK_FEEDBACK/u);
+  assert.match(runtime, /renderStage12CodecSafeCandidate\(payload, losslessReferencePath/u);
+  assert.match(worker, /codecSafeTruePeakShadowReady: stage12Ready\(\)/u);
+  assert.match(worker, /\/stage12\/codec-safe-true-peak-shadow-replay/u);
+  assert.match(domain, /stage12CodecSafeTruePeakShadowSource/u);
+  assert.match(domain, /diagnosticReplayEvidenceId/u);
+  assert.match(schema, /stage12CodecSafeTruePeakShadowEvidence/u);
+  assert.match(migration, /CODEC_SAFE_SHADOW_NOT_CORRECTION/u);
+  assert.match(migration, /production_activation_executed/u);
+  assert.match(migration, /STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_EVIDENCE_IMMUTABLE/u);
+  assert.match(route, /export async function GET/u);
+  assert.match(route, /export async function POST/u);
+  assert.doesNotMatch(route, /export async function PUT/u);
+  assert.match(mcpRoute, /RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY/u);
+  assert.match(workflow, /stage12-codec-safe-true-peak-shadow-smoke\.mjs/u);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
@@ -1324,7 +1355,7 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
       historical_backfill: 0, provider_call_count: 0, provider_dispatch: "OFF",
       auto_publish: "OFF",
     });
-    const replayEvidence = await d1.prepare(`SELECT evidence_semantics,
+    const replayEvidence = await d1.prepare(`SELECT id,evidence_semantics,
       final_integrated_lufs_exact,final_true_peak_dbtp_exact,final_loudness_range_lu_exact,
       measurements_by_pass_json,ffmpeg_version FROM
       stage12_encoded_loudness_diagnostic_replay_evidence`).first();
@@ -1344,6 +1375,110 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
     const diagnostic = JSON.parse(ready.structuredContent.diagnosticJson);
     assert.equal(diagnostic.result.replayOutcome, "FAIL");
     assert.equal(diagnostic.result.correctedOutputUploaded, false);
+
+    const shadowEligible = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(shadowEligible.isError, undefined, JSON.stringify(shadowEligible));
+    assert.equal(shadowEligible.structuredContent.operationState, "ELIGIBLE");
+    assert.equal(shadowEligible.structuredContent.diagnosticState, "PASS");
+
+    const shadowKey = createHash("sha256").update("codec-safe-shadow-key").digest("hex");
+    const shadowToken = "a".repeat(64);
+    const shadowTokenHash = createHash("sha256").update(shadowToken).digest("hex");
+    const shadowImageDigest = `sha256:${"5".repeat(64)}`;
+    const shadowAlgorithmFingerprint = "6".repeat(64);
+    await d1.prepare(`INSERT INTO stage12_codec_safe_true_peak_shadow_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,idempotency_key,
+       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
+       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+       source_receipt_sha256,correction_pass_limit,expected_worker_image_digest,
+       algorithm_fingerprint,threshold_snapshot_sha256)
+      VALUES ('stage12-codec-safe-shadow-1','stage12-contract-attempt-3',
+       'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
+       'stage12-loudness-replay-1',?,?,?,
+       'owner@example.com','RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY','PENDING',
+       'CODEC_SAFE_SHADOW_NOT_CORRECTION',?,?,?,?,3,?,?,?)`)
+      .bind(replayEvidence.id, shadowKey, shadowTokenHash,
+        source.ordinalTwoR2Key, source.ordinalTwoSha256, source.ordinalTwoByteLength,
+        source.ordinalTwoReceiptSha256, shadowImageDigest, shadowAlgorithmFingerprint,
+        thresholdSnapshotSha256).run();
+
+    const shadowSourceRead = await mf.dispatchFetch(
+      `https://factory.test/api/media-worker/stage12-codec-safe-true-peak-shadow-replay?kind=codec-safe-source-ordinal-2&idempotencyKey=${shadowKey}&sha256=${source.ordinalTwoSha256}`,
+      { headers: { authorization: `Bearer ${shadowToken}` } },
+    );
+    assert.equal(shadowSourceRead.status, 200, await shadowSourceRead.clone().text());
+    assert.equal(createHash("sha256").update(
+      Buffer.from(await shadowSourceRead.arrayBuffer()),
+    ).digest("hex"), source.ordinalTwoSha256);
+
+    const losslessReferenceSha256 = "1".repeat(64);
+    const shadowCandidate = { candidatePass: 0, phase: "INITIAL_CODEC_SAFE_CANDIDATE",
+      losslessReferenceSha256, integratedTargetLufs: -14, limiterCeilingDbtp: -2,
+      macroDepthDb: 5, codecOvershootDb: 0.8,
+      integratedLufs: -14, integratedLufsExact: "-14.00",
+      truePeakDbtp: -1.2, truePeakDbtpExact: "-1.20",
+      loudnessRangeLu: 5, loudnessRangeLuExact: "5.00", failedPredicates: [],
+      audioFrameMd5Sha256: "2".repeat(64) };
+    const shadowResult = { accepted: true, schemaVersion: 1,
+      evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+      boundary: "POST_OPUS_TRUE_PEAK_FEEDBACK",
+      source: { correctionOrdinal: 2,
+        correctionJobId: "stage12-audio-p0-correction-2",
+        r2Key: source.ordinalTwoR2Key, sha256: source.ordinalTwoSha256,
+        byteLength: source.ordinalTwoByteLength,
+        receiptSha256: source.ordinalTwoReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: "stage12-audio-p0-correction-3",
+        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+      diagnosticReplay: { jobId: "stage12-loudness-replay-1",
+        evidenceId: replayEvidence.id },
+      losslessReference: { sha256: losslessReferenceSha256, byteLength: 33554432,
+        audioFrameMd5Sha256: "3".repeat(64), codec: "pcm_f32le", sampleRateHz: 48000 },
+      candidates: [shadowCandidate], terminalCandidatePass: 0,
+      finalMeasurements: { integratedLufs: -14, integratedLufsExact: "-14.00",
+        truePeakDbtp: -1.2, truePeakDbtpExact: "-1.20",
+        loudnessRangeLu: 5, loudnessRangeLuExact: "5.00" },
+      failedPredicates: [], shadowOutcome: "PASS",
+      workerImageDigest: shadowImageDigest,
+      expectedWorkerImageDigest: shadowImageDigest,
+      algorithmFingerprint: shadowAlgorithmFingerprint,
+      thresholdSnapshotSha256,
+      runtimeProvenance: { ffmpegVersion: "ffmpeg version 7.1.1",
+        ffmpegBuildFingerprint: "7".repeat(64),
+        libopusEncoderFingerprint: "8".repeat(64) },
+      correctionPassLimit: 3, correctedOutputUploaded: false,
+      historicalBackfill: false, providerCallCount: 0, providerDispatch: "OFF",
+      calibration: false, finalize: false, releaseEligible: false,
+      productionActivation: false, autoPublish: "OFF" };
+    const shadowCallback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-codec-safe-true-peak-shadow-replay",
+      { method: "POST", headers: { authorization: `Bearer ${shadowToken}`,
+        "content-type": "application/json" },
+      body: JSON.stringify({ idempotencyKey: shadowKey, result: shadowResult }) },
+    );
+    assert.equal(shadowCallback.status, 201, await shadowCallback.text());
+    assert.deepEqual(await d1.prepare(`SELECT state,shadow_outcome,terminal_candidate_pass,
+      corrected_output_uploaded,historical_backfill,provider_call_count,provider_dispatch,
+      calibration_executed,finalize_executed,release_eligible,
+      production_activation_executed,auto_publish
+      FROM stage12_codec_safe_true_peak_shadow_job`).first(), {
+      state: "READY", shadow_outcome: "PASS", terminal_candidate_pass: 0,
+      corrected_output_uploaded: 0, historical_backfill: 0, provider_call_count: 0,
+      provider_dispatch: "OFF", calibration_executed: 0, finalize_executed: 0,
+      release_eligible: 0, production_activation_executed: 0, auto_publish: "OFF",
+    });
+    const shadowReady = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(shadowReady.structuredContent.operationState, "READY");
+    const shadowDiagnostic = JSON.parse(shadowReady.structuredContent.diagnosticJson);
+    assert.equal(shadowDiagnostic.result.shadowOutcome, "PASS");
+    assert.equal(shadowDiagnostic.result.productionActivation, false);
     assert.equal((await d1.prepare(
       "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal=4",
     ).first()).count, 0);

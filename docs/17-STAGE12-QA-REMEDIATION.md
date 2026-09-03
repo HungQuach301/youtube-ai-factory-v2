@@ -158,3 +158,26 @@ Evolution ID: `EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY`
 - Replay tuyệt đối không upload corrected output, không gọi provider/calibration,
   không Finalize, release hoặc publish. Production replay chỉ được cân nhắc bằng
   phê duyệt OPERATE riêng sau khi code đã merge/deploy và exact-tree/health PASS.
+
+## Codec-safe true-peak convergence shadow
+
+Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE`
+
+- Nguồn duy nhất là immutable ordinal 2, exact ordinal 3 failure và append-only
+  diagnostic replay `READY/FAIL` có predicate `TRUE_PEAK_DBTP_ABOVE_MAX`; mọi R2,
+  SHA-256, byte length, receipt và replay evidence ID phải khớp tuyệt đối.
+- Worker decode source đúng một lần thành canonical WAV `pcm_f32le`/48 kHz. Mọi
+  candidate Opus được render lại từ WAV này; candidate trước không bao giờ là input
+  của candidate sau, loại bỏ codec-chain accumulation của strategy v3.
+- Candidate 0 dùng target suy ra từ contract. Candidate kế tiếp dùng measurement
+  hậu Opus: LUFS target chỉ bù khi ngoài tolerance; codec overshoot hạ limiter
+  ceiling theo true-peak feedback và ceiling không bao giờ tăng; LRA macro depth
+  được điều chỉnh bounded trong tối đa pass `0..3`.
+- Migration `0031` tạo job/evidence append-only với exact lossless reference,
+  candidate trace, final raw/numeric LUFS/true peak/LRA, predicates và pinned
+  worker/FFmpeg/libopus/algorithm/threshold provenance.
+- Đây chỉ là shadow evidence. `PASS` không upload output, không thay production
+  correction path và không tự activate. Threshold giữ nguyên; ordinal 2/3 và
+  diagnostic replay history không UPDATE/backfill.
+- Build/PR không chạy Production shadow replay. Không ordinal 4/attempt 4,
+  provider, calibration, Finalize, release hoặc publish.

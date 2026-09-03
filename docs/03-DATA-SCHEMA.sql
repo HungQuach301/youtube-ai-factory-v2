@@ -1440,3 +1440,21 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- chỉ thêm transition typed LOUDNESS_REPLAY_PENDING. Không provider, calibration,
 -- output upload, backfill, Finalize, release hoặc publish.
 -- Xem drizzle/0030_stage12_encoded_loudness_diagnostic_replay.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE — migration 0031
+-- =====================================================================
+-- stage12_codec_safe_true_peak_shadow_job chỉ nhận exact ordinal 2 READY/FAIL,
+-- ordinal 3 FAILED:STAGE12_ENCODED_LOUDNESS_UNRESOLVED và diagnostic replay
+-- READY/FAIL chứa TRUE_PEAK_DBTP_ABOVE_MAX. Lineage khóa source R2/SHA/bytes/
+-- receipt, replay evidence ID, threshold snapshot và expected worker image.
+--
+-- stage12_codec_safe_true_peak_shadow_evidence lưu canonical pcm_f32le reference,
+-- lossless SHA/frame-MD5, candidate pass 0..3, controller parameters, exact
+-- post-Opus LUFS/true peak/LRA/predicates và FFmpeg/libopus provenance. Mọi
+-- candidate phải trỏ cùng lossless SHA; terminal job/evidence cấm UPDATE/DELETE.
+--
+-- Migration không backfill hoặc sửa ordinal 2/3/replay history. DB ép output,
+-- provider, calibration, finalize, release, production activation và publish OFF.
+-- Command contract chỉ thêm typed CODEC_SAFE_SHADOW_PENDING transition.
+-- Xem drizzle/0031_stage12_codec_safe_true_peak_shadow.sql.
