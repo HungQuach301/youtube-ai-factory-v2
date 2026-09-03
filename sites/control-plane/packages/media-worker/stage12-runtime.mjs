@@ -63,8 +63,11 @@ function parseLoudnorm(stderr) {
   const parsed = JSON.parse(raw)
   return {
     integratedLufs: Number(parsed.input_i),
+    integratedLufsExact: String(parsed.input_i),
     truePeakDbtp: Number(parsed.input_tp),
+    truePeakDbtpExact: String(parsed.input_tp),
     loudnessRangeLu: Number(parsed.input_lra),
+    loudnessRangeLuExact: String(parsed.input_lra),
     threshold: Number(parsed.input_thresh),
     offset: Number(parsed.target_offset),
   }
@@ -249,11 +252,55 @@ function loudnessMeasurement(payload, correctionPass, phase, loudness) {
   }
 }
 
+function exactLoudnessMeasurement(payload, correctionPass, phase, loudness,
+  audioFrameMd5Sha256) {
+  return {
+    correctionPass,
+    phase,
+    integratedLufs: loudness.integratedLufs,
+    integratedLufsExact: loudness.integratedLufsExact,
+    truePeakDbtp: loudness.truePeakDbtp,
+    truePeakDbtpExact: loudness.truePeakDbtpExact,
+    loudnessRangeLu: loudness.loudnessRangeLu,
+    loudnessRangeLuExact: loudness.loudnessRangeLuExact,
+    failedPredicates: stage12LoudnessFailedPredicates(payload, loudness),
+    audioFrameMd5Sha256,
+  }
+}
+
 async function measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget) {
   const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
     '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
   'STAGE12_FINAL_LOUDNESS_FAILED')
   return parseLoudnorm(analysis.stderr.toString('utf8'))
+}
+
+async function stage12AudioFrameMd5Sha256(preMasterPath, workRoot) {
+  const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-map', '0:a:0', '-f', 'framemd5', '-'], workRoot,
+  'STAGE12_DIAGNOSTIC_REPLAY_AUDIO_FRAME_HASH_FAILED')
+  return sha256(frameMd5.stdout)
+}
+
+export function stage12EncodedLoudnessDiagnosticReplayFingerprints(payload,
+  correctionPassLimit = 3) {
+  const thresholdSnapshot = {
+    integratedLufs: payload.qa.loudness.integratedLufs,
+    toleranceLufs: payload.qa.loudness.toleranceLufs,
+    truePeakMaxDbtp: payload.qa.loudness.truePeakMaxDbtp,
+    lraMin: payload.qa.loudness.lraMin,
+    lraMax: payload.qa.loudness.lraMax,
+    nearStaticMaxSec: payload.qa.nearStaticMaxSec,
+    sampleRateHz: payload.render.sampleRateHz,
+  }
+  const thresholdSnapshotSha256 = sha256(Buffer.from(canonicalize(thresholdSnapshot), 'utf8'))
+  const algorithmFingerprint = sha256(Buffer.from(canonicalize({
+    algorithmVersion: 'stage12-encoded-loudness-diagnostic-replay-v1',
+    correctionStrategyVersion: 3,
+    correctionPassLimit,
+    thresholdSnapshotSha256,
+  }), 'utf8'))
+  return { algorithmFingerprint, thresholdSnapshotSha256 }
 }
 
 export function buildStage12EncodedLoudnessFailure(payload, correctionPassLimit,
@@ -309,6 +356,9 @@ export async function correctStage12EncodedLoudness(payload, preMasterPath, work
   const measurementsByPass = [loudnessMeasurement(
     payload, 0, 'INITIAL_ENCODED_MEASUREMENT', measured,
   )]
+  if (typeof options.onMeasurement === 'function') {
+    await options.onMeasurement(measured, 0, 'INITIAL_ENCODED_MEASUREMENT', preMasterPath)
+  }
   if (loudnessPasses(payload, measured)) return measured
   for (let pass = 1; pass <= passLimit; pass += 1) {
     const correctedPath = join(workRoot, `pre-master-loudness-corrected-${pass}.webm`)
@@ -328,12 +378,237 @@ export async function correctStage12EncodedLoudness(payload, preMasterPath, work
     measured = await measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget)
     measurementsByPass.push(loudnessMeasurement(payload, pass,
       pass === passLimit ? 'FINAL_POST_ENCODE_VERIFICATION' : 'POST_CORRECTION_PASS', measured))
+    if (typeof options.onMeasurement === 'function') {
+      await options.onMeasurement(measured, pass,
+        pass === passLimit ? 'FINAL_POST_ENCODE_VERIFICATION' : 'POST_CORRECTION_PASS',
+        preMasterPath)
+    }
     if (loudnessPasses(payload, measured)) return measured
   }
   if (options.requirePass === true) {
     throw buildStage12EncodedLoudnessFailure(payload, passLimit, measurementsByPass)
   }
   return measured
+}
+
+function validateExactReplayMeasurement(payload, value, correctionPass, phase) {
+  if (!value || value.correctionPass !== correctionPass || value.phase !== phase
+    || !Number.isFinite(value.integratedLufs) || !Number.isFinite(value.truePeakDbtp)
+    || !Number.isFinite(value.loudnessRangeLu)
+    || !/^-?\d+(?:\.\d+)?$/u.test(value.integratedLufsExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(value.truePeakDbtpExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(value.loudnessRangeLuExact ?? '')
+    || Number(value.integratedLufsExact) !== value.integratedLufs
+    || Number(value.truePeakDbtpExact) !== value.truePeakDbtp
+    || Number(value.loudnessRangeLuExact) !== value.loudnessRangeLu
+    || !HEX64.test(value.audioFrameMd5Sha256 ?? '')
+    || canonicalize(value.failedPredicates) !== canonicalize(
+      stage12LoudnessFailedPredicates(payload, value),
+    )) {
+    throw Object.assign(new Error('Invalid Stage 12 diagnostic replay measurement.'), {
+      code: 'INVALID_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_EVIDENCE',
+    })
+  }
+  return value
+}
+
+export function buildStage12EncodedLoudnessDiagnosticReplayEvidence(payload, evidence) {
+  const invalid = () => Object.assign(new Error('Invalid Stage 12 diagnostic replay evidence.'), {
+    code: 'INVALID_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_EVIDENCE',
+  })
+  const measurementsByPass = evidence?.measurementsByPass
+  const terminalCorrectionPass = Array.isArray(measurementsByPass)
+    ? measurementsByPass.length - 1 : -1
+  if (evidence?.evidenceSemantics !== 'NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL'
+    || evidence?.source?.correctionOrdinal !== 2
+    || typeof evidence.source.correctionJobId !== 'string'
+    || !String(evidence.source.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(evidence.source.sha256 ?? '')
+    || !Number.isInteger(evidence.source.byteLength) || evidence.source.byteLength < 1
+    || !HEX64.test(evidence.source.receiptSha256 ?? '')
+    || evidence?.historicalFailure?.correctionOrdinal !== 3
+    || typeof evidence.historicalFailure.correctionJobId !== 'string'
+    || evidence.historicalFailure.errorCode !== 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED'
+    || !Array.isArray(measurementsByPass) || measurementsByPass.length < 1
+    || measurementsByPass.length > 4
+    || !/^sha256:[a-f0-9]{64}$/u.test(evidence.workerImageDigest ?? '')
+    || evidence.workerImageDigest !== evidence.expectedWorkerImageDigest
+    || !HEX64.test(evidence.algorithmFingerprint ?? '')
+    || !HEX64.test(evidence.thresholdSnapshotSha256 ?? '')
+    || typeof evidence.runtimeProvenance?.ffmpegVersion !== 'string'
+    || evidence.runtimeProvenance.ffmpegVersion.length < 8
+    || !HEX64.test(evidence.runtimeProvenance.ffmpegBuildFingerprint ?? '')
+    || !HEX64.test(evidence.runtimeProvenance.libopusEncoderFingerprint ?? '')) throw invalid()
+  const sourceBaseline = { ...evidence.sourceBaseline, correctionPass: -1 }
+  validateExactReplayMeasurement(payload, sourceBaseline, -1, 'SOURCE_ORDINAL2_BASELINE')
+  delete sourceBaseline.correctionPass
+  for (let index = 0; index < measurementsByPass.length; index += 1) {
+    validateExactReplayMeasurement(payload, measurementsByPass[index], index,
+      index === 0 ? 'INITIAL_ENCODED_MEASUREMENT'
+        : index === 3 ? 'FINAL_POST_ENCODE_VERIFICATION' : 'POST_CORRECTION_PASS')
+  }
+  const finalObservation = measurementsByPass.at(-1)
+  const failedPredicates = stage12LoudnessFailedPredicates(payload, finalObservation)
+  if (terminalCorrectionPass < 3 && failedPredicates.length > 0) throw invalid()
+  const replayOutcome = failedPredicates.length === 0 ? 'PASS' : 'FAIL'
+  const finalMeasurements = {
+    integratedLufs: finalObservation.integratedLufs,
+    integratedLufsExact: finalObservation.integratedLufsExact,
+    truePeakDbtp: finalObservation.truePeakDbtp,
+    truePeakDbtpExact: finalObservation.truePeakDbtpExact,
+    loudnessRangeLu: finalObservation.loudnessRangeLu,
+    loudnessRangeLuExact: finalObservation.loudnessRangeLuExact,
+  }
+  return {
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: 'FINAL_POST_ENCODE_LOUDNESS_VERIFICATION',
+    source: evidence.source,
+    historicalFailure: evidence.historicalFailure,
+    sourceBaseline: evidence.sourceBaseline,
+    measurementsByPass,
+    terminalCorrectionPass,
+    finalMeasurements,
+    failedPredicates,
+    replayOutcome,
+    workerImageDigest: evidence.workerImageDigest,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    runtimeProvenance: evidence.runtimeProvenance,
+    correctionStrategyVersion: 3,
+    correctionPassLimit: 3,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: 'OFF',
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    autoPublish: 'OFF',
+  }
+}
+
+export function validateStage12EncodedLoudnessDiagnosticReplayPayload(payload, imageDigest) {
+  const value = validateStage12Payload(payload)
+  const replay = payload?.diagnosticReplay
+  const fingerprints = stage12EncodedLoudnessDiagnosticReplayFingerprints(
+    payload, Number.isInteger(replay?.correctionPassLimit) ? replay.correctionPassLimit : 3,
+  )
+  if (!replay || replay.schemaVersion !== 1
+    || replay.evidenceSemantics !== 'NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL'
+    || replay.sourceAttemptOrdinal !== 3 || replay.sourceCorrectionOrdinal !== 2
+    || replay.historicalFailureCorrectionOrdinal !== 3
+    || replay.correctionStrategyVersion !== 3 || replay.correctionPassLimit !== 3
+    || typeof replay.sourceCorrectionJobId !== 'string'
+    || typeof replay.historicalFailureJobId !== 'string'
+    || !String(replay.sourceCorrectedPreMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(replay.sourceCorrectedPreMaster?.sha256 ?? '')
+    || !Number.isInteger(replay.sourceCorrectedPreMaster?.byteLength)
+    || replay.sourceCorrectedPreMaster.byteLength < 1
+    || !HEX64.test(replay.sourceCorrectionReceiptSha256 ?? '')
+    || !/^sha256:[a-f0-9]{64}$/u.test(replay.expectedWorkerImageDigest ?? '')
+    || replay.algorithmFingerprint !== fingerprints.algorithmFingerprint
+    || replay.thresholdSnapshotSha256 !== fingerprints.thresholdSnapshotSha256
+    || replay.historicalBackfill !== false || replay.uploadCorrectedOutput !== false
+    || replay.providerDispatch !== 'OFF' || replay.providerCallCount !== 0
+    || replay.calibration !== false || replay.finalize !== false || replay.release !== false
+    || replay.autoPublish !== 'OFF') {
+    throw Object.assign(new Error('Invalid Stage 12 encoded-loudness diagnostic replay envelope.'), {
+      code: 'INVALID_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_ENVELOPE',
+    })
+  }
+  if (imageDigest !== undefined && replay.expectedWorkerImageDigest !== imageDigest) {
+    throw Object.assign(new Error('Diagnostic replay worker image does not match the pin.'), {
+      code: 'STAGE12_DIAGNOSTIC_REPLAY_WORKER_IMAGE_MISMATCH',
+    })
+  }
+  return value
+}
+
+async function collectStage12DiagnosticReplayRuntimeProvenance(workRoot) {
+  const [ffmpegVersion, libopusEncoder] = await Promise.all([
+    runTool('ffmpeg', ['-version'], workRoot, 'STAGE12_DIAGNOSTIC_REPLAY_RUNTIME_PROBE_FAILED'),
+    runTool('ffmpeg', ['-hide_banner', '-h', 'encoder=libopus'], workRoot,
+      'STAGE12_DIAGNOSTIC_REPLAY_RUNTIME_PROBE_FAILED'),
+  ])
+  const versionBytes = Buffer.concat([ffmpegVersion.stdout, ffmpegVersion.stderr])
+  const encoderBytes = Buffer.concat([libopusEncoder.stdout, libopusEncoder.stderr])
+  return {
+    ffmpegVersion: versionBytes.toString('utf8').split(/\r?\n/u)[0],
+    ffmpegBuildFingerprint: sha256(versionBytes),
+    libopusEncoderFingerprint: sha256(encoderBytes),
+  }
+}
+
+export async function executeStage12EncodedLoudnessDiagnosticReplay(payloadInput, imageDigest) {
+  const payload = validateStage12EncodedLoudnessDiagnosticReplayPayload(payloadInput, imageDigest)
+  const replay = payloadInput.diagnosticReplay
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-loudness-diagnostic-replay-'))
+  const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
+  const replayPath = join(workRoot, 'diagnostic-replay-working-copy.webm')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${replay.sourceCorrectedPreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== replay.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== replay.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('Diagnostic replay source read-back mismatch.'), {
+        code: 'STAGE12_DIAGNOSTIC_REPLAY_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+    const sourceMeasured = await measureStage12EncodedLoudness(payload, sourcePath, workRoot,
+      lraTarget)
+    const sourceBaseline = exactLoudnessMeasurement(payload, -1, 'SOURCE_ORDINAL2_BASELINE',
+      sourceMeasured, await stage12AudioFrameMd5Sha256(sourcePath, workRoot))
+    delete sourceBaseline.correctionPass
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy',
+      '-af', buildStage12AudioP0CorrectionFilter(payload, 3), '-c:a', 'libopus',
+      '-ar', String(payload.render.sampleRateHz), replayPath], workRoot,
+    'STAGE12_DIAGNOSTIC_REPLAY_BASE_TRANSCODE_FAILED')
+    const measurementsByPass = []
+    const truePeakTargetDbtp = payload.qa.loudness.truePeakMaxDbtp
+      - payload.qa.loudness.toleranceLufs
+    await correctStage12EncodedLoudness(payload, replayPath, workRoot, {
+      truePeakTargetDbtp,
+      passLimit: replay.correctionPassLimit,
+      useMacroDynamics: true,
+      requirePass: false,
+      onMeasurement: async (measured, correctionPass, phase, measuredPath) => {
+        measurementsByPass.push(exactLoudnessMeasurement(payload, correctionPass, phase,
+          measured, await stage12AudioFrameMd5Sha256(measuredPath, workRoot)))
+      },
+    })
+    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    const evidence = buildStage12EncodedLoudnessDiagnosticReplayEvidence(payload, {
+      evidenceSemantics: replay.evidenceSemantics,
+      source: { correctionOrdinal: 2, correctionJobId: replay.sourceCorrectionJobId,
+        r2Key: replay.sourceCorrectedPreMaster.r2Key,
+        sha256: replay.sourceCorrectedPreMaster.sha256,
+        byteLength: replay.sourceCorrectedPreMaster.byteLength,
+        receiptSha256: replay.sourceCorrectionReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: replay.historicalFailureJobId,
+        errorCode: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED' },
+      sourceBaseline,
+      measurementsByPass,
+      workerImageDigest: imageDigest,
+      expectedWorkerImageDigest: replay.expectedWorkerImageDigest,
+      algorithmFingerprint: replay.algorithmFingerprint,
+      thresholdSnapshotSha256: replay.thresholdSnapshotSha256,
+      runtimeProvenance,
+    })
+    return { ...evidence, correctedOutputUploaded: false }
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
 }
 
 function stage12Receipt(imageDigest, inspected, pointer) {

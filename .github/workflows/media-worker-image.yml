@@ -40,15 +40,20 @@ jobs:
             'test "$(id -u)" -ne 0 && python3 /app/scripts/verify-stage10-python-runtime.py --output /tmp/stage10-python.json'
       - name: Verify Stage 12 corrected pre-master smoke
         run: docker run --rm --entrypoint node factory-media-worker:test stage12-remediation-smoke.mjs
+      - name: Verify Stage 12 encoded-loudness diagnostic replay smoke
+        run: docker run --rm --entrypoint node factory-media-worker:test stage12-diagnostic-replay-smoke.mjs
       - name: Prove health and absence of D1 binding
         run: |
           docker run --detach --name factory-media-worker \
             --env MEDIA_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --env MEDIA_STAGE12_ENABLED=true \
+            --env MEDIA_STAGE10_VERIFY_KEY=ci-stage12-signing-boundary \
             --publish 18080:8080 factory-media-worker:test
           for attempt in $(seq 1 20); do
             health="$(curl --fail --silent http://127.0.0.1:18080/health || true)"
             if echo "$health" | jq --exit-status \
               '.ok == true and .jobDispatchEnabled == false and .pythonRuntimeVerified == true
+               and .stage12Ready == true and .encodedLoudnessDiagnosticReplayReady == true
                and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
               exit 0
             fi

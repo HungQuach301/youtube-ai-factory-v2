@@ -285,3 +285,18 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Evidence và source identity append-only | migration 0029 test UPDATE/DELETE, source SHA mismatch và duplicate job → ABORT |
 | Không backfill số đo ordinal 3 đã mất | migration test áp 0029 trên terminal row hiện hữu rồi yêu cầu evidence count bằng 0 |
 | Không đổi threshold/ordinal/attempt/provider/publish | `thresholds.ts` không đổi; pass limit vẫn `RETRY.MAX_ATTEMPTS=3`; E2E xác minh attempt 4 bằng 0 và controls `0/OFF` |
+
+## 10. EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
+
+| Acceptance | Test/evidence |
+|---|---|
+| Typed command chỉ nhận exact ordinal 2 source + ordinal 3 loudness failure | worker validator, MCP diagnostic và migration 0030 lineage tests |
+| Source route chỉ đọc và không upload output | route static guardrail yêu cầu chỉ `GET`/`POST`; FFmpeg smoke đếm đúng một source GET và zero write request |
+| Exact per-pass/final LUFS, true peak, LRA được giữ cả raw và numeric | runtime unit test, real FFmpeg smoke và strict control-plane parser |
+| Predicate của source, từng pass và final khớp threshold cũ | migration mutation vectors đổi final/intermediate predicate phải ABORT |
+| Worker/runtime provenance được pin | validator + D1 trigger từ chối image mismatch; evidence khóa algorithm, threshold, FFmpeg và libopus fingerprints |
+| Replay evidence là reproduction mới, không backfill lịch sử | `evidenceSemantics=NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL`; migration áp trên ordinal 2/3 fixture rồi chứng minh history unchanged |
+| Job/evidence append-only và terminal shape fail-closed | migration test từ chối UPDATE/DELETE, READY thiếu evidence, PENDING có result và FAILED có evidence |
+| Không ordinal 4/attempt 4/provider/calibration/output/finalize/publish | unit, migration, static guardrail và Sites E2E kiểm literals `false`, `0`, `OFF` và zero attempt 4 |
+| Control plane/worker dùng cùng deterministic fingerprints | cross-boundary unit test so exact algorithm/threshold hashes |
+| Production không tự chạy replay | CI chỉ build/test; mọi invocation cần owner OPERATE approval riêng sau merge/deploy/health PASS |

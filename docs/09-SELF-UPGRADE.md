@@ -238,3 +238,15 @@ Migration 0029 chỉ INSERT một evidence row mới và khóa UPDATE/DELETE; or
 terminal history không bị sửa hoặc backfill bằng dữ liệu suy đoán. Promotion chỉ
 triển khai observability sau CI/health PASS, không cấp quyền ordinal 4, attempt 4,
 provider, calibration, finalize, release hoặc publish.
+
+### Evolution record: EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
+
+Thay đổi `NEUTRAL` về QA threshold/algorithm và `STRICTER_REPRODUCTION_EVIDENCE`:
+một typed reproduction job riêng đọc exact immutable ordinal 2, tái chạy strategy
+v3 trong temporary workspace và ghi evidence mới gồm raw/numeric per-pass/final
+LUFS, true peak, LRA, predicates, audio frame-MD5 và pinned runtime provenance.
+Migration 0030 tạo job/evidence append-only và không UPDATE/backfill ordinal 2/3.
+Replay không tạo corrected artifact, correction ordinal hoặc Stage 12 attempt. PR
+và CI không cấp quyền chạy Production replay; invocation cần một phê duyệt OPERATE
+tách biệt sau merge, deploy, exact-tree và health PASS. Không provider, calibration,
+Finalize, release hoặc publish.

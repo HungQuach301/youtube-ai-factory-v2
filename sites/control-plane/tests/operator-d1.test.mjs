@@ -185,6 +185,33 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(mcpRoute, /execute_factory_command/u);
 });
 
+test("Stage 12 encoded-loudness replay is separate, pinned and read-only at the object route", async () => {
+  const [runtime, worker, domain, schema, migration, route, mcpRoute] = await Promise.all([
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0030_stage12_encoded_loudness_diagnostic_replay.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-encoded-loudness-diagnostic-replay/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+  ]);
+  assert.match(runtime, /executeStage12EncodedLoudnessDiagnosticReplay/u);
+  assert.match(runtime, /kind=source-ordinal-2/u);
+  assert.match(runtime, /correctedOutputUploaded: false/u);
+  assert.match(worker, /\/stage12\/encoded-loudness-diagnostic-replay/u);
+  assert.match(worker, /encodedLoudnessDiagnosticReplayReady: stage12Ready\(\)/u);
+  assert.match(domain, /stage12EncodedLoudnessDiagnosticReplaySource/u);
+  assert.match(domain, /readStage12MediaWorkerHealth/u);
+  assert.match(schema, /stage12EncodedLoudnessDiagnosticReplayEvidence/u);
+  assert.match(migration, /NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL/u);
+  assert.match(migration, /STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_EVIDENCE_IMMUTABLE/u);
+  assert.match(route, /export async function GET/u);
+  assert.match(route, /export async function POST/u);
+  assert.doesNotMatch(route, /export async function PUT/u);
+  assert.match(mcpRoute, /RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY/u);
+  assert.match(mcpRoute, /RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY/u);
+});
+
 const ownerHeaders = {
   "content-type": "application/json",
   "oai-authenticated-user-email": "owner@example.com",
@@ -1146,6 +1173,184 @@ test("persists exact encoded-loudness failure callback evidence append-only", as
     assert.equal((await d1.prepare(
       "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal=4",
     ).first()).count, 0);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("diagnostic replay reads ordinal 2 and persists only new append-only evidence", async () => {
+  const { mf, d1 } = await createFactoryFixture("g01a-stage12-loudness-diagnostic-replay", {
+    FACTORY_OWNER_EMAIL: "owner@example.com",
+    MEDIA_REQUEST_SIGNING_KEY: "test-only-stage12-loudness-replay-signing-key",
+  });
+  const transport = new StreamableHTTPClientTransport(new URL("https://factory.test/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-stage12-loudness-replay-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await seedStage12AudioP0CorrectionSource(client, mf, d1);
+    const source = await seedStage12AudioP0OrdinalThreePending(mf, d1);
+    await d1.prepare(`UPDATE stage12_audio_p0_correction_retry_job SET state='FAILED',
+      error_code='STAGE12_ENCODED_LOUDNESS_UNRESOLVED'
+      WHERE id='stage12-audio-p0-correction-3'`).run();
+
+    const eligible = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(eligible.isError, undefined, JSON.stringify(eligible));
+    assert.equal(eligible.structuredContent.operationState, "ELIGIBLE");
+    assert.equal(eligible.structuredContent.diagnosticState, "PASS");
+
+    const unavailable = await client.callTool({ name: "execute_factory_command", arguments: {
+      commandType: "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+      expectedCurrentStep: "STAGE_12_READY",
+      objective: "Reproduce encoded loudness measurements from immutable ordinal two evidence.",
+      confirm: true,
+      ownerApprovalText: "RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY",
+    } });
+    assert.equal(unavailable.isError, true);
+    assert.match(unavailable.content[0].text, /MEDIA_WORKER_URL_UNAVAILABLE/u);
+    assert.equal((await d1.prepare(`SELECT count(*) AS count
+      FROM stage12_encoded_loudness_diagnostic_replay_job`).first()).count, 0);
+    assert.equal((await d1.prepare(`SELECT count(*) AS count FROM command_log
+      WHERE command_type='RUN_TRACK_G_VIDEO_1_STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY'`)
+      .first()).count, 0);
+
+    const idempotencyKey = createHash("sha256").update("diagnostic-replay-key").digest("hex");
+    const callbackToken = "8".repeat(64);
+    const callbackTokenHash = createHash("sha256").update(callbackToken).digest("hex");
+    const expectedWorkerImageDigest = `sha256:${"9".repeat(64)}`;
+    const algorithmFingerprint = "3".repeat(64);
+    const thresholdSnapshotSha256 = "4".repeat(64);
+    await d1.prepare(`INSERT INTO stage12_encoded_loudness_diagnostic_replay_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,idempotency_key,
+       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
+       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+       source_receipt_sha256,correction_strategy_version,correction_pass_limit,
+       expected_worker_image_digest,algorithm_fingerprint,threshold_snapshot_sha256)
+      VALUES ('stage12-loudness-replay-1','stage12-contract-attempt-3',
+       'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',?,?,
+       'owner@example.com','RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY','PENDING',
+       'NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL',?,?,?,?,3,3,?,?,?)`)
+      .bind(idempotencyKey, callbackTokenHash, source.ordinalTwoR2Key,
+        source.ordinalTwoSha256, source.ordinalTwoByteLength, source.ordinalTwoReceiptSha256,
+        expectedWorkerImageDigest, algorithmFingerprint, thresholdSnapshotSha256).run();
+
+    const sourceRead = await mf.dispatchFetch(
+      `https://factory.test/api/media-worker/stage12-encoded-loudness-diagnostic-replay?kind=source-ordinal-2&idempotencyKey=${idempotencyKey}&sha256=${source.ordinalTwoSha256}`,
+      { headers: { authorization: `Bearer ${callbackToken}` } },
+    );
+    assert.equal(sourceRead.status, 200, await sourceRead.clone().text());
+    assert.equal(createHash("sha256").update(Buffer.from(await sourceRead.arrayBuffer())).digest("hex"),
+      source.ordinalTwoSha256);
+
+    const exactMeasurement = (correctionPass, phase, values, failedPredicates) => ({
+      correctionPass, phase, ...values, failedPredicates,
+      audioFrameMd5Sha256: createHash("sha256").update(`audio-frame-${correctionPass}`).digest("hex"),
+    });
+    const sourceBaseline = {
+      phase: "SOURCE_ORDINAL2_BASELINE",
+      integratedLufs: -14.51, integratedLufsExact: "-14.51",
+      truePeakDbtp: -0.9, truePeakDbtpExact: "-0.90",
+      loudnessRangeLu: 3, loudnessRangeLuExact: "3.00",
+      failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"],
+      audioFrameMd5Sha256: createHash("sha256").update("source-audio-frame").digest("hex"),
+    };
+    const measurementsByPass = [
+      exactMeasurement(0, "INITIAL_ENCODED_MEASUREMENT", {
+        integratedLufs: -14.4, integratedLufsExact: "-14.40",
+        truePeakDbtp: -1.2, truePeakDbtpExact: "-1.20",
+        loudnessRangeLu: 3.2, loudnessRangeLuExact: "3.20",
+      }, ["LOUDNESS_RANGE_LU_BELOW_MIN"]),
+      exactMeasurement(1, "POST_CORRECTION_PASS", {
+        integratedLufs: -14.1, integratedLufsExact: "-14.10",
+        truePeakDbtp: -1.3, truePeakDbtpExact: "-1.30",
+        loudnessRangeLu: 3.6, loudnessRangeLuExact: "3.60",
+      }, ["LOUDNESS_RANGE_LU_BELOW_MIN"]),
+      exactMeasurement(2, "POST_CORRECTION_PASS", {
+        integratedLufs: -13.9, integratedLufsExact: "-13.90",
+        truePeakDbtp: -1.4, truePeakDbtpExact: "-1.40",
+        loudnessRangeLu: 3.8, loudnessRangeLuExact: "3.80",
+      }, ["LOUDNESS_RANGE_LU_BELOW_MIN"]),
+      exactMeasurement(3, "FINAL_POST_ENCODE_VERIFICATION", {
+        integratedLufs: -13.8, integratedLufsExact: "-13.80",
+        truePeakDbtp: -0.8, truePeakDbtpExact: "-0.80",
+        loudnessRangeLu: 3.9, loudnessRangeLuExact: "3.90",
+      }, ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"]),
+    ];
+    const replayResult = {
+      accepted: true, schemaVersion: 1,
+      evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL",
+      boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+      source: { correctionOrdinal: 2, correctionJobId: "stage12-audio-p0-correction-2",
+        r2Key: source.ordinalTwoR2Key, sha256: source.ordinalTwoSha256,
+        byteLength: source.ordinalTwoByteLength, receiptSha256: source.ordinalTwoReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: "stage12-audio-p0-correction-3",
+        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+      sourceBaseline, measurementsByPass, terminalCorrectionPass: 3,
+      finalMeasurements: { integratedLufs: -13.8, integratedLufsExact: "-13.80",
+        truePeakDbtp: -0.8, truePeakDbtpExact: "-0.80",
+        loudnessRangeLu: 3.9, loudnessRangeLuExact: "3.90" },
+      failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"],
+      replayOutcome: "FAIL", workerImageDigest: expectedWorkerImageDigest,
+      expectedWorkerImageDigest, algorithmFingerprint, thresholdSnapshotSha256,
+      runtimeProvenance: { ffmpegVersion: "ffmpeg version 7.1.1",
+        ffmpegBuildFingerprint: "6".repeat(64), libopusEncoderFingerprint: "7".repeat(64) },
+      correctionStrategyVersion: 3, correctionPassLimit: 3,
+      correctedOutputUploaded: false, historicalBackfill: false,
+      providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+      finalize: false, releaseEligible: false, autoPublish: "OFF",
+    };
+    const callback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-encoded-loudness-diagnostic-replay",
+      { method: "POST", headers: { authorization: `Bearer ${callbackToken}`,
+        "content-type": "application/json" },
+      body: JSON.stringify({ idempotencyKey, result: replayResult }) },
+    );
+    assert.equal(callback.status, 201, await callback.text());
+    assert.deepEqual(await d1.prepare(`SELECT state,replay_outcome,terminal_correction_pass,
+      expected_worker_image_digest,worker_image_digest,corrected_output_uploaded,
+      historical_backfill,provider_call_count,provider_dispatch,auto_publish
+      FROM stage12_encoded_loudness_diagnostic_replay_job`).first(), {
+      state: "READY", replay_outcome: "FAIL", terminal_correction_pass: 3,
+      expected_worker_image_digest: expectedWorkerImageDigest,
+      worker_image_digest: expectedWorkerImageDigest, corrected_output_uploaded: 0,
+      historical_backfill: 0, provider_call_count: 0, provider_dispatch: "OFF",
+      auto_publish: "OFF",
+    });
+    const replayEvidence = await d1.prepare(`SELECT evidence_semantics,
+      final_integrated_lufs_exact,final_true_peak_dbtp_exact,final_loudness_range_lu_exact,
+      measurements_by_pass_json,ffmpeg_version FROM
+      stage12_encoded_loudness_diagnostic_replay_evidence`).first();
+    assert.equal(replayEvidence.evidence_semantics,
+      "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL");
+    assert.equal(replayEvidence.final_integrated_lufs_exact, "-13.80");
+    assert.equal(replayEvidence.final_true_peak_dbtp_exact, "-0.80");
+    assert.equal(replayEvidence.final_loudness_range_lu_exact, "3.90");
+    assert.deepEqual(JSON.parse(replayEvidence.measurements_by_pass_json), measurementsByPass);
+    assert.equal(replayEvidence.ffmpeg_version, "ffmpeg version 7.1.1");
+
+    const ready = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(ready.structuredContent.operationState, "READY");
+    const diagnostic = JSON.parse(ready.structuredContent.diagnosticJson);
+    assert.equal(diagnostic.result.replayOutcome, "FAIL");
+    assert.equal(diagnostic.result.correctedOutputUploaded, false);
+    assert.equal((await d1.prepare(
+      "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal=4",
+    ).first()).count, 0);
+    assert.deepEqual(await d1.prepare(`SELECT state,error_code,corrected_pre_master_sha256
+      FROM stage12_audio_p0_correction_retry_job WHERE id='stage12-audio-p0-correction-3'`)
+      .first(), { state: "FAILED", error_code: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+      corrected_pre_master_sha256: null });
   } finally {
     await client.close().catch(() => {});
     await mf.dispose();

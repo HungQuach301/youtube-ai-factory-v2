@@ -290,3 +290,15 @@ WP-00 ─┬─ WP-01 ─┬─ WP-02 ─┬─ WP-03 ─── WP-04 ─┬─ 
 **Phạm vi.** Loại bỏ callback timeout do hydrate pipeline/băm lại pre-master; typed transport error; immutable lineage cho đúng một diagnostic callback retry.
 
 **DoD.** Callback dùng duration đã lưu và pointer/hash/size R2, receipt vẫn immutable/read-back; numeric DOMException code không lọt vào D1; failed diagnostic cũ không sửa/xóa; retry ordinal 2 chỉ nhận callback timeout typed; không tự chạy retry scan, generation, provider, finalize hoặc publish; mọi threshold giữ nguyên.
+
+### 🟢 WP-35 · EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
+
+**Phạm vi.** Typed reproduction job riêng đọc immutable corrected pre-master ordinal
+2, tái chạy strategy v3 chỉ để đo exact source/per-pass/final encoded loudness và
+ghi append-only evidence với pinned worker/runtime provenance.
+
+**DoD.** Migration 0030 không sửa/backfill ordinal 2/3; source route không có upload;
+real FFmpeg smoke và root/Sites tests PASS; per-pass raw/numeric LUFS, true peak,
+LRA, predicates, frame-MD5 và provenance nhất quán; không ordinal/attempt 4,
+provider, calibration, corrected output, Finalize, release hoặc publish. Build/PR
+không tự chạy Production replay.

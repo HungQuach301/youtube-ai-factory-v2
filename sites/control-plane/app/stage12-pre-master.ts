@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ASSURANCE, AUDIO, AV_SYNC_MS, MASTER, RETRY, VISUAL } from "../packages/contracts/src/thresholds";
 
 const HEX64 = /^[0-9a-f]{64}$/u;
@@ -107,6 +108,59 @@ export type Stage12EncodedLoudnessFailureDiagnostic = {
   workerImageDigest: string;
 };
 
+export type Stage12EncodedLoudnessExactMeasurement = {
+  correctionPass: number;
+  phase: "INITIAL_ENCODED_MEASUREMENT" | "POST_CORRECTION_PASS"
+    | "FINAL_POST_ENCODE_VERIFICATION";
+  integratedLufs: number;
+  integratedLufsExact: string;
+  truePeakDbtp: number;
+  truePeakDbtpExact: string;
+  loudnessRangeLu: number;
+  loudnessRangeLuExact: string;
+  failedPredicates: Stage12EncodedLoudnessFailurePredicate[];
+  audioFrameMd5Sha256: string;
+};
+
+export type Stage12EncodedLoudnessDiagnosticReplayResult = {
+  accepted: true;
+  schemaVersion: 1;
+  evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL";
+  boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION";
+  source: { correctionOrdinal: 2; correctionJobId: string; r2Key: string; sha256: string;
+    byteLength: number; receiptSha256: string };
+  historicalFailure: { correctionOrdinal: 3; correctionJobId: string;
+    errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" };
+  sourceBaseline: Omit<Stage12EncodedLoudnessExactMeasurement, "correctionPass" | "phase"> & {
+    phase: "SOURCE_ORDINAL2_BASELINE";
+  };
+  measurementsByPass: Stage12EncodedLoudnessExactMeasurement[];
+  terminalCorrectionPass: number;
+  finalMeasurements: {
+    integratedLufs: number; integratedLufsExact: string;
+    truePeakDbtp: number; truePeakDbtpExact: string;
+    loudnessRangeLu: number; loudnessRangeLuExact: string;
+  };
+  failedPredicates: Stage12EncodedLoudnessFailurePredicate[];
+  replayOutcome: "PASS" | "FAIL";
+  workerImageDigest: string;
+  expectedWorkerImageDigest: string;
+  algorithmFingerprint: string;
+  thresholdSnapshotSha256: string;
+  runtimeProvenance: { ffmpegVersion: string; ffmpegBuildFingerprint: string;
+    libopusEncoderFingerprint: string };
+  correctionStrategyVersion: 3;
+  correctionPassLimit: 3;
+  correctedOutputUploaded: false;
+  historicalBackfill: false;
+  providerCallCount: 0;
+  providerDispatch: "OFF";
+  calibration: false;
+  finalize: false;
+  releaseEligible: false;
+  autoPublish: "OFF";
+};
+
 export type Stage12GateResult = {
   gate: string;
   state: "PASS";
@@ -170,6 +224,207 @@ function parseFailurePredicates(value: unknown): Stage12EncodedLoudnessFailurePr
 function predicatesMatch(left: Stage12EncodedLoudnessFailurePredicate[],
   right: Stage12EncodedLoudnessFailurePredicate[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function canonicalizeReplayValue(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string") return JSON.stringify(value.normalize("NFC"));
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("Non-finite replay value.");
+    return Object.is(value, -0) ? "0" : String(value);
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) return `[${value.map(canonicalizeReplayValue).join(",")}]`;
+  if (!isRecord(value)) throw new TypeError("Unsupported replay value.");
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key.normalize("NFC"))}:${canonicalizeReplayValue(value[key])}`).join(",")}}`;
+}
+
+function replayHash(value: unknown): string {
+  return createHash("sha256").update(canonicalizeReplayValue(value)).digest("hex");
+}
+
+export function stage12EncodedLoudnessDiagnosticReplayFingerprints(
+  request: Stage12MediaRequest,
+  correctionPassLimit: number = RETRY.MAX_ATTEMPTS,
+) {
+  const thresholdSnapshotSha256 = replayHash({
+    integratedLufs: request.qa.loudness.integratedLufs,
+    toleranceLufs: request.qa.loudness.toleranceLufs,
+    truePeakMaxDbtp: request.qa.loudness.truePeakMaxDbtp,
+    lraMin: request.qa.loudness.lraMin,
+    lraMax: request.qa.loudness.lraMax,
+    nearStaticMaxSec: request.qa.nearStaticMaxSec,
+    sampleRateHz: request.render.sampleRateHz,
+  });
+  return {
+    thresholdSnapshotSha256,
+    algorithmFingerprint: replayHash({
+      algorithmVersion: "stage12-encoded-loudness-diagnostic-replay-v1",
+      correctionStrategyVersion: 3,
+      correctionPassLimit,
+      thresholdSnapshotSha256,
+    }),
+  };
+}
+
+function parseExactReplayMeasurement(value: unknown, expectedPass: number,
+  expectedPhase: Stage12EncodedLoudnessExactMeasurement["phase"]
+    | "SOURCE_ORDINAL2_BASELINE", includePass: boolean) {
+  const invalid = () => new Error("STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_RESULT_INVALID");
+  const keys = ["phase", "integratedLufs", "integratedLufsExact", "truePeakDbtp",
+    "truePeakDbtpExact", "loudnessRangeLu", "loudnessRangeLuExact", "failedPredicates",
+    "audioFrameMd5Sha256", ...(includePass ? ["correctionPass"] : [])];
+  if (!isRecord(value) || !hasExactKeys(value, keys)
+    || value.phase !== expectedPhase
+    || (includePass && value.correctionPass !== expectedPass)
+    || !Number.isFinite(value.integratedLufs) || !Number.isFinite(value.truePeakDbtp)
+    || !Number.isFinite(value.loudnessRangeLu)
+    || !/^-?\d+(?:\.\d+)?$/u.test(String(value.integratedLufsExact ?? ""))
+    || !/^-?\d+(?:\.\d+)?$/u.test(String(value.truePeakDbtpExact ?? ""))
+    || !/^-?\d+(?:\.\d+)?$/u.test(String(value.loudnessRangeLuExact ?? ""))
+    || Number(value.integratedLufsExact) !== value.integratedLufs
+    || Number(value.truePeakDbtpExact) !== value.truePeakDbtp
+    || Number(value.loudnessRangeLuExact) !== value.loudnessRangeLu
+    || !HEX64.test(String(value.audioFrameMd5Sha256 ?? ""))) throw invalid();
+  const measurement = {
+    ...(includePass ? { correctionPass: expectedPass } : {}),
+    phase: expectedPhase,
+    integratedLufs: Number(value.integratedLufs),
+    integratedLufsExact: String(value.integratedLufsExact),
+    truePeakDbtp: Number(value.truePeakDbtp),
+    truePeakDbtpExact: String(value.truePeakDbtpExact),
+    loudnessRangeLu: Number(value.loudnessRangeLu),
+    loudnessRangeLuExact: String(value.loudnessRangeLuExact),
+    failedPredicates: parseFailurePredicates(value.failedPredicates),
+    audioFrameMd5Sha256: String(value.audioFrameMd5Sha256),
+  };
+  if (!predicatesMatch(measurement.failedPredicates,
+    loudnessFailurePredicates(measurement))) throw invalid();
+  return measurement;
+}
+
+export function parseStage12EncodedLoudnessDiagnosticReplayResult(
+  value: unknown,
+): Stage12EncodedLoudnessDiagnosticReplayResult {
+  const invalid = () => new Error("STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_RESULT_INVALID");
+  const topKeys = ["accepted", "schemaVersion", "evidenceSemantics", "boundary", "source",
+    "historicalFailure", "sourceBaseline", "measurementsByPass", "terminalCorrectionPass",
+    "finalMeasurements", "failedPredicates", "replayOutcome", "workerImageDigest",
+    "expectedWorkerImageDigest", "algorithmFingerprint", "thresholdSnapshotSha256",
+    "runtimeProvenance", "correctionStrategyVersion", "correctionPassLimit",
+    "correctedOutputUploaded", "historicalBackfill", "providerCallCount", "providerDispatch",
+    "calibration", "finalize", "releaseEligible", "autoPublish"];
+  if (!isRecord(value) || !hasExactKeys(value, topKeys)
+    || value.accepted !== true || value.schemaVersion !== 1
+    || value.evidenceSemantics !== "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL"
+    || value.boundary !== "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION"
+    || value.correctionStrategyVersion !== 3 || value.correctionPassLimit !== RETRY.MAX_ATTEMPTS
+    || value.correctedOutputUploaded !== false || value.historicalBackfill !== false
+    || value.providerCallCount !== 0 || value.providerDispatch !== "OFF"
+    || value.calibration !== false || value.finalize !== false || value.releaseEligible !== false
+    || value.autoPublish !== "OFF"
+    || !/^sha256:[a-f0-9]{64}$/u.test(String(value.workerImageDigest ?? ""))
+    || value.workerImageDigest !== value.expectedWorkerImageDigest
+    || !HEX64.test(String(value.algorithmFingerprint ?? ""))
+    || !HEX64.test(String(value.thresholdSnapshotSha256 ?? ""))
+    || !isRecord(value.source) || !hasExactKeys(value.source,
+      ["correctionOrdinal", "correctionJobId", "r2Key", "sha256", "byteLength", "receiptSha256"])
+    || value.source.correctionOrdinal !== 2
+    || typeof value.source.correctionJobId !== "string" || value.source.correctionJobId.length < 3
+    || !String(value.source.r2Key ?? "").startsWith("prod/")
+    || String(value.source.r2Key).includes("..") || !HEX64.test(String(value.source.sha256 ?? ""))
+    || !Number.isInteger(value.source.byteLength) || Number(value.source.byteLength) < 1
+    || !HEX64.test(String(value.source.receiptSha256 ?? ""))
+    || !isRecord(value.historicalFailure) || !hasExactKeys(value.historicalFailure,
+      ["correctionOrdinal", "correctionJobId", "errorCode"])
+    || value.historicalFailure.correctionOrdinal !== 3
+    || typeof value.historicalFailure.correctionJobId !== "string"
+    || value.historicalFailure.correctionJobId.length < 3
+    || value.historicalFailure.errorCode !== "STAGE12_ENCODED_LOUDNESS_UNRESOLVED"
+    || !Array.isArray(value.measurementsByPass) || value.measurementsByPass.length < 1
+    || value.measurementsByPass.length > RETRY.MAX_ATTEMPTS + 1
+    || value.terminalCorrectionPass !== value.measurementsByPass.length - 1
+    || !isRecord(value.finalMeasurements) || !hasExactKeys(value.finalMeasurements,
+      ["integratedLufs", "integratedLufsExact", "truePeakDbtp", "truePeakDbtpExact",
+        "loudnessRangeLu", "loudnessRangeLuExact"])
+    || !isRecord(value.runtimeProvenance) || !hasExactKeys(value.runtimeProvenance,
+      ["ffmpegVersion", "ffmpegBuildFingerprint", "libopusEncoderFingerprint"])
+    || typeof value.runtimeProvenance.ffmpegVersion !== "string"
+    || value.runtimeProvenance.ffmpegVersion.length < 8
+    || !HEX64.test(String(value.runtimeProvenance.ffmpegBuildFingerprint ?? ""))
+    || !HEX64.test(String(value.runtimeProvenance.libopusEncoderFingerprint ?? ""))) throw invalid();
+  const sourceBaseline = parseExactReplayMeasurement(
+    value.sourceBaseline, -1, "SOURCE_ORDINAL2_BASELINE", false,
+  );
+  const measurementsByPass = value.measurementsByPass.map((entry, index) =>
+    parseExactReplayMeasurement(entry, index,
+      index === 0 ? "INITIAL_ENCODED_MEASUREMENT"
+        : index === RETRY.MAX_ATTEMPTS ? "FINAL_POST_ENCODE_VERIFICATION"
+          : "POST_CORRECTION_PASS", true)) as Stage12EncodedLoudnessExactMeasurement[];
+  const finalObservation = measurementsByPass.at(-1)!;
+  const finalMeasurements = {
+    integratedLufs: Number(value.finalMeasurements.integratedLufs),
+    integratedLufsExact: String(value.finalMeasurements.integratedLufsExact),
+    truePeakDbtp: Number(value.finalMeasurements.truePeakDbtp),
+    truePeakDbtpExact: String(value.finalMeasurements.truePeakDbtpExact),
+    loudnessRangeLu: Number(value.finalMeasurements.loudnessRangeLu),
+    loudnessRangeLuExact: String(value.finalMeasurements.loudnessRangeLuExact),
+  };
+  for (const key of ["integratedLufs", "integratedLufsExact", "truePeakDbtp",
+    "truePeakDbtpExact", "loudnessRangeLu", "loudnessRangeLuExact"] as const) {
+    if (finalMeasurements[key] !== finalObservation[key]) throw invalid();
+  }
+  const failedPredicates = parseFailurePredicates(value.failedPredicates);
+  if (!predicatesMatch(failedPredicates, finalObservation.failedPredicates)
+    || value.replayOutcome !== (failedPredicates.length === 0 ? "PASS" : "FAIL")
+    || (failedPredicates.length > 0 && value.terminalCorrectionPass !== RETRY.MAX_ATTEMPTS)) {
+    throw invalid();
+  }
+  return {
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: "NEW_REPRODUCTION_NOT_HISTORICAL_BACKFILL",
+    boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+    source: {
+      correctionOrdinal: 2,
+      correctionJobId: String(value.source.correctionJobId),
+      r2Key: String(value.source.r2Key),
+      sha256: String(value.source.sha256),
+      byteLength: Number(value.source.byteLength),
+      receiptSha256: String(value.source.receiptSha256),
+    },
+    historicalFailure: {
+      correctionOrdinal: 3,
+      correctionJobId: String(value.historicalFailure.correctionJobId),
+      errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+    },
+    sourceBaseline: sourceBaseline as Stage12EncodedLoudnessDiagnosticReplayResult["sourceBaseline"],
+    measurementsByPass,
+    terminalCorrectionPass: Number(value.terminalCorrectionPass),
+    finalMeasurements,
+    failedPredicates,
+    replayOutcome: value.replayOutcome as "PASS" | "FAIL",
+    workerImageDigest: String(value.workerImageDigest),
+    expectedWorkerImageDigest: String(value.expectedWorkerImageDigest),
+    algorithmFingerprint: String(value.algorithmFingerprint),
+    thresholdSnapshotSha256: String(value.thresholdSnapshotSha256),
+    runtimeProvenance: {
+      ffmpegVersion: value.runtimeProvenance.ffmpegVersion,
+      ffmpegBuildFingerprint: String(value.runtimeProvenance.ffmpegBuildFingerprint),
+      libopusEncoderFingerprint: String(value.runtimeProvenance.libopusEncoderFingerprint),
+    },
+    correctionStrategyVersion: 3,
+    correctionPassLimit: RETRY.MAX_ATTEMPTS as 3,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: "OFF",
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    autoPublish: "OFF",
+  };
 }
 
 export function parseStage12EncodedLoudnessFailureDiagnostic(
