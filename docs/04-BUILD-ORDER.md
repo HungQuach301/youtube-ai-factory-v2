@@ -302,3 +302,16 @@ real FFmpeg smoke và root/Sites tests PASS; per-pass raw/numeric LUFS, true pea
 LRA, predicates, frame-MD5 và provenance nhất quán; không ordinal/attempt 4,
 provider, calibration, corrected output, Finalize, release hoặc publish. Build/PR
 không tự chạy Production replay.
+
+### 🟢 WP-36 · EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
+
+**Phạm vi.** Shadow-only engine giải mã immutable ordinal 2 đúng một lần thành
+canonical `pcm_f32le`, tạo mọi Opus candidate từ cùng lossless reference và dùng
+post-Opus LUFS/true-peak/LRA làm feedback deterministic. Typed command riêng và
+migration 0031 chỉ ghi append-only job/evidence với exact diagnostic-replay lineage.
+
+**DoD.** Unit/controller, migration, guardrail, real FFmpeg zero-write smoke và
+root/Sites CI PASS; mọi candidate khóa cùng lossless SHA/frame-MD5, image/runtime/
+algorithm/threshold provenance; threshold giữ nguyên. PR không tự chạy Production
+shadow replay, không tạo ordinal/attempt 4, output, provider, calibration, Finalize,
+release hoặc publish; shadow PASS không tự kích hoạt correction algorithm.

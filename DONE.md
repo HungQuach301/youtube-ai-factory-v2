@@ -1612,3 +1612,24 @@ kèm deployment này.
 Work package này chỉ triển khai code trên branch riêng và mở PR. Không merge,
 deploy hoặc chạy Production replay. Mọi Production invocation cần owner OPERATE
 approval riêng sau merge/deploy/exact-tree/health PASS.
+
+---
+
+## EVO-STAGE12-CODEC-SAFE-TRUE-PEAK-CONVERGENCE · Shadow-only lossless engine
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Mọi Opus candidate bắt đầu từ cùng canonical lossless ordinal-2 decode | Runtime engine, unit/guardrail và real FFmpeg smoke |
+| Feedback đo sau Opus, limiter ceiling không tăng | Deterministic controller unit test và strict result parser |
+| Threshold giữ nguyên | Worker/control-plane threshold fingerprint parity; `thresholds.ts` không đổi |
+| Exact ordinal 2/3 + diagnostic replay lineage | Migration 0031 triggers và migration mutation vectors |
+| Job/evidence append-only, pinned provenance | Terminal-shape/immutability triggers; exact image/FFmpeg/libopus evidence |
+| Không output, provider, activation hoặc downstream action | Zero-write smoke; schema/payload flags `false/0/OFF`; no ordinal/attempt 4 guardrail |
+
+## Production boundary
+
+Work package chỉ tạo branch/PR và chạy CI. Không merge, deploy hoặc chạy Production
+shadow replay. Shadow PASS sau này cũng không tự kích hoạt correction algorithm;
+promotion cần owner approval và work package riêng.

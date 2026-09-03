@@ -25,6 +25,8 @@ import {
   stage12AudioP0CorrectionFailureEvidence,
   stage12AudioP0CorrectionJobs,
   stage12AudioP0CorrectionRetryJobs,
+  stage12CodecSafeTruePeakShadowEvidence,
+  stage12CodecSafeTruePeakShadowJobs,
   stage12CorrectedPreMasterJobs,
   stage12EncodedLoudnessDiagnosticReplayEvidence,
   stage12EncodedLoudnessDiagnosticReplayJobs,
@@ -59,6 +61,7 @@ import {
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
+  dispatchStage12CodecSafeTruePeakShadowReplay,
   dispatchStage12EncodedLoudnessDiagnosticReplay,
   dispatchStage12MediaAudioP0Correction,
   dispatchStage12MediaDiagnostic,
@@ -71,10 +74,13 @@ import {
 import {
   buildTrackGVideoOneStage12Request,
   evaluateTrackGVideoOneStage12Receipt,
+  parseStage12CodecSafeTruePeakShadowResult,
   parseStage12EncodedLoudnessDiagnosticReplayResult,
   parseStage12EncodedLoudnessFailureDiagnostic,
+  stage12CodecSafeTruePeakFingerprints,
   stage12EncodedLoudnessDiagnosticReplayFingerprints,
   validateTrackGVideoOneStage12Receipt,
+  type Stage12CodecSafeTruePeakShadowResult,
   type Stage12EncodedLoudnessFailureDiagnostic,
   type Stage12EncodedLoudnessDiagnosticReplayResult,
   type Stage12MediaReceipt,
@@ -204,6 +210,8 @@ const STAGE_12_REMEDIATION_OWNER_APPROVAL_TEXT = "CREATE STAGE 12 CORRECTED PRE-
 const STAGE_12_AUDIO_P0_CORRECTION_OWNER_APPROVAL_TEXT = "CREATE STAGE 12 AUDIO P0 CORRECTION";
 const STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT =
   "RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY";
+const STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT =
+  "RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -294,6 +302,13 @@ export type CreateTrackGVideoOneStage12AudioP0CorrectionInput = {
 export type RunTrackGVideoOneStage12EncodedLoudnessDiagnosticReplayInput = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type RunTrackGVideoOneStage12CodecSafeTruePeakShadowInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -6539,6 +6554,416 @@ export async function runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay(
     throw error;
   }
   return { ...(await diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay()),
+    replayed: false };
+}
+
+function stage12CodecSafeTruePeakShadowIdempotencyKey(
+  sourceSha256: string,
+  sourceReceiptSha256: string,
+  historicalFailureJobId: string,
+  diagnosticReplayEvidenceId: string,
+  expectedWorkerImageDigest: string,
+  algorithmFingerprint: string,
+) {
+  return createHash("sha256").update(
+    ["RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY",
+      sourceSha256, sourceReceiptSha256, historicalFailureJobId,
+      diagnosticReplayEvidenceId, expectedWorkerImageDigest,
+      algorithmFingerprint].join("\0"),
+  ).digest("hex");
+}
+
+function stage12CodecSafeTruePeakShadowCallbackToken(idempotencyKey: string) {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+async function latestStage12CodecSafeTruePeakShadowJob() {
+  const [job] = await getDb().select().from(stage12CodecSafeTruePeakShadowJobs)
+    .orderBy(desc(stage12CodecSafeTruePeakShadowJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function readStage12CodecSafeTruePeakShadowEvidence(shadowJobId: string) {
+  const [evidence] = await getDb().select().from(stage12CodecSafeTruePeakShadowEvidence)
+    .where(eq(stage12CodecSafeTruePeakShadowEvidence.shadowJobId, shadowJobId))
+    .limit(1);
+  return evidence ?? null;
+}
+
+async function stage12CodecSafeTruePeakShadowSource() {
+  const lineage = await stage12EncodedLoudnessDiagnosticReplaySource();
+  const diagnosticReplayJob = await latestStage12EncodedLoudnessDiagnosticReplayJob();
+  const diagnosticReplayEvidence = diagnosticReplayJob
+    ? await readStage12EncodedLoudnessDiagnosticReplayEvidence(diagnosticReplayJob.id) : null;
+  const diagnosticReplayResult = diagnosticReplayEvidence
+    ? stage12EncodedLoudnessDiagnosticReplayEvidenceResult(diagnosticReplayEvidence) : null;
+  const eligible = Boolean(lineage.eligible && lineage.source && lineage.historicalFailure
+    && diagnosticReplayJob && diagnosticReplayEvidence && diagnosticReplayResult
+    && diagnosticReplayJob.state === "READY" && diagnosticReplayJob.replayOutcome === "FAIL"
+    && diagnosticReplayResult.replayOutcome === "FAIL"
+    && diagnosticReplayResult.failedPredicates.includes("TRUE_PEAK_DBTP_ABOVE_MAX")
+    && diagnosticReplayJob.sourceCorrectionJobId === lineage.source.id
+    && diagnosticReplayJob.historicalFailureJobId === lineage.historicalFailure.id
+    && diagnosticReplayEvidence.sourceCorrectionJobId === lineage.source.id
+    && diagnosticReplayEvidence.historicalFailureJobId === lineage.historicalFailure.id
+    && diagnosticReplayEvidence.sourcePreMasterR2Key
+      === lineage.source.correctedPreMasterR2Key
+    && diagnosticReplayEvidence.sourcePreMasterSha256
+      === lineage.source.correctedPreMasterSha256
+    && diagnosticReplayEvidence.sourcePreMasterByteLength
+      === lineage.source.correctedPreMasterByteLength
+    && diagnosticReplayEvidence.sourceReceiptSha256 === lineage.source.receiptSha256
+    && diagnosticReplayEvidence.workerImageDigest
+      === diagnosticReplayEvidence.expectedWorkerImageDigest
+    && diagnosticReplayEvidence.providerCallCount === 0
+    && diagnosticReplayEvidence.providerDispatch === "OFF"
+    && diagnosticReplayEvidence.correctedOutputUploaded === 0
+    && diagnosticReplayEvidence.historicalBackfill === 0
+    && diagnosticReplayEvidence.calibrationExecuted === 0
+    && diagnosticReplayEvidence.finalizeExecuted === 0
+    && diagnosticReplayEvidence.releaseEligible === 0
+    && diagnosticReplayEvidence.autoPublish === "OFF");
+  return { ...lineage, diagnosticReplayJob, diagnosticReplayEvidence,
+    diagnosticReplayResult, eligible };
+}
+
+function stage12CodecSafeTruePeakShadowEvidenceResult(
+  evidence: NonNullable<Awaited<ReturnType<
+    typeof readStage12CodecSafeTruePeakShadowEvidence
+  >>>,
+) {
+  return parseStage12CodecSafeTruePeakShadowResult({
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: "POST_OPUS_TRUE_PEAK_FEEDBACK",
+    source: { correctionOrdinal: 2, correctionJobId: evidence.sourceCorrectionJobId,
+      r2Key: evidence.sourcePreMasterR2Key, sha256: evidence.sourcePreMasterSha256,
+      byteLength: evidence.sourcePreMasterByteLength,
+      receiptSha256: evidence.sourceReceiptSha256 },
+    historicalFailure: { correctionOrdinal: 3,
+      correctionJobId: evidence.historicalFailureJobId,
+      errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+    diagnosticReplay: { jobId: evidence.diagnosticReplayJobId,
+      evidenceId: evidence.diagnosticReplayEvidenceId },
+    losslessReference: { sha256: evidence.losslessReferenceSha256,
+      byteLength: evidence.losslessReferenceByteLength,
+      audioFrameMd5Sha256: evidence.losslessReferenceFrameMd5Sha256,
+      codec: evidence.losslessReferenceCodec,
+      sampleRateHz: evidence.losslessReferenceSampleRateHz },
+    candidates: JSON.parse(evidence.candidatesJson) as unknown,
+    terminalCandidatePass: evidence.terminalCandidatePass,
+    finalMeasurements: { integratedLufs: evidence.finalIntegratedLufs,
+      integratedLufsExact: evidence.finalIntegratedLufsExact,
+      truePeakDbtp: evidence.finalTruePeakDbtp,
+      truePeakDbtpExact: evidence.finalTruePeakDbtpExact,
+      loudnessRangeLu: evidence.finalLoudnessRangeLu,
+      loudnessRangeLuExact: evidence.finalLoudnessRangeLuExact },
+    failedPredicates: JSON.parse(evidence.failedPredicatesJson) as unknown,
+    shadowOutcome: evidence.shadowOutcome,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    workerImageDigest: evidence.workerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    runtimeProvenance: { ffmpegVersion: evidence.ffmpegVersion,
+      ffmpegBuildFingerprint: evidence.ffmpegBuildFingerprint,
+      libopusEncoderFingerprint: evidence.libopusEncoderFingerprint },
+    correctionPassLimit: 3,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: "OFF",
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    productionActivation: false,
+    autoPublish: "OFF",
+  });
+}
+
+export async function diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow() {
+  const source = await stage12CodecSafeTruePeakShadowSource();
+  const job = await latestStage12CodecSafeTruePeakShadowJob();
+  const evidence = job ? await readStage12CodecSafeTruePeakShadowEvidence(job.id) : null;
+  const result = evidence ? stage12CodecSafeTruePeakShadowEvidenceResult(evidence) : null;
+  if (job?.state === "READY" && (!result
+    || result.workerImageDigest !== job.workerImageDigest
+    || result.shadowOutcome !== job.shadowOutcome
+    || result.terminalCandidatePass !== job.terminalCandidatePass)) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_READ_BACK_FAILED");
+  }
+  return {
+    shadowState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
+    errorCode: job?.errorCode ?? (source.eligible ? null
+      : "STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_SOURCE_NOT_ELIGIBLE"),
+    currentStep: source.bootstrap.run.currentStep,
+    sourceAttemptOrdinal: 3 as const,
+    sourceCorrectionOrdinal: 2 as const,
+    historicalFailureCorrectionOrdinal: 3 as const,
+    sourceCorrectionJobId: job?.sourceCorrectionJobId ?? source.source?.id ?? null,
+    historicalFailureJobId: job?.historicalFailureJobId
+      ?? source.historicalFailure?.id ?? null,
+    diagnosticReplayJobId: job?.diagnosticReplayJobId
+      ?? source.diagnosticReplayJob?.id ?? null,
+    diagnosticReplayEvidenceId: job?.diagnosticReplayEvidenceId
+      ?? source.diagnosticReplayEvidence?.id ?? null,
+    sourcePreMasterR2Key: job?.sourcePreMasterR2Key
+      ?? source.source?.correctedPreMasterR2Key ?? null,
+    sourcePreMasterSha256: job?.sourcePreMasterSha256
+      ?? source.source?.correctedPreMasterSha256 ?? null,
+    sourcePreMasterByteLength: job?.sourcePreMasterByteLength
+      ?? source.source?.correctedPreMasterByteLength ?? null,
+    sourceReceiptSha256: job?.sourceReceiptSha256 ?? source.source?.receiptSha256 ?? null,
+    expectedWorkerImageDigest: job?.expectedWorkerImageDigest ?? null,
+    workerImageDigest: job?.workerImageDigest ?? null,
+    shadowOutcome: job?.shadowOutcome ?? null,
+    terminalCandidatePass: job?.terminalCandidatePass ?? null,
+    result,
+    evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION" as const,
+    shadowExecuted: job !== null,
+    correctedOutputUploaded: false as const,
+    historicalBackfill: false as const,
+    providerCallCount: 0 as const,
+    providerDispatch: "OFF" as const,
+    calibration: false as const,
+    finalize: false as const,
+    releaseEligible: false as const,
+    productionActivation: false as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
+function requireStage12CodecSafeTruePeakShadowToken(
+  job: Awaited<ReturnType<typeof latestStage12CodecSafeTruePeakShadowJob>>,
+  idempotencyKey: string,
+  token: string,
+): asserts job is NonNullable<typeof job> {
+  if (!job || job.idempotencyKey !== idempotencyKey || !HEX64.test(token)
+    || job.callbackTokenHash !== sha256(new TextEncoder().encode(token))) {
+    throw new Error("STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_UNAUTHORIZED");
+  }
+}
+
+export async function readTrackGVideoOneStage12CodecSafeTruePeakShadowSource(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+) {
+  const job = await latestStage12CodecSafeTruePeakShadowJob();
+  requireStage12CodecSafeTruePeakShadowToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || expectedSha256 !== job.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_SOURCE_CONFLICT");
+  }
+  return readVerifiedProductionEvidence(job.sourcePreMasterR2Key, job.sourcePreMasterSha256);
+}
+
+export async function recordTrackGVideoOneStage12CodecSafeTruePeakShadowCallback(input: {
+  idempotencyKey: string;
+  token: string;
+  result?: Stage12CodecSafeTruePeakShadowResult;
+  errorCode?: string;
+}) {
+  const job = await latestStage12CodecSafeTruePeakShadowJob();
+  requireStage12CodecSafeTruePeakShadowToken(job, input.idempotencyKey, input.token);
+  if (job.state === "READY") {
+    return { accepted: true, replayed: true, jobStatus: "READY" as const };
+  }
+  if (job.state !== "PENDING") {
+    throw new Error("STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_CALLBACK_STATE_CONFLICT");
+  }
+  if (!input.result) {
+    const code = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_FAILED";
+    await getD1().prepare(`UPDATE stage12_codec_safe_true_peak_shadow_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`)
+      .bind(code, new Date().toISOString(), job.id).run();
+    return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+  }
+  const result = parseStage12CodecSafeTruePeakShadowResult(input.result);
+  if (result.source.correctionJobId !== job.sourceCorrectionJobId
+    || result.historicalFailure.correctionJobId !== job.historicalFailureJobId
+    || result.diagnosticReplay.jobId !== job.diagnosticReplayJobId
+    || result.diagnosticReplay.evidenceId !== job.diagnosticReplayEvidenceId
+    || result.source.r2Key !== job.sourcePreMasterR2Key
+    || result.source.sha256 !== job.sourcePreMasterSha256
+    || result.source.byteLength !== job.sourcePreMasterByteLength
+    || result.source.receiptSha256 !== job.sourceReceiptSha256
+    || result.expectedWorkerImageDigest !== job.expectedWorkerImageDigest
+    || result.workerImageDigest !== job.expectedWorkerImageDigest
+    || result.algorithmFingerprint !== job.algorithmFingerprint
+    || result.thresholdSnapshotSha256 !== job.thresholdSnapshotSha256) {
+    throw new Error("STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_RESULT_LINEAGE_INVALID");
+  }
+  const evidenceId = sha256(new TextEncoder().encode(canonicalize({
+    shadowJobId: job.id, result,
+  })));
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO stage12_codec_safe_true_peak_shadow_evidence
+      (id,shadow_job_id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,evidence_semantics,
+       lossless_reference_sha256,lossless_reference_byte_length,
+       lossless_reference_frame_md5_sha256,lossless_reference_codec,
+       lossless_reference_sample_rate_hz,candidates_json,terminal_candidate_pass,
+       final_integrated_lufs,final_integrated_lufs_exact,final_true_peak_dbtp,
+       final_true_peak_dbtp_exact,final_loudness_range_lu,final_loudness_range_lu_exact,
+       failed_predicates_json,shadow_outcome,expected_worker_image_digest,
+       worker_image_digest,algorithm_fingerprint,threshold_snapshot_sha256,ffmpeg_version,
+       ffmpeg_build_fingerprint,libopus_encoder_fingerprint,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256)
+      SELECT ?,id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,evidence_semantics,
+       ?,?,?,'pcm_f32le',48000,?,?,?,?,?,?,?,?,?, ?,expected_worker_image_digest,?,
+       algorithm_fingerprint,threshold_snapshot_sha256,?,?,?,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256
+      FROM stage12_codec_safe_true_peak_shadow_job WHERE id=? AND state='PENDING'`)
+      .bind(evidenceId, result.losslessReference.sha256,
+        result.losslessReference.byteLength, result.losslessReference.audioFrameMd5Sha256,
+        canonicalize(result.candidates), result.terminalCandidatePass,
+        result.finalMeasurements.integratedLufs, result.finalMeasurements.integratedLufsExact,
+        result.finalMeasurements.truePeakDbtp, result.finalMeasurements.truePeakDbtpExact,
+        result.finalMeasurements.loudnessRangeLu,
+        result.finalMeasurements.loudnessRangeLuExact,
+        canonicalize(result.failedPredicates), result.shadowOutcome,
+        result.workerImageDigest, result.runtimeProvenance.ffmpegVersion,
+        result.runtimeProvenance.ffmpegBuildFingerprint,
+        result.runtimeProvenance.libopusEncoderFingerprint, job.id),
+    getD1().prepare(`UPDATE stage12_codec_safe_true_peak_shadow_job SET state='READY',
+      shadow_outcome=?,terminal_candidate_pass=?,worker_image_digest=?,updated_at=?
+      WHERE id=? AND state='PENDING'`).bind(result.shadowOutcome,
+      result.terminalCandidatePass, result.workerImageDigest, now, job.id),
+  ]);
+  return { accepted: true, replayed: false, jobStatus: "READY" as const };
+}
+
+export async function runTrackGVideoOneStage12CodecSafeTruePeakShadow(
+  user: ChatGPTUser,
+  input: RunTrackGVideoOneStage12CodecSafeTruePeakShadowInput,
+) {
+  if (input.ownerApprovalText !== STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.objective.trim().length < 12 || input.objective.trim().length > 500
+    || !input.callbackUrl.startsWith("https://")
+    || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_INPUT_INVALID");
+  }
+  const existing = await latestStage12CodecSafeTruePeakShadowJob();
+  if (existing) {
+    return { ...(await diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow()),
+      replayed: true };
+  }
+  const source = await stage12CodecSafeTruePeakShadowSource();
+  if (!source.eligible || !source.source || !source.historicalFailure
+    || !source.diagnosticReplayJob || !source.diagnosticReplayEvidence
+    || !source.source.correctedPreMasterR2Key || !source.source.correctedPreMasterSha256
+    || !source.source.correctedPreMasterByteLength || !source.source.receiptSha256) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_SOURCE_NOT_ELIGIBLE");
+  }
+  const health = await readStage12MediaWorkerHealth();
+  const prepared = await prepareStage12MediaRequest(3);
+  const fingerprints = stage12CodecSafeTruePeakFingerprints(
+    prepared.payload, RETRY.MAX_ATTEMPTS,
+  );
+  if (fingerprints.thresholdSnapshotSha256
+    !== source.diagnosticReplayEvidence.thresholdSnapshotSha256) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_THRESHOLD_DRIFT");
+  }
+  const key = stage12CodecSafeTruePeakShadowIdempotencyKey(
+    source.source.correctedPreMasterSha256, source.source.receiptSha256,
+    source.historicalFailure.id, source.diagnosticReplayEvidence.id,
+    health.imageDigest, fingerprints.algorithmFingerprint,
+  );
+  const token = stage12CodecSafeTruePeakShadowCallbackToken(key);
+  const id = `stage12_codec_safe_true_peak_shadow_${source.diagnosticReplayEvidence.id}`;
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO command_log
+      (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+       trace_id,created_at)
+      VALUES (?,'RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY',?,?,?,
+       'TRACK_G_VIDEO_1_STAGE_12_LOUDNESS_REPLAY_FAIL',
+       'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_SHADOW_PENDING',?,?)`).bind(
+      crypto.randomUUID(), canonicalize({ objective: input.objective.trim(),
+        evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+        sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        sourceCorrectionJobId: source.source.id,
+        historicalFailureJobId: source.historicalFailure.id,
+        diagnosticReplayJobId: source.diagnosticReplayJob.id,
+        diagnosticReplayEvidenceId: source.diagnosticReplayEvidence.id,
+        sourcePreMasterSha256: source.source.correctedPreMasterSha256,
+        expectedWorkerImageDigest: health.imageDigest, ...fingerprints,
+        correctedOutputUploaded: false, historicalBackfill: false,
+        providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+        finalize: false, releaseEligible: false, productionActivation: false,
+        autoPublish: "OFF" }), key, user.email.toLowerCase(), crypto.randomUUID(), now,
+    ),
+    getD1().prepare(`INSERT INTO stage12_codec_safe_true_peak_shadow_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,idempotency_key,
+       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
+       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+       source_receipt_sha256,correction_pass_limit,expected_worker_image_digest,
+       algorithm_fingerprint,threshold_snapshot_sha256,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,'CODEC_SAFE_SHADOW_NOT_CORRECTION',?,?,?,?,3,?,?,?,?,?)`)
+      .bind(id, source.source.stage12JobId, source.source.id,
+        source.historicalFailure.id, source.diagnosticReplayJob.id,
+        source.diagnosticReplayEvidence.id, key,
+        sha256(new TextEncoder().encode(token)), user.email.toLowerCase(),
+        input.ownerApprovalText, "PENDING", source.source.correctedPreMasterR2Key,
+        source.source.correctedPreMasterSha256, source.source.correctedPreMasterByteLength,
+        source.source.receiptSha256, health.imageDigest,
+        fingerprints.algorithmFingerprint, fingerprints.thresholdSnapshotSha256, now, now),
+  ]);
+  try {
+    await dispatchStage12CodecSafeTruePeakShadowReplay({
+      ...prepared.payload,
+      idempotencyKey: key,
+      objectAccess: { url: input.objectAccessUrl, token },
+      callback: { url: input.callbackUrl, token },
+      codecSafeShadowReplay: {
+        schemaVersion: 1,
+        evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+        sourceAttemptOrdinal: 3,
+        sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        correctionPassLimit: RETRY.MAX_ATTEMPTS as 3,
+        sourceCorrectionJobId: source.source.id,
+        historicalFailureJobId: source.historicalFailure.id,
+        diagnosticReplayJobId: source.diagnosticReplayJob.id,
+        diagnosticReplayEvidenceId: source.diagnosticReplayEvidence.id,
+        sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
+          sha256: source.source.correctedPreMasterSha256,
+          byteLength: source.source.correctedPreMasterByteLength },
+        sourceCorrectionReceiptSha256: source.source.receiptSha256,
+        expectedWorkerImageDigest: health.imageDigest,
+        ...fingerprints,
+        historicalBackfill: false,
+        uploadCorrectedOutput: false,
+        providerDispatch: "OFF",
+        providerCallCount: 0,
+        calibration: false,
+        finalize: false,
+        release: false,
+        productionActivation: false,
+        autoPublish: "OFF",
+      },
+    });
+  } catch (error) {
+    await getD1().prepare(`UPDATE stage12_codec_safe_true_peak_shadow_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      error instanceof Error ? error.message.slice(0, 160)
+        : "STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_START_FAILED",
+      new Date().toISOString(), id,
+    ).run();
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow()),
     replayed: false };
 }
 

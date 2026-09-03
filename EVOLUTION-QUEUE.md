@@ -1,5 +1,21 @@
 # EVOLUTION QUEUE
 
+## EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
+
+- Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy
+  và chưa chạy Production shadow replay.
+- Kind: `PIPELINE_CODE`; strictness direction: `SHADOW_ONLY_CODEC_SAFETY`.
+- Source: append-only diagnostic replay chứng minh strategy v3 giữ LUFS/LRA nhưng
+  true peak hậu Opus tăng vì candidate sau tái encode candidate Opus trước.
+- Diff: canonical lossless ordinal-2 decode, deterministic post-Opus feedback,
+  typed shadow command/route, migration 0031 append-only job/evidence, pinned
+  source/replay/image/runtime/algorithm/threshold provenance.
+- Boundary: thresholds không đổi; ordinal 2/3 và replay history immutable; không
+  ordinal/attempt 4, output upload, provider, calibration, Finalize, release,
+  Production activation hoặc publish.
+- Activation: PR/CI không cấp quyền Production shadow. Invocation và mọi promotion
+  sau shadow evidence đều cần owner approval tách biệt.
+
 ## EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
 
 - Status: `IMPLEMENTED_CI_PENDING`; local root/Sites evidence PASS, remote required

@@ -250,3 +250,14 @@ Replay không tạo corrected artifact, correction ordinal hoặc Stage 12 attem
 và CI không cấp quyền chạy Production replay; invocation cần một phê duyệt OPERATE
 tách biệt sau merge, deploy, exact-tree và health PASS. Không provider, calibration,
 Finalize, release hoặc publish.
+
+### Evolution record: EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
+
+Thay đổi `NEUTRAL` về QA threshold và `SHADOW_ONLY` về activation. Engine mới
+decode immutable ordinal 2 đúng một lần thành canonical lossless audio và tạo mọi
+Opus candidate từ cùng reference; post-Opus measurements điều khiển target LUFS,
+limiter ceiling monotonic và bounded LRA shaping. Migration 0031 chỉ thêm job/
+evidence append-only, khóa exact ordinal 2/3 + diagnostic replay lineage và pinned
+runtime provenance. Shadow PASS không được tự promote thành correction path; cần
+proposal/promotion riêng sau Production shadow evidence. Không output upload,
+ordinal/attempt 4, provider, calibration, Finalize, release hoặc publish.

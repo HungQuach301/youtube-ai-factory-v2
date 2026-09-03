@@ -224,3 +224,34 @@ read-back và xin phê duyệt EVOLVE/OPERATE riêng cho bất kỳ bước kế
 - `correctedOutputUploaded=false`, `historicalBackfill=false`, provider count `0`,
   calibration/finalize/release false và auto-publish OFF.
 - Ordinal 2/3 unchanged; không có correction ordinal 4 hoặc Stage 12 attempt 4.
+
+---
+
+## 9. Runbook Stage 12 codec-safe true-peak shadow replay
+
+Shadow replay chỉ tạo reproduction evidence; không phải correction và không được
+kích hoạt Production algorithm.
+
+### Preflight bắt buộc
+
+1. Exact typed owner approval riêng; protected main/Sites/Fly identity và health PASS.
+2. Stage vẫn `STAGE_12_READY`; immutable ordinal 2 và ordinal 3 failure unchanged.
+3. Diagnostic replay job/evidence là `READY/FAIL`, chứa
+   `TRUE_PEAK_DBTP_ABOVE_MAX` và cùng threshold snapshot.
+4. Fly health trả `codecSafeTruePeakShadowReady=true`; job pin exact image digest.
+5. Chưa có shadow job cho replay evidence; provider/publish/activation vẫn OFF.
+
+### Thực thi và điểm dừng
+
+Gửi `RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY` đúng một lần. Khi `PENDING`,
+chỉ poll read-back, không resend. `READY/PASS` nghĩa engine hội tụ trong shadow;
+không upload, không Finalize và không activate. `READY/FAIL` hoặc `FAILED` đều dừng,
+đọc exact evidence/error và lập EVOLVE proposal riêng nếu cần.
+
+### Xác minh
+
+- Tất cả candidate có cùng canonical lossless SHA; pass index/parameters đúng recurrence.
+- Final raw/numeric LUFS, true peak, LRA và predicates khớp threshold giữ nguyên.
+- Image, algorithm, threshold, FFmpeg và libopus provenance đầy đủ.
+- Ordinal 2/3 và diagnostic replay unchanged; output/provider/calibration/finalize/
+  release/production activation/publish đều `false`, `0` hoặc `OFF`.
