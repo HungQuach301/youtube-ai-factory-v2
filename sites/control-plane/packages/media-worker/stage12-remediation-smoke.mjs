@@ -59,10 +59,10 @@ try {
     '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-c:a', 'libopus', audioSource], root)
   await run(['-hide_banner', '-nostdin', '-y', '-i', audioSource,
     '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy',
-    '-af', buildStage12AudioP0CorrectionFilter(audioPayload),
+    '-af', buildStage12AudioP0CorrectionFilter(audioPayload, 3),
     '-c:a', 'libopus', '-ar', '48000', audioCorrected], root)
   await correctStage12EncodedLoudness(audioPayload, audioCorrected, root, {
-    truePeakTargetDbtp: -1.5, passLimit: 3,
+    truePeakTargetDbtp: -2, passLimit: 3, useMacroDynamics: true, requirePass: true,
   })
   const audioMeasured = loudness(await run(['-hide_banner', '-nostdin', '-i', audioCorrected,
     '-af', 'loudnorm=I=-14:TP=-1:LRA=6:print_format=json', '-f', 'null', '-'], root))

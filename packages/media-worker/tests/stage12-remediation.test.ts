@@ -74,12 +74,34 @@ describe("Stage 12 corrected pre-master runtime", () => {
     }
   });
 
-  it("adds deterministic macro dynamics and encoded true-peak headroom without changing QA thresholds", () => {
-    const filter = buildStage12AudioP0CorrectionFilter(payload);
-    expect(filter).toContain("volume=");
-    expect(filter).toContain("compand=");
-    expect(filter).toContain("loudnorm=I=-14:TP=-1.5:LRA=6:linear=false");
+  it("uses ordinal-3 square-wave macro dynamics, full encoded headroom and a limiter", () => {
+    const filter = buildStage12AudioP0CorrectionFilter(payload, 3);
+    expect(filter).toContain("volume='if(lt(mod(t\\,28)\\,14)");
+    expect(filter).toContain("loudnorm=I=-14:TP=-2:LRA=6:linear=false");
+    expect(filter).toContain("alimiter=limit=0.794328");
     expect(payload.qa.loudness).toEqual({ integratedLufs: -14, toleranceLufs: 1,
       truePeakMaxDbtp: -1, lraMin: 4, lraMax: 8 });
+  });
+
+  it("accepts only matched strategy/ordinal pairs for correction lineage", () => {
+    const base = { ...payload, remediation: {
+      sourceAttemptOrdinal: 3, diagnosticOrdinal: 2, strategyVersion: 3,
+      correctionOrdinal: 3, predecessorCorrectionJobId: "correction-2",
+      sourceCorrectedPreMaster: {
+        r2Key: "prod/audio-p0/source.webm", sha256: hex("1"), byteLength: 7_100_000,
+      },
+      sourceCorrectionReceiptSha256: hex("2"), correctionPassLimit: 3,
+      providerDispatch: "OFF", providerCallCount: 0, autoPublish: "OFF",
+    } };
+    expect(validateStage12AudioP0CorrectionPayload(base).idempotencyKey).toBe(hex("a"));
+    for (const remediation of [
+      { ...base.remediation, correctionOrdinal: 2 },
+      { ...base.remediation, strategyVersion: 2 },
+    ]) {
+      expect(() => validateStage12AudioP0CorrectionPayload({ ...base, remediation }))
+        .toThrowError(expect.objectContaining({
+          code: "INVALID_STAGE12_AUDIO_P0_CORRECTION_ENVELOPE",
+        }));
+    }
   });
 });

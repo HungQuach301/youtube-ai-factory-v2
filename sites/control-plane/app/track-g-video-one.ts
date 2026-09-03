@@ -23,6 +23,7 @@ import {
   stage11AudioPlans,
   stage12MediaJobs,
   stage12AudioP0CorrectionJobs,
+  stage12AudioP0CorrectionRetryJobs,
   stage12CorrectedPreMasterJobs,
   stage12PreMasterQa,
   stage12QaDiagnosticJobs,
@@ -5756,10 +5757,10 @@ export async function createTrackGVideoOneStage12CorrectedPreMaster(
 }
 
 function stage12AudioP0CorrectionIdempotencyKey(
-  sourceSha256: string, sourceReceiptSha256: string,
+  sourceSha256: string, sourceReceiptSha256: string, strategyVersion: 2 | 3,
 ) {
   return createHash("sha256").update(
-    `CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION\0${sourceSha256}\0${sourceReceiptSha256}\0strategy-v2`,
+    `CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION\0${sourceSha256}\0${sourceReceiptSha256}\0strategy-v${strategyVersion}`,
   ).digest("hex");
 }
 
@@ -5771,23 +5772,48 @@ function stage12AudioP0CorrectionCallbackToken(idempotencyKey: string) {
   ).digest("hex");
 }
 
-async function latestStage12AudioP0CorrectionJob() {
+async function latestStage12AudioP0InitialCorrectionJob() {
   const [job] = await getDb().select().from(stage12AudioP0CorrectionJobs)
     .orderBy(desc(stage12AudioP0CorrectionJobs.createdAt)).limit(1);
   return job ?? null;
 }
 
+async function latestStage12AudioP0RetryCorrectionJob() {
+  const [job] = await getDb().select().from(stage12AudioP0CorrectionRetryJobs)
+    .orderBy(desc(stage12AudioP0CorrectionRetryJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function latestStage12AudioP0CorrectionJob() {
+  const retry = await latestStage12AudioP0RetryCorrectionJob();
+  if (retry) return { ...retry, lineageTable: "RETRY" as const,
+    predecessorCorrectedPreMasterJobId: retry.predecessorCorrectionJobId };
+  const initial = await latestStage12AudioP0InitialCorrectionJob();
+  return initial ? { ...initial, lineageTable: "INITIAL" as const,
+    correctionStrategyVersion: 2 as const,
+    predecessorCorrectionJobId: initial.predecessorCorrectedPreMasterJobId } : null;
+}
+
 async function stage12AudioP0CorrectionSource() {
-  const predecessor = await latestStage12CorrectedPreMasterJob();
+  const retry = await latestStage12AudioP0RetryCorrectionJob();
+  if (retry) return { predecessor: retry, pointer: undefined, eligible: false,
+    correctionOrdinal: 3 as const, strategyVersion: 3 as const, lineageTable: "RETRY" as const };
+  const initial = await latestStage12AudioP0InitialCorrectionJob();
+  const predecessor = initial ?? await latestStage12CorrectedPreMasterJob();
   if (!predecessor?.correctedPreMasterR2Key || !predecessor.correctedPreMasterSha256
     || !predecessor.correctedPreMasterByteLength || !predecessor.receiptSha256
     || !predecessor.failuresJson || !predecessor.measurementsJson) {
-    return { predecessor, pointer: undefined, eligible: false };
+    return { predecessor, pointer: undefined, eligible: false,
+      correctionOrdinal: initial ? 3 as const : 2 as const,
+      strategyVersion: initial ? 3 as const : 2 as const,
+      lineageTable: initial ? "RETRY" as const : "INITIAL" as const };
   }
   const failures = JSON.parse(predecessor.failuresJson) as string[];
   const measurements = JSON.parse(predecessor.measurementsJson) as Stage12MediaReceipt["measurements"];
+  const correctionOrdinal = initial ? 3 as const : 2 as const;
+  const strategyVersion = initial ? 3 as const : 2 as const;
   const prefix = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
-    STAGE_12_CODE, "corrected-pre-master", ""].join("/");
+    STAGE_12_CODE, initial ? "audio-p0-corrected-pre-master" : "corrected-pre-master", ""].join("/");
   const pointer = (await listImmutableProductionEvidence(prefix, 8)).find((object) =>
     object.key === predecessor.correctedPreMasterR2Key
       && object.sha256 === predecessor.correctedPreMasterSha256
@@ -5801,7 +5827,8 @@ async function stage12AudioP0CorrectionSource() {
     && measurements.truePeakDbtp > AUDIO.TRUE_PEAK_MAX_DBTP
     && measurements.loudnessRangeLu < AUDIO.LRA.min
     && measurements.p0DefectCount > ASSURANCE.P0_MAX);
-  return { predecessor, pointer, eligible };
+  return { predecessor, pointer, eligible, correctionOrdinal, strategyVersion,
+    lineageTable: initial ? "RETRY" as const : "INITIAL" as const };
 }
 
 export async function diagnoseTrackGVideoOneStage12AudioP0Correction() {
@@ -5811,11 +5838,24 @@ export async function diagnoseTrackGVideoOneStage12AudioP0Correction() {
     correctionState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
     errorCode: job?.errorCode ?? (source.eligible ? null : "STAGE12_AUDIO_P0_CORRECTION_SOURCE_NOT_ELIGIBLE"),
     sourceAttemptOrdinal: 3 as const, diagnosticOrdinal: 2 as const,
-    correctionOrdinal: 2 as const,
-    predecessorCorrectionJobId: source.predecessor?.id ?? null,
-    sourcePreMasterSha256: source.predecessor?.correctedPreMasterSha256 ?? null,
-    sourceReceiptSha256: source.predecessor?.receiptSha256 ?? null,
+    correctionOrdinal: job?.correctionOrdinal ?? source.correctionOrdinal,
+    correctionStrategyVersion: job?.correctionStrategyVersion ?? source.strategyVersion,
+    predecessorCorrectionJobId: job?.predecessorCorrectionJobId ?? source.predecessor?.id ?? null,
+    sourcePreMasterR2Key: job?.sourcePreMasterR2Key
+      ?? source.predecessor?.correctedPreMasterR2Key ?? null,
+    sourcePreMasterSha256: job?.sourcePreMasterSha256
+      ?? source.predecessor?.correctedPreMasterSha256 ?? null,
+    sourcePreMasterByteLength: job?.sourcePreMasterByteLength
+      ?? source.predecessor?.correctedPreMasterByteLength ?? null,
+    sourceReceiptSha256: job?.sourceReceiptSha256 ?? source.predecessor?.receiptSha256 ?? null,
+    correctedPreMasterR2Key: job?.correctedPreMasterR2Key ?? null,
     correctedPreMasterSha256: job?.correctedPreMasterSha256 ?? null,
+    correctedPreMasterByteLength: job?.correctedPreMasterByteLength ?? null,
+    correctedFrameMd5Sha256: job?.correctedFrameMd5Sha256 ?? null,
+    receiptR2Key: job?.receiptR2Key ?? null,
+    receiptSha256: job?.receiptSha256 ?? null,
+    reportSha256: job?.reportSha256 ?? null,
+    workerImageDigest: job?.workerImageDigest ?? null,
     outcome: job?.outcome ?? null,
     failures: job?.failuresJson ? JSON.parse(job.failuresJson) as string[] : [],
     measurements: job?.measurementsJson
@@ -5872,7 +5912,9 @@ export async function recordTrackGVideoOneStage12AudioP0CorrectionCallback(input
   if (!input.result) {
     const code = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
       ? input.errorCode : "STAGE12_AUDIO_P0_CORRECTION_FAILED";
-    await getD1().prepare(`UPDATE stage12_audio_p0_correction_job SET state='FAILED',
+    const table = job.lineageTable === "RETRY"
+      ? "stage12_audio_p0_correction_retry_job" : "stage12_audio_p0_correction_job";
+    await getD1().prepare(`UPDATE ${table} SET state='FAILED',
       error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
       code, new Date().toISOString(), job.id,
     ).run();
@@ -5893,15 +5935,18 @@ export async function recordTrackGVideoOneStage12AudioP0CorrectionCallback(input
     throw new Error("TRACK_G_STAGE_12_AUDIO_P0_CORRECTION_READ_BACK_FAILED");
   }
   const receiptBytes = new TextEncoder().encode(`${canonicalize({ schemaVersion: 1,
-    remediation: true, strategyVersion: 2, correctionOrdinal: 2,
-    predecessorCorrectedPreMasterJobId: job.predecessorCorrectedPreMasterJobId,
+    remediation: true, strategyVersion: job.correctionStrategyVersion,
+    correctionOrdinal: job.correctionOrdinal,
+    predecessorCorrectionJobId: job.predecessorCorrectionJobId,
     sourcePreMasterSha256: job.sourcePreMasterSha256,
     idempotencyKey: input.idempotencyKey, result: input.result })}\n`);
   const receiptSha256 = sha256(receiptBytes);
   const receiptR2Key = ["prod", approvedChannel.id, trackGVideoOneContract.episodeId,
     STAGE_12_CODE, "audio-p0-correction-receipts", `${receiptSha256}.json`].join("/");
   await putImmutableProductionEvidence(receiptR2Key, receiptBytes, "application/json", receiptSha256);
-  const result = await getD1().prepare(`UPDATE stage12_audio_p0_correction_job SET state='READY',
+  const table = job.lineageTable === "RETRY"
+    ? "stage12_audio_p0_correction_retry_job" : "stage12_audio_p0_correction_job";
+  const result = await getD1().prepare(`UPDATE ${table} SET state='READY',
     corrected_pre_master_r2_key=?, corrected_pre_master_sha256=?, corrected_pre_master_byte_length=?,
     corrected_frame_md5_sha256=?, receipt_r2_key=?, receipt_sha256=?, worker_image_digest=?,
     report_sha256=?, outcome=?, failures_json=?, measurements_json=?, updated_at=?
@@ -5926,50 +5971,74 @@ export async function createTrackGVideoOneStage12AudioP0Correction(
     || !input.callbackUrl.startsWith("https://") || !input.objectAccessUrl.startsWith("https://")) {
     throw new Error("TRACK_G_STAGE_12_AUDIO_P0_CORRECTION_INPUT_INVALID");
   }
+  const existingRetry = await latestStage12AudioP0RetryCorrectionJob();
+  if (existingRetry) return { ...(await diagnoseTrackGVideoOneStage12AudioP0Correction()), replayed: true };
   const source = await stage12AudioP0CorrectionSource();
   const predecessor = source.predecessor;
   const pointer = source.pointer;
   if (!source.eligible || !predecessor || !pointer || !predecessor.receiptSha256
     || !predecessor.correctedPreMasterR2Key || !predecessor.correctedPreMasterSha256
     || !predecessor.correctedPreMasterByteLength) {
+    const existingInitial = await latestStage12AudioP0InitialCorrectionJob();
+    if (existingInitial) {
+      return { ...(await diagnoseTrackGVideoOneStage12AudioP0Correction()), replayed: true };
+    }
     throw new Error("TRACK_G_STAGE_12_AUDIO_P0_CORRECTION_SOURCE_NOT_ELIGIBLE");
   }
-  const existing = await latestStage12AudioP0CorrectionJob();
-  if (existing) return { ...(await diagnoseTrackGVideoOneStage12AudioP0Correction()), replayed: true };
+  const correctionOrdinal = source.correctionOrdinal;
+  const strategyVersion = source.strategyVersion;
   const key = stage12AudioP0CorrectionIdempotencyKey(
-    predecessor.correctedPreMasterSha256, predecessor.receiptSha256,
+    predecessor.correctedPreMasterSha256, predecessor.receiptSha256, strategyVersion,
   );
   const token = stage12AudioP0CorrectionCallbackToken(key);
-  const id = `stage12_audio_p0_correction_${predecessor.id}`;
+  const id = correctionOrdinal === 3
+    ? `stage12_audio_p0_correction_retry_${predecessor.id}`
+    : `stage12_audio_p0_correction_${predecessor.id}`;
   const now = new Date().toISOString();
   await getD1().batch([
     getD1().prepare(`INSERT INTO command_log
       (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,trace_id,created_at)
       VALUES (?,'CREATE_TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_CORRECTION',?,?,?,
-      'TRACK_G_VIDEO_1_STAGE_12_CORRECTED_FAIL','TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING',?,?)`).bind(
+      ?,'TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING',?,?)`).bind(
       crypto.randomUUID(), canonicalize({ objective: input.objective.trim(), sourceAttemptOrdinal: 3,
-        diagnosticOrdinal: 2, correctionOrdinal: 2, predecessorCorrectionJobId: predecessor.id,
+        diagnosticOrdinal: 2, correctionOrdinal, strategyVersion,
+        predecessorCorrectionJobId: predecessor.id,
         sourcePreMasterSha256: predecessor.correctedPreMasterSha256,
         providerDispatch: "OFF", providerCallCount: 0, autoPublish: "OFF" }),
-      key, user.email.toLowerCase(), crypto.randomUUID(), now,
+      key, user.email.toLowerCase(), correctionOrdinal === 3
+        ? "TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_FAIL"
+        : "TRACK_G_VIDEO_1_STAGE_12_CORRECTED_FAIL", crypto.randomUUID(), now,
     ),
-    getD1().prepare(`INSERT INTO stage12_audio_p0_correction_job
-      (id,predecessor_corrected_pre_master_job_id,stage12_job_id,correction_ordinal,
-       idempotency_key,callback_token_hash,actor_identity,owner_approval_text,state,
-       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
-       source_receipt_sha256,created_at,updated_at)
-      VALUES (?,?,?,2,?,?,?,?,'PENDING',?,?,?,?,?,?)`).bind(id, predecessor.id,
-      predecessor.stage12JobId, key, sha256(new TextEncoder().encode(token)),
-      user.email.toLowerCase(), input.ownerApprovalText, predecessor.correctedPreMasterR2Key,
-      predecessor.correctedPreMasterSha256, predecessor.correctedPreMasterByteLength,
-      predecessor.receiptSha256, now, now),
+    correctionOrdinal === 3
+      ? getD1().prepare(`INSERT INTO stage12_audio_p0_correction_retry_job
+        (id,predecessor_correction_job_id,stage12_job_id,correction_ordinal,
+         correction_strategy_version,retry_reason_code,idempotency_key,callback_token_hash,
+         actor_identity,owner_approval_text,state,source_pre_master_r2_key,
+         source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256,
+         created_at,updated_at)
+        VALUES (?,?,?,3,3,'STAGE12_AUDIO_P0_ENCODED_QA_FAIL',?,?,?,?,'PENDING',?,?,?,?,?,?)`)
+        .bind(id, predecessor.id, predecessor.stage12JobId, key,
+          sha256(new TextEncoder().encode(token)), user.email.toLowerCase(),
+          input.ownerApprovalText, predecessor.correctedPreMasterR2Key,
+          predecessor.correctedPreMasterSha256, predecessor.correctedPreMasterByteLength,
+          predecessor.receiptSha256, now, now)
+      : getD1().prepare(`INSERT INTO stage12_audio_p0_correction_job
+        (id,predecessor_corrected_pre_master_job_id,stage12_job_id,correction_ordinal,
+         idempotency_key,callback_token_hash,actor_identity,owner_approval_text,state,
+         source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+         source_receipt_sha256,created_at,updated_at)
+        VALUES (?,?,?,2,?,?,?,?,'PENDING',?,?,?,?,?,?)`).bind(id, predecessor.id,
+        predecessor.stage12JobId, key, sha256(new TextEncoder().encode(token)),
+        user.email.toLowerCase(), input.ownerApprovalText, predecessor.correctedPreMasterR2Key,
+        predecessor.correctedPreMasterSha256, predecessor.correctedPreMasterByteLength,
+        predecessor.receiptSha256, now, now),
   ]);
   const prepared = await prepareStage12MediaRequest(3);
   try {
     await dispatchStage12MediaAudioP0Correction({ ...prepared.payload, idempotencyKey: key,
       objectAccess: { url: input.objectAccessUrl, token }, callback: { url: input.callbackUrl, token },
-      remediation: { sourceAttemptOrdinal: 3, diagnosticOrdinal: 2, strategyVersion: 2,
-        correctionOrdinal: 2, predecessorCorrectionJobId: predecessor.id,
+      remediation: { sourceAttemptOrdinal: 3, diagnosticOrdinal: 2, strategyVersion,
+        correctionOrdinal, predecessorCorrectionJobId: predecessor.id,
         sourceCorrectedPreMaster: { r2Key: predecessor.correctedPreMasterR2Key,
           sha256: predecessor.correctedPreMasterSha256,
           byteLength: predecessor.correctedPreMasterByteLength },
@@ -5977,7 +6046,9 @@ export async function createTrackGVideoOneStage12AudioP0Correction(
         correctionPassLimit: RETRY.MAX_ATTEMPTS,
         providerDispatch: "OFF", providerCallCount: 0, autoPublish: "OFF" } });
   } catch (error) {
-    await getD1().prepare(`UPDATE stage12_audio_p0_correction_job SET state='FAILED',
+    const table = correctionOrdinal === 3
+      ? "stage12_audio_p0_correction_retry_job" : "stage12_audio_p0_correction_job";
+    await getD1().prepare(`UPDATE ${table} SET state='FAILED',
       error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
       error instanceof Error ? error.message.slice(0, 160) : "STAGE12_AUDIO_P0_CORRECTION_START_FAILED",
       new Date().toISOString(), id,
@@ -6070,7 +6141,8 @@ async function finalizeTrackGVideoOneStage12Prepared(
     schemaVersion: 1,
     runnerContractVersion: 1,
     executorVersion: useAudioP0Correction
-      ? "stage-12-pre-master-deterministic-qa-v2" : "stage-12-pre-master-deterministic-qa-v1",
+      ? `stage-12-pre-master-deterministic-qa-v${audioP0Correction!.correctionStrategyVersion}`
+      : "stage-12-pre-master-deterministic-qa-v1",
     operationRunId: prepared.bootstrap.run.id,
     packageId: STAGE_00_PACKAGE_ID,
     stageCode: STAGE_12_CODE,

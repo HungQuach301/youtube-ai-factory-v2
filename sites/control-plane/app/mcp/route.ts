@@ -1509,7 +1509,8 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
         result = { replayed: correction.replayed, runId,
           currentStep: "STAGE_12_READY", operationState: correction.correctionState,
-          receipt: { attemptOrdinal: 3, diagnosticOrdinal: 2, correctionOrdinal: 2,
+          receipt: { attemptOrdinal: 3, diagnosticOrdinal: 2,
+            correctionOrdinal: correction.correctionOrdinal,
             correctionState: correction.correctionState, correctionExecuted: true,
             providerDispatch: "OFF", autoPublish: "OFF" } };
       } else if (commandType === "START_STAGE_12") {

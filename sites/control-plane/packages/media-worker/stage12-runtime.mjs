@@ -131,7 +131,7 @@ export function buildStage12VideoFilter(payload) {
 
 async function uploadPreMaster(payload, bytes, expectedSha256) {
   const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
-  const kind = payload.remediation?.strategyVersion === 2
+  const kind = payload.remediation?.strategyVersion >= 2
     ? 'audio-p0-corrected-pre-master'
     : payload.remediation ? 'corrected-pre-master' : 'pre-master'
   const response = await authenticatedFetch(
@@ -225,20 +225,43 @@ export async function correctStage12EncodedLoudness(payload, preMasterPath, work
     ? options.passLimit : 1
   const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
   const target = `I=${payload.qa.loudness.integratedLufs}:TP=${truePeakTargetDbtp}:LRA=${lraTarget}`
+  const useMacroDynamics = options.useMacroDynamics === true
+  const expansionLu = payload.qa.loudness.lraMin + payload.qa.loudness.toleranceLufs
+  const periodSec = payload.qa.nearStaticMaxSec * payload.qa.loudness.lraMin
+  const halfPeriodSec = periodSec / 2
+  const attenuatedGain = 10 ** (-expansionLu / 20)
+  const limiter = 10 ** (truePeakTargetDbtp / 20)
   for (let pass = 1; pass <= passLimit; pass += 1) {
     const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
       '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
     'STAGE12_FINAL_LOUDNESS_FAILED')
     const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
-    if (loudnessPasses(payload, measured)) return
+    if (loudnessPasses(payload, measured)) return measured
     const correctedPath = join(workRoot, `pre-master-loudness-corrected-${pass}.webm`)
-    const correction = `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false`
+    const macroDynamics = useMacroDynamics && measured.loudnessRangeLu < payload.qa.loudness.lraMin
+      ? `volume='if(lt(mod(t\\,${periodSec})\\,${halfPeriodSec})\\,${attenuatedGain.toFixed(6)}\\,1)':eval=frame,`
+      : ''
+    const limiterFilter = useMacroDynamics ? `,alimiter=limit=${limiter.toFixed(6)}:level=false` : ''
+    const integratedGain = 10 ** ((payload.qa.loudness.integratedLufs - measured.integratedLufs) / 20)
+    const correction = useMacroDynamics
+      ? `${macroDynamics}volume=${integratedGain.toFixed(6)}${limiterFilter}`
+      : `loudnorm=${target}:measured_I=${measured.integratedLufs}:measured_TP=${measured.truePeakDbtp}:measured_LRA=${measured.loudnessRangeLu}:measured_thresh=${measured.threshold}:offset=${measured.offset}:linear=false`
     await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', preMasterPath,
       '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-af', correction,
       '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
     'STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED')
     await rename(correctedPath, preMasterPath)
   }
+  const verification = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
+  'STAGE12_FINAL_LOUDNESS_FAILED')
+  const measured = parseLoudnorm(verification.stderr.toString('utf8'))
+  if (options.requirePass === true && !loudnessPasses(payload, measured)) {
+    throw Object.assign(new Error('Encoded loudness remains outside the immutable QA contract.'), {
+      code: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED', measurements: measured,
+    })
+  }
+  return measured
 }
 
 function stage12Receipt(imageDigest, inspected, pointer) {
@@ -374,9 +397,11 @@ export function buildStage12RemediationAudioFilter(payload) {
 export function validateStage12AudioP0CorrectionPayload(payload) {
   const value = validateStage12Payload(payload)
   const remediation = payload?.remediation
+  const matchedStrategyAndOrdinal = remediation
+    && ((remediation.strategyVersion === 2 && remediation.correctionOrdinal === 2)
+      || (remediation.strategyVersion === 3 && remediation.correctionOrdinal === 3))
   if (!remediation || remediation.sourceAttemptOrdinal !== 3
-    || remediation.diagnosticOrdinal !== 2 || remediation.strategyVersion !== 2
-    || remediation.correctionOrdinal !== 2
+    || remediation.diagnosticOrdinal !== 2 || !matchedStrategyAndOrdinal
     || typeof remediation.predecessorCorrectionJobId !== 'string'
     || remediation.predecessorCorrectionJobId.length < 3
     || remediation.providerDispatch !== 'OFF' || remediation.providerCallCount !== 0
@@ -395,12 +420,20 @@ export function validateStage12AudioP0CorrectionPayload(payload) {
   return value
 }
 
-export function buildStage12AudioP0CorrectionFilter(payload) {
+export function buildStage12AudioP0CorrectionFilter(payload, strategyVersion = payload.remediation?.strategyVersion ?? 2) {
   const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
   const expansionLu = payload.qa.loudness.lraMin + payload.qa.loudness.toleranceLufs
   const periodSec = payload.qa.nearStaticMaxSec * payload.qa.loudness.lraMin
   const truePeakTargetDbtp = payload.qa.loudness.truePeakMaxDbtp
-    - payload.qa.loudness.toleranceLufs / 2
+    - payload.qa.loudness.toleranceLufs / (strategyVersion >= 3 ? 1 : 2)
+  if (strategyVersion >= 3) {
+    const halfPeriodSec = periodSec / 2
+    const attenuatedGain = 10 ** (-expansionLu / 20)
+    const limiter = 10 ** (truePeakTargetDbtp / 20)
+    const macroDynamics = `volume='if(lt(mod(t\\,${periodSec})\\,${halfPeriodSec})\\,${attenuatedGain.toFixed(6)}\\,1)':eval=frame`
+    const target = `I=${payload.qa.loudness.integratedLufs}:TP=${truePeakTargetDbtp}:LRA=${lraTarget}`
+    return `${macroDynamics},loudnorm=${target}:linear=false,alimiter=limit=${limiter.toFixed(6)}:level=false`
+  }
   const macroDynamics = `volume='pow(10\\,(-${expansionLu}/20)*(0.5+0.5*sin(2*PI*t/${periodSec})))':eval=frame`
   const expansion = 'compand=attacks=0.15:decays=0.8:points=-80/-80|-35/-43|-20/-24|-10/-10|0/-1'
   const target = `I=${payload.qa.loudness.integratedLufs}:TP=${truePeakTargetDbtp}:LRA=${lraTarget}`
@@ -471,13 +504,15 @@ export async function executeStage12AudioP0Correction(payloadInput, imageDigest)
     await writeFile(sourcePath, sourceBytes)
     await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
       '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy',
-      '-af', buildStage12AudioP0CorrectionFilter(payload), '-c:a', 'libopus',
+      '-af', buildStage12AudioP0CorrectionFilter(payload, remediation.strategyVersion), '-c:a', 'libopus',
       '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
     'STAGE12_AUDIO_P0_CORRECTION_TRANSCODE_FAILED')
     const truePeakTargetDbtp = payload.qa.loudness.truePeakMaxDbtp
-      - payload.qa.loudness.toleranceLufs / 2
+      - payload.qa.loudness.toleranceLufs / (remediation.strategyVersion >= 3 ? 1 : 2)
     await correctStage12EncodedLoudness(payload, correctedPath, workRoot, {
       truePeakTargetDbtp, passLimit: remediation.correctionPassLimit,
+      useMacroDynamics: remediation.strategyVersion >= 3,
+      requirePass: remediation.strategyVersion >= 3,
     })
     const inspected = await inspectPreMaster(payload, correctedPath, workRoot)
     if (inspected.preMasterSha256 === remediation.sourceCorrectedPreMaster.sha256) {

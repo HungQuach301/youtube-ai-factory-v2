@@ -1392,3 +1392,15 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- TRACK_G_VIDEO_1_STAGE_12_AUDIO_P0_PENDING. Mọi command, state hoặc idempotency
 -- key ngoài hợp đồng tiếp tục fail-closed bằng COMMAND_CONTRACT_VIOLATION.
 -- Xem drizzle/0027_stage12_audio_p0_command_contract.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_AUDIO_P0_CORRECTION_ORDINAL3 — migration 0028
+-- =====================================================================
+-- stage12_audio_p0_correction_retry_job là lineage append-only từ đúng
+-- stage12_audio_p0_correction_job ordinal 2 READY/FAIL. Trigger khóa source
+-- R2/SHA/byte length/receipt và exact encoded QA failure; ordinal/strategy đều
+-- bằng 3, reason=STAGE12_AUDIO_P0_ENCODED_QA_FAIL. READY bắt buộc artifact,
+-- frame-MD5, receipt, report, image digest và measurements; terminal row cấm
+-- UPDATE/DELETE. command_log giữ mọi transition cũ và chỉ thêm AUDIO_P0_FAIL →
+-- AUDIO_P0_PENDING cho cùng typed command. Xem
+-- drizzle/0028_stage12_audio_p0_correction_ordinal_three.sql.

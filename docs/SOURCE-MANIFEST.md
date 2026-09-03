@@ -29,14 +29,14 @@
 | `04-BUILD-ORDER.md` | `b85726913124815f17f1079adfb066e808dd57f553913c2fa4913eec5a66cdab` | 34 work packages/two tracks; diagnostic callback evolution |
 | `09-SELF-UPGRADE.md` | `baf407f3ed29c16e7988f4ae7b273512cc3ef194ae5e4f2abe669d5d95536c3b` | Evolution governance; Stage 12 callback lineage record |
 | `ai-factory-kien-truc.md` | `0dc6355071682b73fa14accb2f1cc141664bc7a44a905a4165116200e9312115` | Base business/technical architecture |
-| `03-DATA-SCHEMA.sql` | `eddd9746301d08a4bf8f89d404d74e0b43b7f2ea7af55ef765e8d0c96ff5de44` | Data source of truth; Stage 12 corrected pre-master, audio/P0 lineage and command allowlist aligned |
+| `03-DATA-SCHEMA.sql` | `190341a31099f4181b6e9d968c6ac9c3f2ee9708e3153be8bf3d2694cfb1bf60` | Data source of truth; Stage 12 audio/P0 ordinal 3 retry lineage and command transition aligned |
 | `16-ARCHITECTURE-ADDENDUM.md` | `54465b278ae103e25138e8a705d9ff4ab62710bc500b44db839613c1165a6b96` | Architecture v2 delta |
 | `ai-factory-modul-nen-tang.md` | `a3b29ac017ca874436005836e8f6450d3dafbf9dcc6625d6213652e089106384` | 19 platform/control modules |
 | `02-CONTRACTS.md` | `f21e1e524b91c571b5db29e48815485b26d5c503f781686ad7954633ce05f418` | Type, mọi ngưỡng số và Stage 12 typed callback/retry contract |
 | `06-PROMPT-PACK.md` | `3d4b93416ef4e2f56a667b3696e68afadf993d77c9c8337a8bcb7b16ee427012` | Prompt BUILD/OPERATE/EVOLVE |
 | `08-CONTINUOUS-OPERATION.md` | `e9f0f39036e82469b4784f07d7725e2dede51ce5c6e8dacf8743a2f6effdc61d` | Mode, runbook và chống drift |
 | `ai-factory-modul-nghiep-vu.md` | `43b797dd6786f47e980ba7523590fc278c2e549258455438dac1b145d116ebbb` | 25 business/production modules |
-| `17-STAGE12-QA-REMEDIATION.md` | `abbb1e04271f297ed0dea069bc963703c27a7b3e930719f7d0add542a48856f2` | Owner-approved immutable QA evidence, diagnostic retry, corrected pre-master, audio/P0 correction and stable command contract |
+| `17-STAGE12-QA-REMEDIATION.md` | `3b6f1a70de1819d30290e2cd11868082c56a202c9a81900c4959fc8c51ee6178` | Owner-approved immutable QA evidence and encoded audio/P0 correction ordinal 3 contract |
 | `DECISIONS-ANSWERED.md` | `2d074646fb165f1822b59e1f45f2e32e3913756a12542fcb5bcd183ecb5feafd` | Owner decision baseline; spend ceilings, standing authorization and WP-12B numeric PROFILE=REDUCED decision confirmed 2026-08-23; hard controls and remaining owner inputs stay fail-closed |
 
 ## Provenance rule
