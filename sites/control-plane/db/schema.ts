@@ -572,6 +572,41 @@ export const stage12AudioP0CorrectionRetryJobs = sqliteTable(
   ],
 );
 
+export const stage12AudioP0CorrectionFailureEvidence = sqliteTable(
+  "stage12_audio_p0_correction_failure_evidence",
+  {
+    id: text("id").primaryKey(),
+    correctionJobId: text("correction_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionRetryJobs.id),
+    stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+    correctionOrdinal: integer("correction_ordinal").notNull(),
+    correctionStrategyVersion: integer("correction_strategy_version").notNull(),
+    errorCode: text("error_code").notNull(),
+    failureBoundary: text("failure_boundary", {
+      enum: ["FINAL_POST_ENCODE_LOUDNESS_VERIFICATION"],
+    }).notNull(),
+    correctionPass: integer("correction_pass").notNull(),
+    correctionPassLimit: integer("correction_pass_limit").notNull(),
+    measurementsByPassJson: text("measurements_by_pass_json").notNull(),
+    finalIntegratedLufs: real("final_integrated_lufs").notNull(),
+    finalTruePeakDbtp: real("final_true_peak_dbtp").notNull(),
+    finalLoudnessRangeLu: real("final_loudness_range_lu").notNull(),
+    failedPredicatesJson: text("failed_predicates_json").notNull(),
+    workerImageDigest: text("worker_image_digest").notNull(),
+    sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+    sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+    sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+    sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+    autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("stage12_audio_p0_correction_failure_job_unique").on(table.correctionJobId),
+  ],
+);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

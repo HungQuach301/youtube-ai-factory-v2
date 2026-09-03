@@ -13,7 +13,8 @@ import {
   stage12WorkerErrorCode,
 } from './stage12-callback-error.mjs'
 import { executeStage12, executeStage12AudioP0Correction, executeStage12Recovery,
-  executeStage12Remediation, validateStage12AudioP0CorrectionPayload,
+  executeStage12Remediation, stage12EncodedLoudnessFailureDiagnostic,
+  validateStage12AudioP0CorrectionPayload,
   validateStage12Payload, validateStage12RemediationPayload } from './stage12-runtime.mjs'
 
 const IMAGE_DIGEST = process.env.MEDIA_IMAGE_DIGEST
@@ -537,10 +538,12 @@ async function publishStage12Callback(callback, idempotencyKey, result) {
 }
 
 async function publishStage12Failure(callback, idempotencyKey, error) {
+  const failureDiagnostic = stage12EncodedLoudnessFailureDiagnostic(error, IMAGE_DIGEST)
   const response = await fetch(callback.url, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
     headers: { authorization: `Bearer ${callback.token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ idempotencyKey, errorCode: stage12WorkerErrorCode(error) }),
+    body: JSON.stringify({ idempotencyKey, errorCode: stage12WorkerErrorCode(error),
+      ...(failureDiagnostic ? { failureDiagnostic } : {}) }),
   })
   if (!response.ok) throw Object.assign(new Error(`Stage 12 failure callback returned ${response.status}.`), { code: 'STAGE12_FAILURE_CALLBACK_FAILED' })
 }
@@ -670,7 +673,11 @@ function startStage12AudioP0CorrectionJob(payload) {
     })
     .catch(async (error) => {
       job.status = 'FAILED'
-      console.error('STAGE12_AUDIO_P0_CORRECTION_FAILED', stage12WorkerErrorCode(error))
+      console.error('STAGE12_AUDIO_P0_CORRECTION_FAILED', JSON.stringify({
+        trace_id: payload.idempotencyKey,
+        errorCode: stage12WorkerErrorCode(error),
+        failureDiagnostic: stage12EncodedLoudnessFailureDiagnostic(error, IMAGE_DIGEST) ?? null,
+      }))
       try { await publishStage12Failure(payload.callback, payload.idempotencyKey, error) }
       catch (callbackError) {
         console.error('STAGE12_AUDIO_P0_CORRECTION_FAILURE_CALLBACK_FAILED',

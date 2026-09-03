@@ -274,3 +274,14 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Chỉ đúng một retry có typed lineage | migration 0024 test ordinal, predecessor, reason, duration và third-attempt rejection |
 | Không scan/generation/provider/finalize/publish | evolution chỉ sửa code/migration; không gọi Production command; envelope giữ literals OFF/false |
 | Không nới threshold | `verify:g11` + diff `packages/contracts/src/thresholds.ts` rỗng |
+
+## 9. EVOLVE_STAGE12_ENCODED_LOUDNESS_FAILURE_OBSERVABILITY
+
+| Acceptance | Test/evidence |
+|---|---|
+| Worker giữ exact initial + post-pass 1/2 + final/pass 3 measurements | `stage12-remediation.test.ts` kiểm failure object và ba số LUFS/true-peak/LRA ở từng mốc |
+| Failed predicates được suy ra từ threshold hiện hành | parser regression từ chối predicate thiếu/sai và final scalar không khớp pass cuối |
+| Failure callback đóng job và INSERT evidence atomically | Sites Miniflare E2E gọi route thật, đọc lại job `FAILED` và evidence row |
+| Evidence và source identity append-only | migration 0029 test UPDATE/DELETE, source SHA mismatch và duplicate job → ABORT |
+| Không backfill số đo ordinal 3 đã mất | migration test áp 0029 trên terminal row hiện hữu rồi yêu cầu evidence count bằng 0 |
+| Không đổi threshold/ordinal/attempt/provider/publish | `thresholds.ts` không đổi; pass limit vẫn `RETRY.MAX_ATTEMPTS=3`; E2E xác minh attempt 4 bằng 0 và controls `0/OFF` |

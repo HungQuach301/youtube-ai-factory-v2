@@ -1569,3 +1569,25 @@ triển khai và health check PASS.
 
 Không chạy correction ordinal 3 trong evolution này. Merge/deploy và lệnh OPERATE
 đều cần owner approval riêng sau khi CI hoàn tất.
+
+---
+
+## EVO-STAGE12-ENCODED-LOUDNESS-FAILURE-OBSERVABILITY · Immutable failure evidence
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Exact initial, post-pass 1/2 và final/pass 3 measurements không bị mất | Worker failure diagnostic + `stage12-remediation.test.ts` |
+| Integrated LUFS, true peak, LRA và failed predicates nhất quán với threshold cũ | Typed control-plane parser và migration 0029 validation tests |
+| Failure callback persist evidence cùng terminal transition | Miniflare E2E gọi callback route và read-back nested `encodedLoudnessFailure` |
+| Evidence append-only, source identity ordinal 2/3 giữ nguyên | UNIQUE correction job; exact R2/SHA/bytes/receipt; UPDATE/DELETE triggers |
+| Không bịa lại số đo ordinal 3 đã mất | Migration test yêu cầu zero backfill trên historical terminal row |
+| Không threshold/algorithm/ordinal/attempt/provider/finalize/publish change | `thresholds.ts` và filter strategy không đổi; test attempt 4 = 0, controls `0/OFF` |
+
+## Production boundary
+
+Evolution chỉ bổ sung observability cho callback tương lai. Terminal ordinal 3 hiện
+hữu vẫn immutable và không thể khôi phục exact measurements đã không được persist.
+Merge/deploy cần owner promotion sau CI; không có correction/retry hay Finalize đi
+kèm deployment này.

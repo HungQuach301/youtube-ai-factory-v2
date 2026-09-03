@@ -210,12 +210,86 @@ async function inspectPreMaster(payload, preMasterPath, workRoot) {
   return { preMasterBytes, preMasterSha256, frameMd5Sha256, measurements }
 }
 
+export function stage12LoudnessFailedPredicates(payload, loudness) {
+  const failedPredicates = []
+  const integratedMinimum = payload.qa.loudness.integratedLufs
+    - payload.qa.loudness.toleranceLufs
+  const integratedMaximum = payload.qa.loudness.integratedLufs
+    + payload.qa.loudness.toleranceLufs
+  if (loudness.integratedLufs < integratedMinimum) {
+    failedPredicates.push('INTEGRATED_LUFS_BELOW_MIN')
+  }
+  if (loudness.integratedLufs > integratedMaximum) {
+    failedPredicates.push('INTEGRATED_LUFS_ABOVE_MAX')
+  }
+  if (loudness.truePeakDbtp > payload.qa.loudness.truePeakMaxDbtp) {
+    failedPredicates.push('TRUE_PEAK_DBTP_ABOVE_MAX')
+  }
+  if (loudness.loudnessRangeLu < payload.qa.loudness.lraMin) {
+    failedPredicates.push('LOUDNESS_RANGE_LU_BELOW_MIN')
+  }
+  if (loudness.loudnessRangeLu > payload.qa.loudness.lraMax) {
+    failedPredicates.push('LOUDNESS_RANGE_LU_ABOVE_MAX')
+  }
+  return failedPredicates
+}
+
 function loudnessPasses(payload, loudness) {
-  return Math.abs(loudness.integratedLufs - payload.qa.loudness.integratedLufs)
-      <= payload.qa.loudness.toleranceLufs
-    && loudness.truePeakDbtp <= payload.qa.loudness.truePeakMaxDbtp
-    && loudness.loudnessRangeLu >= payload.qa.loudness.lraMin
-    && loudness.loudnessRangeLu <= payload.qa.loudness.lraMax
+  return stage12LoudnessFailedPredicates(payload, loudness).length === 0
+}
+
+function loudnessMeasurement(payload, correctionPass, phase, loudness) {
+  return {
+    correctionPass,
+    phase,
+    integratedLufs: loudness.integratedLufs,
+    truePeakDbtp: loudness.truePeakDbtp,
+    loudnessRangeLu: loudness.loudnessRangeLu,
+    failedPredicates: stage12LoudnessFailedPredicates(payload, loudness),
+  }
+}
+
+async function measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget) {
+  const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
+    '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
+  'STAGE12_FINAL_LOUDNESS_FAILED')
+  return parseLoudnorm(analysis.stderr.toString('utf8'))
+}
+
+export function buildStage12EncodedLoudnessFailure(payload, correctionPassLimit,
+  measurementsByPass) {
+  const finalObservation = measurementsByPass.at(-1)
+  if (!finalObservation || finalObservation.correctionPass !== correctionPassLimit
+    || finalObservation.phase !== 'FINAL_POST_ENCODE_VERIFICATION') {
+    throw new Error('Invalid encoded-loudness failure evidence.')
+  }
+  const finalMeasurements = {
+    integratedLufs: finalObservation.integratedLufs,
+    truePeakDbtp: finalObservation.truePeakDbtp,
+    loudnessRangeLu: finalObservation.loudnessRangeLu,
+  }
+  return Object.assign(new Error('Encoded loudness remains outside the immutable QA contract.'), {
+    code: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED',
+    measurements: finalMeasurements,
+    failureDiagnostic: {
+      schemaVersion: 1,
+      boundary: 'FINAL_POST_ENCODE_LOUDNESS_VERIFICATION',
+      correctionPass: correctionPassLimit,
+      correctionPassLimit,
+      measurementsByPass,
+      finalMeasurements,
+      failedPredicates: stage12LoudnessFailedPredicates(payload, finalMeasurements),
+    },
+  })
+}
+
+export function stage12EncodedLoudnessFailureDiagnostic(error, imageDigest) {
+  const candidate = error && typeof error === 'object'
+    && error.code === 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED'
+    && error.failureDiagnostic && typeof error.failureDiagnostic === 'object'
+    ? error.failureDiagnostic : null
+  if (!candidate || !/^sha256:[a-f0-9]{64}$/u.test(imageDigest)) return undefined
+  return { ...candidate, workerImageDigest: imageDigest }
 }
 
 export async function correctStage12EncodedLoudness(payload, preMasterPath, workRoot, options = {}) {
@@ -231,12 +305,12 @@ export async function correctStage12EncodedLoudness(payload, preMasterPath, work
   const halfPeriodSec = periodSec / 2
   const attenuatedGain = 10 ** (-expansionLu / 20)
   const limiter = 10 ** (truePeakTargetDbtp / 20)
+  let measured = await measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget)
+  const measurementsByPass = [loudnessMeasurement(
+    payload, 0, 'INITIAL_ENCODED_MEASUREMENT', measured,
+  )]
+  if (loudnessPasses(payload, measured)) return measured
   for (let pass = 1; pass <= passLimit; pass += 1) {
-    const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-      '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
-    'STAGE12_FINAL_LOUDNESS_FAILED')
-    const measured = parseLoudnorm(analysis.stderr.toString('utf8'))
-    if (loudnessPasses(payload, measured)) return measured
     const correctedPath = join(workRoot, `pre-master-loudness-corrected-${pass}.webm`)
     const macroDynamics = useMacroDynamics && measured.loudnessRangeLu < payload.qa.loudness.lraMin
       ? `volume='if(lt(mod(t\\,${periodSec})\\,${halfPeriodSec})\\,${attenuatedGain.toFixed(6)}\\,1)':eval=frame,`
@@ -251,15 +325,13 @@ export async function correctStage12EncodedLoudness(payload, preMasterPath, work
       '-c:a', 'libopus', '-ar', String(payload.render.sampleRateHz), correctedPath], workRoot,
     'STAGE12_FINAL_LOUDNESS_CORRECTION_FAILED')
     await rename(correctedPath, preMasterPath)
+    measured = await measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget)
+    measurementsByPass.push(loudnessMeasurement(payload, pass,
+      pass === passLimit ? 'FINAL_POST_ENCODE_VERIFICATION' : 'POST_CORRECTION_PASS', measured))
+    if (loudnessPasses(payload, measured)) return measured
   }
-  const verification = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
-    '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
-  'STAGE12_FINAL_LOUDNESS_FAILED')
-  const measured = parseLoudnorm(verification.stderr.toString('utf8'))
-  if (options.requirePass === true && !loudnessPasses(payload, measured)) {
-    throw Object.assign(new Error('Encoded loudness remains outside the immutable QA contract.'), {
-      code: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED', measurements: measured,
-    })
+  if (options.requirePass === true) {
+    throw buildStage12EncodedLoudnessFailure(payload, passLimit, measurementsByPass)
   }
   return measured
 }

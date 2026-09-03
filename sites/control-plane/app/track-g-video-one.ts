@@ -22,6 +22,7 @@ import {
   stage10MediaJobs,
   stage11AudioPlans,
   stage12MediaJobs,
+  stage12AudioP0CorrectionFailureEvidence,
   stage12AudioP0CorrectionJobs,
   stage12AudioP0CorrectionRetryJobs,
   stage12CorrectedPreMasterJobs,
@@ -66,7 +67,9 @@ import {
 import {
   buildTrackGVideoOneStage12Request,
   evaluateTrackGVideoOneStage12Receipt,
+  parseStage12EncodedLoudnessFailureDiagnostic,
   validateTrackGVideoOneStage12Receipt,
+  type Stage12EncodedLoudnessFailureDiagnostic,
   type Stage12MediaReceipt,
 } from "./stage12-pre-master";
 import { ASSURANCE, AUDIO, RETRY } from "../packages/contracts/src/thresholds";
@@ -5794,6 +5797,13 @@ async function latestStage12AudioP0CorrectionJob() {
     predecessorCorrectionJobId: initial.predecessorCorrectedPreMasterJobId } : null;
 }
 
+async function readStage12AudioP0CorrectionFailureEvidence(correctionJobId: string) {
+  const [evidence] = await getDb().select().from(stage12AudioP0CorrectionFailureEvidence)
+    .where(eq(stage12AudioP0CorrectionFailureEvidence.correctionJobId, correctionJobId))
+    .limit(1);
+  return evidence ?? null;
+}
+
 async function stage12AudioP0CorrectionSource() {
   const retry = await latestStage12AudioP0RetryCorrectionJob();
   if (retry) return { predecessor: retry, pointer: undefined, eligible: false,
@@ -5834,6 +5844,8 @@ async function stage12AudioP0CorrectionSource() {
 export async function diagnoseTrackGVideoOneStage12AudioP0Correction() {
   const source = await stage12AudioP0CorrectionSource();
   const job = await latestStage12AudioP0CorrectionJob();
+  const failureEvidence = job?.lineageTable === "RETRY"
+    ? await readStage12AudioP0CorrectionFailureEvidence(job.id) : null;
   return {
     correctionState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
     errorCode: job?.errorCode ?? (source.eligible ? null : "STAGE12_AUDIO_P0_CORRECTION_SOURCE_NOT_ELIGIBLE"),
@@ -5860,6 +5872,24 @@ export async function diagnoseTrackGVideoOneStage12AudioP0Correction() {
     failures: job?.failuresJson ? JSON.parse(job.failuresJson) as string[] : [],
     measurements: job?.measurementsJson
       ? JSON.parse(job.measurementsJson) as Stage12MediaReceipt["measurements"] : null,
+    encodedLoudnessFailure: failureEvidence ? {
+      evidenceId: failureEvidence.id,
+      failureBoundary: failureEvidence.failureBoundary,
+      correctionPass: failureEvidence.correctionPass,
+      correctionPassLimit: failureEvidence.correctionPassLimit,
+      measurementsByPass: JSON.parse(failureEvidence.measurementsByPassJson) as Stage12EncodedLoudnessFailureDiagnostic["measurementsByPass"],
+      finalMeasurements: {
+        integratedLufs: failureEvidence.finalIntegratedLufs,
+        truePeakDbtp: failureEvidence.finalTruePeakDbtp,
+        loudnessRangeLu: failureEvidence.finalLoudnessRangeLu,
+      },
+      failedPredicates: JSON.parse(failureEvidence.failedPredicatesJson) as Stage12EncodedLoudnessFailureDiagnostic["failedPredicates"],
+      workerImageDigest: failureEvidence.workerImageDigest,
+      sourcePreMasterR2Key: failureEvidence.sourcePreMasterR2Key,
+      sourcePreMasterSha256: failureEvidence.sourcePreMasterSha256,
+      sourcePreMasterByteLength: failureEvidence.sourcePreMasterByteLength,
+      sourceReceiptSha256: failureEvidence.sourceReceiptSha256,
+    } : null,
     correctionExecuted: job !== null,
     providerDispatch: "OFF" as const, providerCallCount: 0 as const,
     autoPublish: "OFF" as const,
@@ -5904,6 +5934,7 @@ export async function storeTrackGVideoOneStage12AudioP0CorrectedPreMaster(
 
 export async function recordTrackGVideoOneStage12AudioP0CorrectionCallback(input: {
   idempotencyKey: string; token: string; result?: Stage12MediaReceipt; errorCode?: string;
+  failureDiagnostic?: unknown;
 }) {
   const job = await latestStage12AudioP0CorrectionJob();
   requireStage12AudioP0CorrectionToken(job, input.idempotencyKey, input.token);
@@ -5914,6 +5945,46 @@ export async function recordTrackGVideoOneStage12AudioP0CorrectionCallback(input
       ? input.errorCode : "STAGE12_AUDIO_P0_CORRECTION_FAILED";
     const table = job.lineageTable === "RETRY"
       ? "stage12_audio_p0_correction_retry_job" : "stage12_audio_p0_correction_job";
+    if (code === "STAGE12_ENCODED_LOUDNESS_UNRESOLVED") {
+      if (job.lineageTable !== "RETRY") {
+        throw new Error("STAGE12_ENCODED_LOUDNESS_FAILURE_LINEAGE_INVALID");
+      }
+      const diagnostic = parseStage12EncodedLoudnessFailureDiagnostic(input.failureDiagnostic);
+      const evidenceId = sha256(new TextEncoder().encode(canonicalize({
+        correctionJobId: job.id,
+        errorCode: code,
+        diagnostic,
+      })));
+      await getD1().batch([
+        getD1().prepare(`UPDATE ${table} SET state='FAILED',
+          error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
+          code, new Date().toISOString(), job.id,
+        ),
+        getD1().prepare(`INSERT INTO stage12_audio_p0_correction_failure_evidence
+          (id, correction_job_id, stage12_job_id, correction_ordinal,
+           correction_strategy_version, error_code, failure_boundary, correction_pass,
+           correction_pass_limit, measurements_by_pass_json, final_integrated_lufs,
+           final_true_peak_dbtp, final_loudness_range_lu, failed_predicates_json,
+           worker_image_digest, source_pre_master_r2_key, source_pre_master_sha256,
+           source_pre_master_byte_length, source_receipt_sha256, provider_call_count,
+           provider_dispatch, auto_publish)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'OFF', 'OFF')`)
+          .bind(evidenceId, job.id, job.stage12JobId, job.correctionOrdinal,
+            job.correctionStrategyVersion, code, diagnostic.boundary,
+            diagnostic.correctionPass, diagnostic.correctionPassLimit,
+            canonicalize(diagnostic.measurementsByPass),
+            diagnostic.finalMeasurements.integratedLufs,
+            diagnostic.finalMeasurements.truePeakDbtp,
+            diagnostic.finalMeasurements.loudnessRangeLu,
+            canonicalize(diagnostic.failedPredicates), diagnostic.workerImageDigest,
+            job.sourcePreMasterR2Key, job.sourcePreMasterSha256,
+            job.sourcePreMasterByteLength, job.sourceReceiptSha256),
+      ]);
+      return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+    }
+    if (input.failureDiagnostic !== undefined) {
+      throw new Error("STAGE12_AUDIO_P0_CORRECTION_FAILURE_DIAGNOSTIC_UNEXPECTED");
+    }
     await getD1().prepare(`UPDATE ${table} SET state='FAILED',
       error_code=?, updated_at=? WHERE id=? AND state='PENDING'`).bind(
       code, new Date().toISOString(), job.id,

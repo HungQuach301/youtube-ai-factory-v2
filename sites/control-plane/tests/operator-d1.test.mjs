@@ -111,7 +111,7 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
     qaMigration, diagnosticRetryMigration, correctedMigration, audioP0Migration,
-    audioP0RetryMigration, diagnosticRoute,
+    audioP0RetryMigration, loudnessFailureMigration, diagnosticRoute,
     remediationRoute, audioP0Route, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
@@ -126,6 +126,7 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
     readFile(fileURLToPath(new URL("../drizzle/0025_stage12_corrected_pre_master.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0026_stage12_audio_p0_correction.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../drizzle/0028_stage12_audio_p0_correction_ordinal_three.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0029_stage12_encoded_loudness_failure_observability.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-remediation/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-audio-p0-correction/route.ts", import.meta.url)), "utf8"),
@@ -156,6 +157,8 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(audioP0Migration, /STAGE12_AUDIO_P0_CORRECTION_TERMINAL_IMMUTABLE/u);
   assert.match(audioP0RetryMigration, /stage12_audio_p0_correction_ordinal3_lineage_insert/u);
   assert.match(audioP0RetryMigration, /STAGE12_AUDIO_P0_CORRECTION_ORDINAL3_TERMINAL_IMMUTABLE/u);
+  assert.match(loudnessFailureMigration, /stage12_audio_p0_correction_failure_evidence_insert/u);
+  assert.match(loudnessFailureMigration, /STAGE12_ENCODED_LOUDNESS_FAILURE_EVIDENCE_IMMUTABLE/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
   assert.match(remediationRoute, /storeTrackGVideoOneStage12CorrectedPreMaster/u);
   assert.match(audioP0Route, /storeTrackGVideoOneStage12AudioP0CorrectedPreMaster/u);
@@ -165,6 +168,9 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(worker, /request\.url === '\/stage12\/audio-p0-correct'/u);
   assert.match(runtime, /executeStage12AudioP0Correction/u);
   assert.match(runtime, /STAGE12_ENCODED_LOUDNESS_UNRESOLVED/u);
+  assert.match(runtime, /measurementsByPass/u);
+  assert.match(worker, /failureDiagnostic: stage12EncodedLoudnessFailureDiagnostic/u);
+  assert.match(domain, /encodedLoudnessFailure/u);
   assert.match(domain, /correctedFrameMd5Sha256/u);
   assert.match(domain, /const useAudioP0Correction =/u);
   assert.match(domain, /audioP0CorrectionJobId: audioP0Correction!\.id/u);
@@ -427,6 +433,65 @@ async function seedStage12AudioP0CorrectionSource(client, mf, d1) {
     httpMetadata: { contentType: "video/webm" },
     customMetadata: { sha256: sourceSha256, namespace: "production" },
   });
+}
+
+async function seedStage12AudioP0OrdinalThreePending(mf, d1) {
+  const predecessor = await d1.prepare(`SELECT id, stage12_job_id,
+    corrected_pre_master_r2_key, corrected_pre_master_sha256,
+    corrected_pre_master_byte_length, receipt_sha256
+    FROM stage12_corrected_pre_master_job`).first();
+  assert.ok(predecessor);
+  const bucket = await mf.getR2Bucket("BUCKET");
+  const ordinalTwoBytes = Buffer.from("immutable-audio-p0-correction-ordinal-two");
+  const ordinalTwoSha256 = createHash("sha256").update(ordinalTwoBytes).digest("hex");
+  const ordinalTwoR2Key = ["prod", "channel_ai_era_money_defense_v1",
+    "episode_ai_money_defense_01", "12", "audio-p0-corrected-pre-master",
+    `${ordinalTwoSha256}.webm`].join("/");
+  await bucket.put(ordinalTwoR2Key, ordinalTwoBytes, {
+    httpMetadata: { contentType: "video/webm" },
+    customMetadata: { sha256: ordinalTwoSha256, namespace: "production" },
+  });
+  const ordinalTwoReceiptSha256 = createHash("sha256")
+    .update("ordinal-two-receipt").digest("hex");
+  await d1.prepare(`INSERT INTO stage12_audio_p0_correction_job
+    (id, predecessor_corrected_pre_master_job_id, stage12_job_id, correction_ordinal,
+     idempotency_key, callback_token_hash, actor_identity, owner_approval_text, state,
+     source_pre_master_r2_key, source_pre_master_sha256, source_pre_master_byte_length,
+     source_receipt_sha256, corrected_pre_master_r2_key, corrected_pre_master_sha256,
+     corrected_pre_master_byte_length, corrected_frame_md5_sha256, receipt_r2_key,
+     receipt_sha256, worker_image_digest, report_sha256, outcome, failures_json,
+     measurements_json)
+    VALUES ('stage12-audio-p0-correction-2', ?, ?, 2, ?, ?, 'owner@example.com',
+     'CREATE STAGE 12 AUDIO P0 CORRECTION', 'READY', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+     'FAIL', '["TECHNICAL_DEFECT","LOUDNESS","M0_INPUT_RIGHTS_P0"]',
+     '{"clippingSampleCount":1,"truePeakDbtp":-0.9,"loudnessRangeLu":3,"p0DefectCount":1}')`)
+    .bind(predecessor.id, predecessor.stage12_job_id,
+      createHash("sha256").update("ordinal-two-key").digest("hex"),
+      createHash("sha256").update("ordinal-two-token").digest("hex"),
+      predecessor.corrected_pre_master_r2_key, predecessor.corrected_pre_master_sha256,
+      predecessor.corrected_pre_master_byte_length, predecessor.receipt_sha256,
+      ordinalTwoR2Key, ordinalTwoSha256, ordinalTwoBytes.length,
+      createHash("sha256").update("ordinal-two-frame-md5").digest("hex"),
+      "prod/receipts/ordinal-two.json", ordinalTwoReceiptSha256,
+      `sha256:${"2".repeat(64)}`,
+      createHash("sha256").update("ordinal-two-report").digest("hex")).run();
+
+  const idempotencyKey = createHash("sha256").update("ordinal-three-key").digest("hex");
+  const callbackToken = "7".repeat(64);
+  const callbackTokenHash = createHash("sha256").update(callbackToken).digest("hex");
+  await d1.prepare(`INSERT INTO stage12_audio_p0_correction_retry_job
+    (id, predecessor_correction_job_id, stage12_job_id, correction_ordinal,
+     correction_strategy_version, retry_reason_code, idempotency_key, callback_token_hash,
+     actor_identity, owner_approval_text, state, source_pre_master_r2_key,
+     source_pre_master_sha256, source_pre_master_byte_length, source_receipt_sha256)
+    VALUES ('stage12-audio-p0-correction-3', 'stage12-audio-p0-correction-2', ?, 3, 3,
+     'STAGE12_AUDIO_P0_ENCODED_QA_FAIL', ?, ?, 'owner@example.com',
+     'CREATE STAGE 12 AUDIO P0 CORRECTION', 'PENDING', ?, ?, ?, ?)`)
+    .bind(predecessor.stage12_job_id, idempotencyKey, callbackTokenHash,
+      ordinalTwoR2Key, ordinalTwoSha256, ordinalTwoBytes.length,
+      ordinalTwoReceiptSha256).run();
+  return { idempotencyKey, callbackToken, ordinalTwoR2Key, ordinalTwoSha256,
+    ordinalTwoByteLength: ordinalTwoBytes.length, ordinalTwoReceiptSha256 };
 }
 
 test("renders the root Server Component with a real D1 binding", async () => {
@@ -957,6 +1022,129 @@ test("stable MCP diagnostic reads the complete immutable ordinal-3 correction li
     });
     assert.equal((await d1.prepare(
       "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal = 4",
+    ).first()).count, 0);
+  } finally {
+    await client.close().catch(() => {});
+    await mf.dispose();
+  }
+});
+
+test("persists exact encoded-loudness failure callback evidence append-only", async () => {
+  const { mf, d1 } = await createFactoryFixture("g01a-stage12-loudness-failure-evidence", {
+    FACTORY_OWNER_EMAIL: "owner@example.com",
+    MEDIA_REQUEST_SIGNING_KEY: "test-only-stage12-loudness-evidence-signing-key",
+  });
+  const transport = new StreamableHTTPClientTransport(new URL("https://factory.test/api/mcp"), {
+    requestInit: { headers: ownerHeaders },
+    fetch: (input, init) => mf.dispatchFetch(input, init),
+  });
+  const client = new Client({ name: "factory-stage12-loudness-evidence-test", version: "1.0.0" });
+  try {
+    await client.connect(transport);
+    await seedStage12AudioP0CorrectionSource(client, mf, d1);
+    const source = await seedStage12AudioP0OrdinalThreePending(mf, d1);
+    const measurementsByPass = [
+      { correctionPass: 0, phase: "INITIAL_ENCODED_MEASUREMENT", integratedLufs: -14.51,
+        truePeakDbtp: -0.9, loudnessRangeLu: 3,
+        failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 1, phase: "POST_CORRECTION_PASS", integratedLufs: -14.2,
+        truePeakDbtp: -1.3, loudnessRangeLu: 3.4,
+        failedPredicates: ["LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 2, phase: "POST_CORRECTION_PASS", integratedLufs: -13.9,
+        truePeakDbtp: -1.5, loudnessRangeLu: 3.8,
+        failedPredicates: ["LOUDNESS_RANGE_LU_BELOW_MIN"] },
+      { correctionPass: 3, phase: "FINAL_POST_ENCODE_VERIFICATION", integratedLufs: -13.8,
+        truePeakDbtp: -0.8, loudnessRangeLu: 3.9,
+        failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"] },
+    ];
+    const workerImageDigest = `sha256:${"3".repeat(64)}`;
+    const failureDiagnostic = {
+      schemaVersion: 1, boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+      correctionPass: 3, correctionPassLimit: 3, measurementsByPass,
+      finalMeasurements: { integratedLufs: -13.8, truePeakDbtp: -0.8,
+        loudnessRangeLu: 3.9 },
+      failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_BELOW_MIN"],
+      workerImageDigest,
+    };
+    const callbackBody = JSON.stringify({
+      idempotencyKey: source.idempotencyKey,
+      errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+      failureDiagnostic,
+    });
+    const incompleteCallback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-audio-p0-correction",
+      { method: "POST", headers: { authorization: `Bearer ${source.callbackToken}`,
+        "content-type": "application/json" }, body: JSON.stringify({
+        idempotencyKey: source.idempotencyKey,
+        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+      }) },
+    );
+    assert.equal(incompleteCallback.status, 400);
+    assert.equal((await d1.prepare(`SELECT state FROM stage12_audio_p0_correction_retry_job
+      WHERE id='stage12-audio-p0-correction-3'`).first()).state, "PENDING");
+    const callback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-audio-p0-correction",
+      { method: "POST", headers: { authorization: `Bearer ${source.callbackToken}`,
+        "content-type": "application/json" }, body: callbackBody },
+    );
+    assert.equal(callback.status, 201, await callback.text());
+    assert.deepEqual(await d1.prepare(`SELECT state, error_code, corrected_pre_master_sha256,
+      measurements_json, provider_call_count, provider_dispatch, auto_publish
+      FROM stage12_audio_p0_correction_retry_job WHERE id='stage12-audio-p0-correction-3'`).first(), {
+      state: "FAILED", error_code: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED",
+      corrected_pre_master_sha256: null, measurements_json: null,
+      provider_call_count: 0, provider_dispatch: "OFF", auto_publish: "OFF",
+    });
+    const evidence = await d1.prepare(`SELECT correction_pass, correction_pass_limit,
+      measurements_by_pass_json, final_integrated_lufs, final_true_peak_dbtp,
+      final_loudness_range_lu, failed_predicates_json, worker_image_digest,
+      source_pre_master_r2_key, source_pre_master_sha256, source_pre_master_byte_length,
+      source_receipt_sha256 FROM stage12_audio_p0_correction_failure_evidence`).first();
+    const { measurements_by_pass_json: measurementsJson, ...evidenceScalars } = evidence;
+    assert.deepEqual(JSON.parse(measurementsJson), measurementsByPass);
+    assert.deepEqual(evidenceScalars, {
+      correction_pass: 3, correction_pass_limit: 3,
+      final_integrated_lufs: -13.8, final_true_peak_dbtp: -0.8,
+      final_loudness_range_lu: 3.9,
+      failed_predicates_json:
+        '["TRUE_PEAK_DBTP_ABOVE_MAX","LOUDNESS_RANGE_LU_BELOW_MIN"]',
+      worker_image_digest: workerImageDigest,
+      source_pre_master_r2_key: source.ordinalTwoR2Key,
+      source_pre_master_sha256: source.ordinalTwoSha256,
+      source_pre_master_byte_length: source.ordinalTwoByteLength,
+      source_receipt_sha256: source.ordinalTwoReceiptSha256,
+    });
+
+    const diagnosticResult = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "CREATE_STAGE_12_AUDIO_P0_CORRECTION", trackCode: "G",
+      videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    const diagnostic = JSON.parse(diagnosticResult.structuredContent.diagnosticJson);
+    const { evidenceId, ...failureReadBack } = diagnostic.encodedLoudnessFailure;
+    assert.match(evidenceId, /^[a-f0-9]{64}$/u);
+    assert.deepEqual(failureReadBack, {
+      failureBoundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+      correctionPass: 3, correctionPassLimit: 3, measurementsByPass,
+      finalMeasurements: failureDiagnostic.finalMeasurements,
+      failedPredicates: failureDiagnostic.failedPredicates,
+      workerImageDigest, sourcePreMasterR2Key: source.ordinalTwoR2Key,
+      sourcePreMasterSha256: source.ordinalTwoSha256,
+      sourcePreMasterByteLength: source.ordinalTwoByteLength,
+      sourceReceiptSha256: source.ordinalTwoReceiptSha256,
+    });
+    const replay = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-audio-p0-correction",
+      { method: "POST", headers: { authorization: `Bearer ${source.callbackToken}`,
+        "content-type": "application/json" }, body: callbackBody },
+    );
+    assert.equal(replay.status, 422);
+    assert.equal((await d1.prepare(
+      "SELECT count(*) AS count FROM stage12_audio_p0_correction_failure_evidence",
+    ).first()).count, 1);
+    await assert.rejects(d1.prepare(`UPDATE stage12_audio_p0_correction_failure_evidence
+      SET final_integrated_lufs=-14`).run(), /FAILURE_EVIDENCE_IMMUTABLE/u);
+    assert.equal((await d1.prepare(
+      "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal=4",
     ).first()).count, 0);
   } finally {
     await client.close().catch(() => {});

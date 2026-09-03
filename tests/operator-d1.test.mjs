@@ -111,7 +111,7 @@ test("Stage 12 derives command idempotency from one hydrated preflight", async (
 test("Stage 12 verifies its renderer and permits a bounded third runtime attempt", async () => {
   const [dockerfile, worker, runtime, smoke, audioSmoke, domain, schema, migration,
     qaMigration, diagnosticRetryMigration, correctedMigration, audioP0Migration,
-    audioP0RetryMigration, diagnosticRoute,
+    audioP0RetryMigration, loudnessFailureMigration, diagnosticRoute,
     remediationRoute, audioP0Route, mcpRoute] = await Promise.all([
     readFile(fileURLToPath(new URL("../packages/media-worker/Dockerfile", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
@@ -126,6 +126,7 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
     readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0025_stage12_corrected_pre_master.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0026_stage12_audio_p0_correction.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0028_stage12_audio_p0_correction_ordinal_three.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../sites/control-plane/drizzle/0029_stage12_encoded_loudness_failure_observability.sql", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../sites/control-plane/app/api/media-worker/stage12-diagnostic/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../sites/control-plane/app/api/media-worker/stage12-remediation/route.ts", import.meta.url)), "utf8"),
     readFile(fileURLToPath(new URL("../sites/control-plane/app/api/media-worker/stage12-audio-p0-correction/route.ts", import.meta.url)), "utf8"),
@@ -156,6 +157,8 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(audioP0Migration, /STAGE12_AUDIO_P0_CORRECTION_TERMINAL_IMMUTABLE/u);
   assert.match(audioP0RetryMigration, /stage12_audio_p0_correction_ordinal3_lineage_insert/u);
   assert.match(audioP0RetryMigration, /STAGE12_AUDIO_P0_CORRECTION_ORDINAL3_TERMINAL_IMMUTABLE/u);
+  assert.match(loudnessFailureMigration, /stage12_audio_p0_correction_failure_evidence_insert/u);
+  assert.match(loudnessFailureMigration, /STAGE12_ENCODED_LOUDNESS_FAILURE_EVIDENCE_IMMUTABLE/u);
   assert.match(diagnosticRoute, /readTrackGVideoOneStage12DiagnosticPreMaster/u);
   assert.match(remediationRoute, /storeTrackGVideoOneStage12CorrectedPreMaster/u);
   assert.match(audioP0Route, /storeTrackGVideoOneStage12AudioP0CorrectedPreMaster/u);
@@ -165,6 +168,9 @@ test("Stage 12 verifies its renderer and permits a bounded third runtime attempt
   assert.match(worker, /request\.url === '\/stage12\/audio-p0-correct'/u);
   assert.match(runtime, /executeStage12AudioP0Correction/u);
   assert.match(runtime, /STAGE12_ENCODED_LOUDNESS_UNRESOLVED/u);
+  assert.match(runtime, /measurementsByPass/u);
+  assert.match(worker, /failureDiagnostic: stage12EncodedLoudnessFailureDiagnostic/u);
+  assert.match(domain, /encodedLoudnessFailure/u);
   assert.match(domain, /correctedFrameMd5Sha256/u);
   assert.match(domain, /const useAudioP0Correction =/u);
   assert.match(domain, /audioP0CorrectionJobId: audioP0Correction!\.id/u);

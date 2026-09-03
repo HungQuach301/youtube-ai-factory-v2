@@ -1,4 +1,4 @@
-import { ASSURANCE, AUDIO, AV_SYNC_MS, MASTER, VISUAL } from "../packages/contracts/src/thresholds";
+import { ASSURANCE, AUDIO, AV_SYNC_MS, MASTER, RETRY, VISUAL } from "../packages/contracts/src/thresholds";
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 
@@ -71,6 +71,42 @@ export type Stage12MediaReceipt = {
   autoPublish: "OFF";
 };
 
+export const STAGE12_ENCODED_LOUDNESS_FAILURE_PREDICATES = [
+  "INTEGRATED_LUFS_BELOW_MIN",
+  "INTEGRATED_LUFS_ABOVE_MAX",
+  "TRUE_PEAK_DBTP_ABOVE_MAX",
+  "LOUDNESS_RANGE_LU_BELOW_MIN",
+  "LOUDNESS_RANGE_LU_ABOVE_MAX",
+] as const;
+
+export type Stage12EncodedLoudnessFailurePredicate =
+  typeof STAGE12_ENCODED_LOUDNESS_FAILURE_PREDICATES[number];
+
+export type Stage12EncodedLoudnessPassMeasurement = {
+  correctionPass: number;
+  phase: "INITIAL_ENCODED_MEASUREMENT" | "POST_CORRECTION_PASS"
+    | "FINAL_POST_ENCODE_VERIFICATION";
+  integratedLufs: number;
+  truePeakDbtp: number;
+  loudnessRangeLu: number;
+  failedPredicates: Stage12EncodedLoudnessFailurePredicate[];
+};
+
+export type Stage12EncodedLoudnessFailureDiagnostic = {
+  schemaVersion: 1;
+  boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION";
+  correctionPass: number;
+  correctionPassLimit: number;
+  measurementsByPass: Stage12EncodedLoudnessPassMeasurement[];
+  finalMeasurements: {
+    integratedLufs: number;
+    truePeakDbtp: number;
+    loudnessRangeLu: number;
+  };
+  failedPredicates: Stage12EncodedLoudnessFailurePredicate[];
+  workerImageDigest: string;
+};
+
 export type Stage12GateResult = {
   gate: string;
   state: "PASS";
@@ -85,6 +121,122 @@ export type Stage12ReceiptEvaluation = {
 
 function assertHex64(value: string, code: string): void {
   if (!HEX64.test(value)) throw new Error(code);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
+function loudnessFailurePredicates(measurement: {
+  integratedLufs: number; truePeakDbtp: number; loudnessRangeLu: number;
+}): Stage12EncodedLoudnessFailurePredicate[] {
+  const failed: Stage12EncodedLoudnessFailurePredicate[] = [];
+  if (measurement.integratedLufs < AUDIO.LUFS_I.target - AUDIO.LUFS_I.tolerance) {
+    failed.push("INTEGRATED_LUFS_BELOW_MIN");
+  }
+  if (measurement.integratedLufs > AUDIO.LUFS_I.target + AUDIO.LUFS_I.tolerance) {
+    failed.push("INTEGRATED_LUFS_ABOVE_MAX");
+  }
+  if (measurement.truePeakDbtp > AUDIO.TRUE_PEAK_MAX_DBTP) {
+    failed.push("TRUE_PEAK_DBTP_ABOVE_MAX");
+  }
+  if (measurement.loudnessRangeLu < AUDIO.LRA.min) {
+    failed.push("LOUDNESS_RANGE_LU_BELOW_MIN");
+  }
+  if (measurement.loudnessRangeLu > AUDIO.LRA.max) {
+    failed.push("LOUDNESS_RANGE_LU_ABOVE_MAX");
+  }
+  return failed;
+}
+
+function parseFailurePredicates(value: unknown): Stage12EncodedLoudnessFailurePredicate[] {
+  if (!Array.isArray(value) || new Set(value).size !== value.length
+    || !value.every((entry) => typeof entry === "string"
+      && STAGE12_ENCODED_LOUDNESS_FAILURE_PREDICATES.includes(
+        entry as Stage12EncodedLoudnessFailurePredicate,
+      ))) {
+    throw new Error("STAGE12_ENCODED_LOUDNESS_FAILURE_DIAGNOSTIC_INVALID");
+  }
+  return [...value] as Stage12EncodedLoudnessFailurePredicate[];
+}
+
+function predicatesMatch(left: Stage12EncodedLoudnessFailurePredicate[],
+  right: Stage12EncodedLoudnessFailurePredicate[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+export function parseStage12EncodedLoudnessFailureDiagnostic(
+  value: unknown,
+): Stage12EncodedLoudnessFailureDiagnostic {
+  const invalid = () => new Error("STAGE12_ENCODED_LOUDNESS_FAILURE_DIAGNOSTIC_INVALID");
+  if (!isRecord(value) || !hasExactKeys(value, [
+    "schemaVersion", "boundary", "correctionPass", "correctionPassLimit",
+    "measurementsByPass", "finalMeasurements", "failedPredicates", "workerImageDigest",
+  ]) || value.schemaVersion !== 1
+    || value.boundary !== "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION"
+    || value.correctionPassLimit !== RETRY.MAX_ATTEMPTS
+    || value.correctionPass !== value.correctionPassLimit
+    || !/^sha256:[a-f0-9]{64}$/u.test(String(value.workerImageDigest ?? ""))
+    || !Array.isArray(value.measurementsByPass)
+    || value.measurementsByPass.length !== RETRY.MAX_ATTEMPTS + 1
+    || !isRecord(value.finalMeasurements)
+    || !hasExactKeys(value.finalMeasurements, [
+      "integratedLufs", "truePeakDbtp", "loudnessRangeLu",
+    ])) throw invalid();
+
+  const measurementsByPass = value.measurementsByPass.map((entry, index) => {
+    if (!isRecord(entry) || !hasExactKeys(entry, [
+      "correctionPass", "phase", "integratedLufs", "truePeakDbtp", "loudnessRangeLu",
+      "failedPredicates",
+    ]) || entry.correctionPass !== index
+      || entry.phase !== (index === 0 ? "INITIAL_ENCODED_MEASUREMENT"
+        : index === RETRY.MAX_ATTEMPTS ? "FINAL_POST_ENCODE_VERIFICATION"
+          : "POST_CORRECTION_PASS")
+      || !Number.isFinite(entry.integratedLufs)
+      || !Number.isFinite(entry.truePeakDbtp)
+      || !Number.isFinite(entry.loudnessRangeLu)) throw invalid();
+    const measurement = {
+      correctionPass: index,
+      phase: entry.phase,
+      integratedLufs: Number(entry.integratedLufs),
+      truePeakDbtp: Number(entry.truePeakDbtp),
+      loudnessRangeLu: Number(entry.loudnessRangeLu),
+      failedPredicates: parseFailurePredicates(entry.failedPredicates),
+    } as Stage12EncodedLoudnessPassMeasurement;
+    if (!predicatesMatch(measurement.failedPredicates,
+      loudnessFailurePredicates(measurement))) throw invalid();
+    return measurement;
+  });
+  const finalMeasurements = {
+    integratedLufs: Number(value.finalMeasurements.integratedLufs),
+    truePeakDbtp: Number(value.finalMeasurements.truePeakDbtp),
+    loudnessRangeLu: Number(value.finalMeasurements.loudnessRangeLu),
+  };
+  if (!Object.values(finalMeasurements).every(Number.isFinite)) throw invalid();
+  const finalObservation = measurementsByPass.at(-1)!;
+  if (finalMeasurements.integratedLufs !== finalObservation.integratedLufs
+    || finalMeasurements.truePeakDbtp !== finalObservation.truePeakDbtp
+    || finalMeasurements.loudnessRangeLu !== finalObservation.loudnessRangeLu) throw invalid();
+  const failedPredicates = parseFailurePredicates(value.failedPredicates);
+  if (failedPredicates.length === 0
+    || !predicatesMatch(failedPredicates, finalObservation.failedPredicates)) throw invalid();
+  return {
+    schemaVersion: 1,
+    boundary: "FINAL_POST_ENCODE_LOUDNESS_VERIFICATION",
+    correctionPass: RETRY.MAX_ATTEMPTS,
+    correctionPassLimit: RETRY.MAX_ATTEMPTS,
+    measurementsByPass,
+    finalMeasurements,
+    failedPredicates,
+    workerImageDigest: String(value.workerImageDigest),
+  };
 }
 
 export function buildTrackGVideoOneStage12Request(input: Stage12RequestInput) {
