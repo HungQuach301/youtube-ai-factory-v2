@@ -1602,7 +1602,7 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
        algorithm_fingerprint,threshold_snapshot_sha256,created_at,updated_at)
       VALUES ('stage12-codec-safe-shadow-lra-parent','stage12-contract-attempt-3',
        'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
-       'stage12-loudness-replay-1',?,?,?,?,
+       'stage12-loudness-replay-1',?,?,?,
        'owner@example.com','RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY','PENDING',
        'CODEC_SAFE_SHADOW_NOT_CORRECTION',?,?,?,?,3,?,?,?,'2099-01-01T00:00:00.000Z',
        '2099-01-01T00:00:00.000Z')`)
