@@ -11,6 +11,15 @@ const insert = (db: DatabaseSync) => db.prepare(`INSERT INTO stage12_codec_safe_
  '4ff67d50dbdd891b13014b476b9cb91eb0e7fcb610a98b87bc88a2524d94ccb9','PENDING',new Date(0).toISOString())
 
 describe('migration 0033 Stage 12 LRA feasibility search', () => {
+  it('keeps every D1 statement in its own append-only migration chunk', () => {
+    const statements = sql.split('--> statement-breakpoint').map((value) => value.trim()).filter(Boolean)
+    expect(statements).toHaveLength(7)
+    expect(statements[0]).toBe('PRAGMA foreign_keys = ON;')
+    expect(statements.slice(1).every((statement) => /^(?:CREATE TABLE|CREATE TRIGGER)\b/u.test(statement)))
+      .toBe(true)
+    expect(sql).not.toMatch(/-- Down\b/u)
+  })
+
   it('is append-only and locks shadow side effects off', () => {
     const db = new DatabaseSync(':memory:'); db.exec(sql); insert(db)
     expect(() => db.prepare("UPDATE stage12_codec_safe_lra_feasibility_job SET status='READY'").run())

@@ -1,4 +1,5 @@
 PRAGMA foreign_keys = ON;
+--> statement-breakpoint
 
 CREATE TABLE stage12_codec_safe_lra_feasibility_job (
   id TEXT PRIMARY KEY,
@@ -18,6 +19,7 @@ CREATE TABLE stage12_codec_safe_lra_feasibility_job (
   auto_publish INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish = 0),
   created_at TEXT NOT NULL
 );
+--> statement-breakpoint
 
 CREATE TABLE stage12_codec_safe_lra_feasibility_evidence (
   id TEXT PRIMARY KEY,
@@ -31,20 +33,16 @@ CREATE TABLE stage12_codec_safe_lra_feasibility_evidence (
   evidence_semantics TEXT NOT NULL CHECK (evidence_semantics = 'CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION'),
   created_at TEXT NOT NULL
 );
+--> statement-breakpoint
 
 CREATE TRIGGER trg_stage12_lra_feasibility_job_no_update BEFORE UPDATE ON stage12_codec_safe_lra_feasibility_job
 BEGIN SELECT RAISE(ABORT, 'STAGE12_LRA_FEASIBILITY_JOB_IMMUTABLE'); END;
+--> statement-breakpoint
 CREATE TRIGGER trg_stage12_lra_feasibility_job_no_delete BEFORE DELETE ON stage12_codec_safe_lra_feasibility_job
 BEGIN SELECT RAISE(ABORT, 'STAGE12_LRA_FEASIBILITY_JOB_IMMUTABLE'); END;
+--> statement-breakpoint
 CREATE TRIGGER trg_stage12_lra_feasibility_evidence_no_update BEFORE UPDATE ON stage12_codec_safe_lra_feasibility_evidence
 BEGIN SELECT RAISE(ABORT, 'STAGE12_LRA_FEASIBILITY_EVIDENCE_IMMUTABLE'); END;
+--> statement-breakpoint
 CREATE TRIGGER trg_stage12_lra_feasibility_evidence_no_delete BEFORE DELETE ON stage12_codec_safe_lra_feasibility_evidence
 BEGIN SELECT RAISE(ABORT, 'STAGE12_LRA_FEASIBILITY_EVIDENCE_IMMUTABLE'); END;
-
--- Down (manual, development-only):
--- DROP TRIGGER trg_stage12_lra_feasibility_evidence_no_delete;
--- DROP TRIGGER trg_stage12_lra_feasibility_evidence_no_update;
--- DROP TRIGGER trg_stage12_lra_feasibility_job_no_delete;
--- DROP TRIGGER trg_stage12_lra_feasibility_job_no_update;
--- DROP TABLE stage12_codec_safe_lra_feasibility_evidence;
--- DROP TABLE stage12_codec_safe_lra_feasibility_job;

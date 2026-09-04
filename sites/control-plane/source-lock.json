@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "0c82152ab95589dbbdb302794cee882d1e94d6aaa2511ccf6183cb75e912a013",
+  "aggregate_sha256": "6e32356762f78412fbb2bf8bbe1005e0f0675098619d29a405665631cfbe3d07",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -154,6 +154,10 @@
     {
       "path": "app/stage11-audio.ts",
       "sha256": "13756bb8b6930646365126eda2869b8bb67040af2bced510381e48d92414edb6"
+    },
+    {
+      "path": "app/stage12-lra-feasibility-contract.ts",
+      "sha256": "579ffd6455549e9598ada2a26a7b386c5dadbf80738a3b255c0a434545903cfa"
     },
     {
       "path": "app/stage12-media.ts",
@@ -318,6 +322,10 @@
     {
       "path": "drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql",
       "sha256": "007c663760f0c59c8d0813be1b2b217fc6f7fcb17b7b8362cd794df2fba67c18"
+    },
+    {
+      "path": "drizzle/0033_stage12_codec_safe_lra_feasibility_search.sql",
+      "sha256": "c18d864c365b53dde261f67b0835990dc21c7365dfb3868f76b51e6561f0e14c"
     },
     {
       "path": "drizzle/meta/0000_snapshot.json",
