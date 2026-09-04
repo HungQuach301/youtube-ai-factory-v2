@@ -1,9 +1,40 @@
 # EVOLUTION QUEUE
 
+## EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+- Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng từ exact main
+  `11cde9b22e63191133fe3f0791b3093e8d888e49` / tree
+  `fd0db89b64402d5c16abc3cb04e78a96408c8c48`, chưa merge/deploy hoặc chạy
+  Production feasibility search.
+- Deployment checkpoint chỉ để read-back: Sites v80/source
+  `5d97e67fae0e589950aa077076d2f26a487dcfee`; Fly image
+  `sha256:233073a2a5f4282e4fe377fea3d7cd43e966c56e466c62203e97ed87cb75f280`.
+  Implementation này không thay đổi hai deployment đó.
+- Kind: `PIPELINE_CODE`; strictness direction: `SHADOW_ONLY_CODEC_SAFETY`;
+  thresholds direction: `NEUTRAL`.
+- Source: immutable correction ordinal 2 SHA
+  `163acb7a9d1b971afeb50b3ac935960cfe7197e9fcbe45416eebdaa8299506d2`, parent
+  true-peak evidence `41209f9c50604dd8e1963d83717eaf6734c1c6fdee1857c6647af483f89243eb`
+  và LRA-guard evidence `4ff67d50dbdd891b13014b476b9cb91eb0e7fcb610a98b87bc88a2524d94ccb9`.
+  Guard terminal `READY/FAIL:BUDGET_EXHAUSTED`, selected pass 5, final
+  `-15.25 LUFS/-1.06 dBTP/3.20 LU`; failed predicates là integrated LUFS và LRA
+  below minimum.
+- Diff: deterministic LRA map trong `10.9..14 dB`, post-Opus true-peak
+  containment, LUFS trim/stabilization, same-artifact verification và safe
+  rollback với phase budget riêng `8/4/3/2/1/1`. Typed command
+  `RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH`, migration 0033 append-only,
+  worker/control-plane mirrors và real FFmpeg zero-write smoke.
+- Boundary: thresholds giữ nguyên `-14±1 LUFS-I`, `≤-1 dBTP`, `4..8 LU`; parent
+  history immutable và current step giữ `STAGE_12_READY`; không Production
+  invocation/replay, ordinal/attempt 4,
+  output, provider, calibration, Finalize, activation, release hoặc publish.
+- Activation: PR/CI chỉ build/test. Sau merge/deploy/exact-tree/health PASS vẫn
+  cần owner OPERATE approval riêng cho đúng một Production feasibility search.
+
 ## EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
 
-- Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy và chưa
-  chạy Production LRA guard shadow replay.
+- Status: `PRODUCTION_SHADOW_READY_FAIL`; implementation đã merge/deploy và đúng
+  một owner-approved Production LRA guard shadow đã về terminal. Không replay lần hai.
 - Kind: `PIPELINE_CODE`; strictness direction: `SHADOW_ONLY_CODEC_SAFETY`.
 - Source: immutable parent shadow evidence
   `41209f9c50604dd8e1963d83717eaf6734c1c6fdee1857c6647af483f89243eb`
@@ -17,13 +48,18 @@
 - Local evidence: full root CI PASS; 15 focused controller/migration/guardrail tests
   PASS; real FFmpeg zero-write smoke PASS; canonical/Sites worker mirrors exact-match;
   source manifests và Sites source-lock PASS.
-- Activation: PR/CI không cấp quyền Production replay. Invocation cần owner OPERATE
-  approval riêng sau merge/deploy/exact-tree/health PASS.
+- Production evidence: evidence
+  `4ff67d50dbdd891b13014b476b9cb91eb0e7fcb610a98b87bc88a2524d94ccb9`,
+  job `READY/FAIL`, terminal `BUDGET_EXHAUSTED`, selected pass 5; final
+  `-15.25 LUFS`, `-1.06 dBTP`, `3.20 LU`. Nó không tạo output hoặc activation.
+- Activation: guard đã dừng fail-closed; không replay. Feasibility evolution kế
+  tiếp cần implementation/promotion và owner OPERATE approval tách biệt.
 
 ## EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
 
-- Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy
-  và chưa chạy Production shadow replay.
+- Status: `PRODUCTION_SHADOW_EVIDENCE_AVAILABLE`; immutable Production parent
+  evidence `41209f9c50604dd8e1963d83717eaf6734c1c6fdee1857c6647af483f89243eb`
+  đã trở thành lineage input cho LRA guard; không replay lại.
 - Kind: `PIPELINE_CODE`; strictness direction: `SHADOW_ONLY_CODEC_SAFETY`.
 - Source: append-only diagnostic replay chứng minh strategy v3 giữ LUFS/LRA nhưng
   true peak hậu Opus tăng vì candidate sau tái encode candidate Opus trước.
@@ -33,8 +69,8 @@
 - Boundary: thresholds không đổi; ordinal 2/3 và replay history immutable; không
   ordinal/attempt 4, output upload, provider, calibration, Finalize, release,
   Production activation hoặc publish.
-- Activation: PR/CI không cấp quyền Production shadow. Invocation và mọi promotion
-  sau shadow evidence đều cần owner approval tách biệt.
+- Activation: không replay hoặc tự promote. Mọi evolution/Production invocation
+  tiếp theo cần owner approval tách biệt.
 
 ## EVOLVE_STAGE12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY
 

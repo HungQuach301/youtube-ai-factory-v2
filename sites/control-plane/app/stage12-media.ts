@@ -2,6 +2,8 @@ import { createHash, createPrivateKey, sign } from "node:crypto";
 import type { Stage12CodecSafeLraGuardControllerPolicy,
   Stage12CodecSafeTruePeakCandidate, Stage12MediaReceipt,
   Stage12MediaRequest } from "./stage12-pre-master";
+import type { Stage12CodecSafeLraFeasibilitySearchContract } from
+  "../packages/contracts/src/stage12-codec-safe-lra-feasibility";
 import { getFactoryEnv } from "./runtime-env";
 
 export type Stage12MediaStartRequest = Stage12MediaRequest & {
@@ -154,6 +156,10 @@ export type Stage12MediaCodecSafeLraGuardShadowReplayRequest = Stage12MediaStart
   };
 };
 
+export type Stage12MediaCodecSafeLraFeasibilitySearchRequest = Stage12MediaStartRequest & {
+  codecSafeLraFeasibilitySearch: Stage12CodecSafeLraFeasibilitySearchContract;
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -168,6 +174,7 @@ export type Stage12MediaWorkerHealth = {
   encodedLoudnessDiagnosticReplayReady: true;
   codecSafeTruePeakShadowReady: true;
   codecSafeLraGuardShadowReady: true;
+  codecSafeLraFeasibilitySearchReady: true;
 };
 
 function sha256(bytes: Uint8Array): string {
@@ -212,6 +219,7 @@ export async function readStage12MediaWorkerHealth(): Promise<Stage12MediaWorker
     || value.encodedLoudnessDiagnosticReplayReady !== true
     || value.codecSafeTruePeakShadowReady !== true
     || value.codecSafeLraGuardShadowReady !== true
+    || value.codecSafeLraFeasibilitySearchReady !== true
     || !/^sha256:[a-f0-9]{64}$/u.test(value.imageDigest ?? "")) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_HEALTH_FAILED:${value.code ?? response.status}`);
   }
@@ -245,6 +253,22 @@ export async function dispatchStage12CodecSafeLraGuardShadowReplay(
     || result.imageDigest !== payload.codecSafeLraGuardShadowReplay.expectedWorkerImageDigest) {
     throw new Error(
       `TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY_FAILED:${result.code ?? response.status}`,
+    );
+  }
+  return result;
+}
+
+export async function dispatchStage12CodecSafeLraFeasibilitySearch(
+  payload: Stage12MediaCodecSafeLraFeasibilitySearchRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/codec-safe-lra-feasibility-search", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || result.imageDigest !== payload.codecSafeLraFeasibilitySearch.expectedWorkerImageDigest) {
+    throw new Error(
+      `TRACK_G_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH_FAILED:${result.code ?? response.status}`,
     );
   }
   return result;

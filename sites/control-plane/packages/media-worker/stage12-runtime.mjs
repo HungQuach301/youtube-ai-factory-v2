@@ -4,6 +4,25 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import {
+  buildStage12CodecSafeLraFeasibilityEvidence,
+  classifyStage12CodecSafeLraFeasibilityCandidate,
+  finalizeStage12CodecSafeLraFeasibilityTrace,
+  planStage12CodecSafeLraFeasibilityCandidate,
+  stage12CodecSafeLraFeasibilityFingerprints,
+  stage12CodecSafeLraFeasibilityRenderRuntimeFingerprint,
+  validateStage12CodecSafeLraFeasibilityContract,
+} from './stage12-codec-safe-lra-feasibility-controller.mjs'
+
+export {
+  buildStage12CodecSafeLraFeasibilityEvidence,
+  classifyStage12CodecSafeLraFeasibilityCandidate,
+  finalizeStage12CodecSafeLraFeasibilityTrace,
+  planStage12CodecSafeLraFeasibilityCandidate,
+  stage12CodecSafeLraFeasibilityFingerprints,
+  stage12CodecSafeLraFeasibilityRenderRuntimeFingerprint,
+}
+
 const HEX64 = /^[0-9a-f]{64}$/u
 const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
   ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
@@ -268,14 +287,16 @@ function exactLoudnessMeasurement(payload, correctionPass, phase, loudness,
   }
 }
 
-async function measureStage12EncodedLoudness(payload, preMasterPath, workRoot, lraTarget) {
+export async function measureStage12EncodedLoudness(
+  payload, preMasterPath, workRoot, lraTarget,
+) {
   const analysis = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
     '-af', `loudnorm=I=${payload.qa.loudness.integratedLufs}:TP=${payload.qa.loudness.truePeakMaxDbtp}:LRA=${lraTarget}:print_format=json`, '-f', 'null', '-'], workRoot,
   'STAGE12_FINAL_LOUDNESS_FAILED')
   return parseLoudnorm(analysis.stderr.toString('utf8'))
 }
 
-async function stage12AudioFrameMd5Sha256(preMasterPath, workRoot) {
+export async function stage12AudioFrameMd5Sha256(preMasterPath, workRoot) {
   const frameMd5 = await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-i', preMasterPath,
     '-map', '0:a:0', '-f', 'framemd5', '-'], workRoot,
   'STAGE12_DIAGNOSTIC_REPLAY_AUDIO_FRAME_HASH_FAILED')
@@ -951,6 +972,12 @@ export function validateStage12CodecSafeLraGuardShadowPayload(payload, imageDige
   return value
 }
 
+export function validateStage12CodecSafeLraFeasibilityPayload(payload, imageDigest) {
+  const value = validateStage12Payload(payload)
+  validateStage12CodecSafeLraFeasibilityContract(payload, imageDigest)
+  return value
+}
+
 export function buildStage12CodecSafeLraGuardShadowEvidence(payload, evidence) {
   const invalid = () => Object.assign(new Error('Invalid Stage 12 LRA guard evidence.'), {
     code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_EVIDENCE',
@@ -1367,8 +1394,9 @@ function stage12CodecSafeMacroDynamics(payload, macroDepthDb) {
   return `volume='if(lt(mod(t\\,${periodSec})\\,${halfPeriodSec})\\,${attenuatedGain.toFixed(6)}\\,1)':eval=frame,`
 }
 
-async function renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
-  workRoot, controller) {
+export async function renderStage12CodecSafeCandidate(
+  payload, losslessReferencePath, candidatePath, workRoot, controller,
+) {
   const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
   const target = `I=${controller.integratedTargetLufs.toFixed(6)}:TP=${controller.limiterCeilingDbtp.toFixed(6)}:LRA=${lraTarget}`
   const macroDynamics = stage12CodecSafeMacroDynamics(payload, controller.macroDepthDb)
@@ -1569,6 +1597,137 @@ export async function executeStage12CodecSafeLraGuardShadowReplay(payloadInput, 
         evidenceId: replay.diagnosticReplayEvidenceId },
       parentShadow: { jobId: replay.codecSafeTruePeakShadowJobId,
         evidenceId: replay.codecSafeTruePeakShadowEvidenceId },
+      losslessReference,
+      candidates,
+      workerImageDigest: imageDigest,
+      expectedWorkerImageDigest: replay.expectedWorkerImageDigest,
+      algorithmFingerprint: replay.algorithmFingerprint,
+      thresholdSnapshotSha256: replay.thresholdSnapshotSha256,
+      controllerPolicySha256: replay.controllerPolicySha256,
+      renderKernelFingerprint: replay.renderKernelFingerprint,
+      renderRuntimeFingerprint,
+      runtimeProvenance,
+    })
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, imageDigest) {
+  const payload = validateStage12CodecSafeLraFeasibilityPayload(payloadInput, imageDigest)
+  const replay = payloadInput.codecSafeLraFeasibilitySearch
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-codec-safe-lra-feasibility-'))
+  const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
+  const losslessReferencePath = join(workRoot, 'canonical-lossless-reference.wav')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=codec-safe-lra-feasibility-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${replay.sourceCorrectedPreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== replay.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== replay.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('LRA feasibility source read-back mismatch.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:a:0', '-map_metadata', '-1', '-fflags', '+bitexact',
+      '-flags:a', '+bitexact', '-c:a', 'pcm_f32le',
+      '-ar', String(payload.render.sampleRateHz), losslessReferencePath], workRoot,
+    'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_LOSSLESS_DECODE_FAILED')
+    const losslessBytes = await readFile(losslessReferencePath)
+    const losslessReference = {
+      sha256: sha256(losslessBytes),
+      byteLength: losslessBytes.byteLength,
+      audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(losslessReferencePath, workRoot),
+      codec: 'pcm_f32le',
+      sampleRateHz: payload.render.sampleRateHz,
+    }
+    if (canonicalize(losslessReference) !== canonicalize(replay.parentLosslessReference)) {
+      throw Object.assign(new Error('LRA feasibility lossless reference drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_LOSSLESS_REFERENCE_DRIFT',
+      })
+    }
+    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    if (canonicalize(runtimeProvenance) !== canonicalize(replay.parentRuntimeProvenance)) {
+      throw Object.assign(new Error('LRA feasibility runtime provenance drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_RUNTIME_DRIFT',
+      })
+    }
+    const renderRuntimeFingerprint = stage12CodecSafeLraFeasibilityRenderRuntimeFingerprint(
+      replay.renderKernelFingerprint, runtimeProvenance,
+    )
+    if (renderRuntimeFingerprint !== replay.parentRenderRuntimeFingerprint) {
+      throw Object.assign(new Error('LRA feasibility render runtime drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_RENDER_RUNTIME_DRIFT',
+      })
+    }
+    const candidates = []
+    const candidatePaths = new Map()
+    const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+    const maximumCandidates = replay.controllerPolicy.lraMapBudget
+      + replay.controllerPolicy.truePeakContainmentBudget
+      + replay.controllerPolicy.lufsTrimBudget
+      + replay.controllerPolicy.postTrimStabilizationBudget
+      + replay.controllerPolicy.finalVerifyBudget
+      + replay.controllerPolicy.rollbackVerifyBudget
+    while (candidates.length < maximumCandidates) {
+      const plan = planStage12CodecSafeLraFeasibilityCandidate(payload, replay, candidates)
+      if (plan.done) break
+      let candidatePath
+      if (plan.phase === 'FINAL_VERIFY') {
+        candidatePath = candidatePaths.get(plan.parentCandidateOrdinal)
+        if (!candidatePath) {
+          throw Object.assign(new Error('Final verification artifact is missing.'), {
+            code: 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_FINAL_ARTIFACT_MISSING',
+          })
+        }
+      } else {
+        candidatePath = join(workRoot, `codec-safe-lra-feasibility-${plan.candidateOrdinal}.webm`)
+        await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+          workRoot, plan)
+      }
+      const measured = await measureStage12EncodedLoudness(
+        payload, candidatePath, workRoot, lraTarget,
+      )
+      const candidate = classifyStage12CodecSafeLraFeasibilityCandidate(
+        payload, replay, plan, {
+          integratedLufs: measured.integratedLufs,
+          integratedLufsExact: measured.integratedLufsExact,
+          truePeakDbtp: measured.truePeakDbtp,
+          truePeakDbtpExact: measured.truePeakDbtpExact,
+          loudnessRangeLu: measured.loudnessRangeLu,
+          loudnessRangeLuExact: measured.loudnessRangeLuExact,
+          encodedArtifactSha256: sha256(await readFile(candidatePath)),
+          audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(candidatePath, workRoot),
+        },
+      )
+      candidates.push(candidate)
+      candidatePaths.set(candidate.candidateOrdinal, candidatePath)
+      if (candidate.disposition === 'FINAL_PASS' || candidate.phase === 'ROLLBACK_VERIFY') break
+    }
+    return buildStage12CodecSafeLraFeasibilityEvidence(payload, {
+      evidenceSemantics: replay.evidenceSemantics,
+      replay,
+      source: { correctionOrdinal: replay.sourceCorrectionOrdinal,
+        correctionJobId: replay.sourceCorrectionJobId,
+        r2Key: replay.sourceCorrectedPreMaster.r2Key,
+        sha256: replay.sourceCorrectedPreMaster.sha256,
+        byteLength: replay.sourceCorrectedPreMaster.byteLength,
+        receiptSha256: replay.sourceCorrectionReceiptSha256 },
+      historicalFailure: { correctionOrdinal: replay.historicalFailureCorrectionOrdinal,
+        correctionJobId: replay.historicalFailureJobId,
+        errorCode: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED' },
+      diagnosticReplay: { jobId: replay.diagnosticReplayJobId,
+        evidenceId: replay.diagnosticReplayEvidenceId },
+      parentTruePeakShadow: { jobId: replay.codecSafeTruePeakShadowJobId,
+        evidenceId: replay.codecSafeTruePeakShadowEvidenceId },
+      parentLraGuard: { jobId: replay.codecSafeLraGuardShadowJobId,
+        evidenceId: replay.codecSafeLraGuardShadowEvidenceId },
+      parentGuardTrace: replay.parentGuardTrace,
       losslessReference,
       candidates,
       workerImageDigest: imageDigest,

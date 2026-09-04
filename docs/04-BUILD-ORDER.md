@@ -329,3 +329,20 @@ bước tối đa 0.25 LU; overshoot regression >0.25 dB bị reject và rollbac
 migration, guardrail, real FFmpeg zero-write smoke, root/Sites CI PASS. Threshold
 không đổi; không Production replay, ordinal/attempt 4, output, provider,
 calibration, Finalize, release, activation hoặc publish.
+
+### 🟡 WP-38 · EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+**Phạm vi.** Shadow-only deterministic feasibility controller đọc exact LRA-guard
+trace pass `0..7`, khảo sát macro depth `10.9..14 dB` mà không dùng true-peak fail
+làm LRA bound, sau đó tách post-Opus true-peak containment và LUFS trim thành hai
+phase với control variable và budget riêng. Typed command
+`RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH`; migration 0033 chỉ thêm
+append-only job/evidence trên exact ordinal-2 + hai parent-shadow lineage.
+
+**DoD.** LRA probe lattice, seed tie-break, containment/trim isolation và tổng
+budget `19` deterministic; reserve trim/verification/rollback không bị phase trước
+tiêu; cùng một decoded-Opus artifact phải đạt đồng thời threshold hiện hành trước
+PASS. Unit, migration, guardrail, real FFmpeg zero-write smoke, root/Sites CI và
+health readiness parity PASS. Threshold diff bằng 0; PR không chạy Production
+search và không tạo ordinal/attempt 4, output, provider, calibration, Finalize,
+activation, release hoặc publish.

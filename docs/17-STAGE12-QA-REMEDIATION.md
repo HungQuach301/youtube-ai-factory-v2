@@ -202,3 +202,40 @@ Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD`
 - Đây chỉ là shadow evidence. Threshold giữ nguyên `-14±1`, `≤-1`, `4..8`;
   không output, Production activation, ordinal/attempt 4, provider, calibration,
   Finalize, release hoặc publish.
+
+## Codec-safe LRA feasibility search shadow
+
+Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH`
+
+- Search chỉ nhận immutable correction ordinal 2 và exact lineage của true-peak
+  shadow + LRA-guard shadow `READY/FAIL:BUDGET_EXHAUSTED`. Parent pass `0..7`
+  được parse lossless; selected pass 5 chỉ là
+  `CODEC_PEAK_SAFE_FALLBACK`, không phải Stage 12 PASS.
+- Phase `LRA_MAP` chỉ thay macro depth trong `10.9..14 dB`. True-peak
+  fail không được thu hẹp miền LRA. Probe order xác định là
+  `14, 12.45, 11.675, 13.225, 11.2875, 12.0625, 12.8375, 13.6125 dB`; điểm
+  `14 dB` luôn được đo lại với target `-14 LUFS`, không tái sử dụng parent high
+  reference có target `-11.79 LUFS`.
+- Seed đạt `LRA 4..8 LU` được xếp hạng bằng tie-break cố định: margin LRA lớn
+  hơn, true-peak excess nhỏ hơn, LUFS error nhỏ hơn, macro depth thấp hơn, rồi
+  candidate ordinal thấp hơn. Tối đa hai seed đi tiếp.
+- Phase `TP_CONTAINMENT` khóa macro depth và LUFS target, chỉ hạ limiter ceiling;
+  mỗi step encode/decode/measure lại cùng artifact. Phase `LUFS_TRIM` chỉ bắt đầu
+  sau khi LRA và true peak cùng đạt, khóa macro
+  depth/containment và trim tối đa `0.25 LU` mỗi step về interior
+  `-14.95..-13.05 LUFS-I`.
+- Budget tách biệt, không vay lẫn nhau: LRA map `8`, containment `4`, LUFS trim
+  `3`, post-trim stabilization `2`, same-artifact verification `1`, rollback
+  reproduction `1` — tổng tối đa `19` compute candidates. Hết budget trả
+  `FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED`, không suy diễn miền bất khả thi.
+- Final `PASS` chỉ hợp lệ khi cùng một encoded-Opus artifact SHA-256, decoded
+  frame-MD5 và exact measurement strings đồng thời đạt `-15..-13 LUFS-I`,
+  `≤-1 dBTP`, `4..8 LU`. Result semantics là
+  `CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION`; không có output pointer hay
+  quyền promotion.
+- Migration `0033` chỉ thêm job/evidence append-only, bind exact ordinal 2 SHA,
+  parent evidence IDs, candidate trace, budget ledger, rollback selection và
+  worker/FFmpeg/libopus/algorithm/threshold provenance. Không UPDATE/backfill
+  ordinal 2/3 hoặc hai parent shadows.
+- PR/CI chỉ build/test. Không Production invocation/replay, ordinal/attempt 4,
+  output upload, provider, calibration, Finalize, activation, release hoặc publish.

@@ -1656,3 +1656,29 @@ promotion cần owner approval và work package riêng.
 Work package chỉ implement trên branch riêng, tạo PR và chạy CI. Không merge,
 deploy hoặc chạy Production guard shadow replay. Mọi invocation/promotion sau đó
 cần owner approval riêng; shadow PASS không tự activate correction algorithm.
+
+---
+
+## EVO-STAGE12-CODEC-SAFE-LRA-FEASIBILITY-SEARCH · Phase-isolated shadow controller
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Exact guard trace pass `0..7`, parent evidence và ordinal-2 SHA | Strict parser, typed control-plane input, migration 0033 lineage triggers và canonical regression fixture |
+| Non-monotonic LRA map trong `10.9..14 dB` | Deterministic endpoint-first largest-gap lattice unit vectors; high reference khác target bị đánh dấu confounded |
+| Tách macro depth, limiter ceiling và LUFS target | Six-phase controller unit trace; mỗi phase chỉ thay đúng một control variable |
+| Budget/reserve không vay lẫn nhau | Ledger khóa `8/4/3/2/1/1`, tổng tối đa 19 candidates; exhaustion có typed terminal riêng |
+| Same-artifact post-Opus acceptance | Runtime parser + real FFmpeg smoke đo LUFS/TP/LRA trên đúng terminal candidate; không trộn measurements |
+| Safe rollback không bị gọi là PASS | Exact selected parent pass 5 reproduction; rollback drift fail closed |
+| Threshold contract unchanged | Worker/control-plane fingerprint parity và guardrails khóa `-14±1`, `≤-1`, `4..8`; `thresholds.ts` không đổi |
+| Append-only shadow-only, không side effect | Migration immutability/terminal-shape tests, read-only source, zero-write smoke và flags `false/0/OFF` |
+| Không ordinal/attempt 4 | Static, migration và Sites integration assertions |
+
+## Production boundary
+
+Work package chỉ implement trên branch riêng, chạy local/remote CI và mở PR. Không
+merge, deploy hoặc chạy Production feasibility search. Mọi invocation cần owner
+OPERATE approval riêng sau merge/deploy/exact-tree/health PASS. Shadow PASS không
+upload output hoặc tự activate correction path; không provider, calibration,
+Finalize, release hay publish.

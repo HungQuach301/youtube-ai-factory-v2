@@ -22,6 +22,102 @@ function canonicalTestSha256(value) {
   return createHash("sha256").update(canonicalTestValue(value)).digest("hex");
 }
 
+test("Stage 12 LRA feasibility callback SQL keeps columns, placeholders, and binds aligned", async () => {
+  const domain = await readFile(
+    fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)),
+    "utf8",
+  );
+
+  function argumentCount(source) {
+    let count = source.trim() ? 1 : 0;
+    let depth = 0;
+    let quote = null;
+    for (let index = 0; index < source.length; index += 1) {
+      const character = source[index];
+      if (quote) {
+        if (character === "\\") index += 1;
+        else if (character === quote) quote = null;
+      } else if (character === "\"" || character === "'" || character === "`") {
+        quote = character;
+      } else if (character === "(" || character === "[" || character === "{") {
+        depth += 1;
+      } else if (character === ")" || character === "]" || character === "}") {
+        depth -= 1;
+      } else if (character === "," && depth === 0) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  function preparedBinds(source) {
+    const calls = [];
+    const marker = "getD1().prepare(`";
+    let cursor = 0;
+    while ((cursor = source.indexOf(marker, cursor)) !== -1) {
+      const sqlStart = cursor + marker.length;
+      const sqlEnd = source.indexOf("`", sqlStart);
+      if (sqlEnd === -1) break;
+      const binding = /^\)\s*\.bind\(/u.exec(source.slice(sqlEnd + 1));
+      if (!binding) {
+        cursor = sqlEnd + 1;
+        continue;
+      }
+      const argsStart = sqlEnd + 1 + binding[0].length;
+      let depth = 1;
+      let quote = null;
+      let argsEnd = argsStart;
+      for (; argsEnd < source.length && depth > 0; argsEnd += 1) {
+        const character = source[argsEnd];
+        if (quote) {
+          if (character === "\\") argsEnd += 1;
+          else if (character === quote) quote = null;
+        } else if (character === "\"" || character === "'" || character === "`") {
+          quote = character;
+        } else if (character === "(") {
+          depth += 1;
+        } else if (character === ")") {
+          depth -= 1;
+        }
+      }
+      calls.push({ sql: source.slice(sqlStart, sqlEnd),
+        args: source.slice(argsStart, argsEnd - 1) });
+      cursor = argsEnd;
+    }
+    return calls;
+  }
+
+  const calls = preparedBinds(domain);
+  const required = [
+    calls.find(({ sql }) => sql.includes(
+      "INSERT INTO stage12_codec_safe_lra_feasibility_search_job",
+    )),
+    calls.find(({ sql }) => sql.includes(
+      "INSERT INTO stage12_codec_safe_lra_feasibility_search_evidence",
+    )),
+    calls.find(({ sql }) => sql.includes(
+      "UPDATE stage12_codec_safe_lra_feasibility_search_job SET state='READY'",
+    )),
+  ];
+  for (const call of required) {
+    assert.ok(call, "missing Stage 12 LRA feasibility SQL statement");
+    assert.equal(call.sql.match(/\?/gu)?.length ?? 0, argumentCount(call.args));
+  }
+
+  const projectionStart = domain.indexOf("function stage12CodecSafeLraFeasibilityEvidenceResult");
+  const projectionEnd = domain.indexOf(
+    "export async function diagnoseTrackGVideoOneStage12CodecSafeLraFeasibilitySearch",
+    projectionStart,
+  );
+  const projection = domain.slice(projectionStart, projectionEnd);
+  assert.match(projection,
+    /lastEvaluatedCandidateOrdinal:\s*evidence\.lastCandidateOrdinal/u);
+  assert.match(projection,
+    /verifiedCandidateOrdinal:\s*evidence\.verifiedCandidateOrdinal/u);
+  assert.match(projection,
+    /parentRenderKernelFingerprint:\s*evidence\.parentRenderKernelFingerprint/u);
+});
+
 test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
@@ -321,8 +417,18 @@ async function createFactoryFixture(databaseName, bindings = { FACTORY_OWNER_EMA
     .sort();
   for (const migrationName of migrations) {
     const migration = await readFile(resolve(migrationRoot, migrationName), "utf8");
-    for (const statement of migration.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
-      await d1.prepare(statement).run();
+    const statements = migration.split("--> statement-breakpoint")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    for (const [statementIndex, statement] of statements.entries()) {
+      try {
+        await d1.prepare(statement).run();
+      } catch (error) {
+        throw new Error(
+          `D1 migration ${migrationName} statement ${statementIndex + 1} failed: ${String(error)}`,
+          { cause: error },
+        );
+      }
     }
   }
   return { mf, d1 };
