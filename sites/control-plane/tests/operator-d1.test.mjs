@@ -1459,73 +1459,6 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
     ).digest("hex"), source.ordinalTwoSha256);
 
     const losslessReferenceSha256 = "1".repeat(64);
-    const shadowCandidate = { candidatePass: 0, phase: "INITIAL_CODEC_SAFE_CANDIDATE",
-      losslessReferenceSha256, integratedTargetLufs: -14, limiterCeilingDbtp: -2,
-      macroDepthDb: 5, codecOvershootDb: 0.8,
-      integratedLufs: -14, integratedLufsExact: "-14.00",
-      truePeakDbtp: -1.2, truePeakDbtpExact: "-1.20",
-      loudnessRangeLu: 5, loudnessRangeLuExact: "5.00", failedPredicates: [],
-      audioFrameMd5Sha256: "2".repeat(64) };
-    const shadowResult = { accepted: true, schemaVersion: 1,
-      evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
-      boundary: "POST_OPUS_TRUE_PEAK_FEEDBACK",
-      source: { correctionOrdinal: 2,
-        correctionJobId: "stage12-audio-p0-correction-2",
-        r2Key: source.ordinalTwoR2Key, sha256: source.ordinalTwoSha256,
-        byteLength: source.ordinalTwoByteLength,
-        receiptSha256: source.ordinalTwoReceiptSha256 },
-      historicalFailure: { correctionOrdinal: 3,
-        correctionJobId: "stage12-audio-p0-correction-3",
-        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
-      diagnosticReplay: { jobId: "stage12-loudness-replay-1",
-        evidenceId: replayEvidence.id },
-      losslessReference: { sha256: losslessReferenceSha256, byteLength: 33554432,
-        audioFrameMd5Sha256: "3".repeat(64), codec: "pcm_f32le", sampleRateHz: 48000 },
-      candidates: [shadowCandidate], terminalCandidatePass: 0,
-      finalMeasurements: { integratedLufs: -14, integratedLufsExact: "-14.00",
-        truePeakDbtp: -1.2, truePeakDbtpExact: "-1.20",
-        loudnessRangeLu: 5, loudnessRangeLuExact: "5.00" },
-      failedPredicates: [], shadowOutcome: "PASS",
-      workerImageDigest: shadowImageDigest,
-      expectedWorkerImageDigest: shadowImageDigest,
-      algorithmFingerprint: shadowAlgorithmFingerprint,
-      thresholdSnapshotSha256,
-      runtimeProvenance: { ffmpegVersion: "ffmpeg version 7.1.1",
-        ffmpegBuildFingerprint: "7".repeat(64),
-        libopusEncoderFingerprint: "8".repeat(64) },
-      correctionPassLimit: 3, correctedOutputUploaded: false,
-      historicalBackfill: false, providerCallCount: 0, providerDispatch: "OFF",
-      calibration: false, finalize: false, releaseEligible: false,
-      productionActivation: false, autoPublish: "OFF" };
-    const shadowCallback = await mf.dispatchFetch(
-      "https://factory.test/api/media-worker/stage12-codec-safe-true-peak-shadow-replay",
-      { method: "POST", headers: { authorization: `Bearer ${shadowToken}`,
-        "content-type": "application/json" },
-      body: JSON.stringify({ idempotencyKey: shadowKey, result: shadowResult }) },
-    );
-    assert.equal(shadowCallback.status, 201, await shadowCallback.text());
-    assert.deepEqual(await d1.prepare(`SELECT state,shadow_outcome,terminal_candidate_pass,
-      corrected_output_uploaded,historical_backfill,provider_call_count,provider_dispatch,
-      calibration_executed,finalize_executed,release_eligible,
-      production_activation_executed,auto_publish
-      FROM stage12_codec_safe_true_peak_shadow_job`).first(), {
-      state: "READY", shadow_outcome: "PASS", terminal_candidate_pass: 0,
-      corrected_output_uploaded: 0, historical_backfill: 0, provider_call_count: 0,
-      provider_dispatch: "OFF", calibration_executed: 0, finalize_executed: 0,
-      release_eligible: 0, production_activation_executed: 0, auto_publish: "OFF",
-    });
-    const shadowReady = await client.callTool({ name: "diagnose_factory_command", arguments: {
-      commandType: "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY",
-      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
-    } });
-    assert.equal(shadowReady.structuredContent.operationState, "READY");
-    const shadowDiagnostic = JSON.parse(shadowReady.structuredContent.diagnosticJson);
-    assert.equal(shadowDiagnostic.result.shadowOutcome, "PASS");
-    assert.equal(shadowDiagnostic.result.productionActivation, false);
-
-    const parentKey = createHash("sha256").update("codec-safe-lra-parent-key").digest("hex");
-    const parentToken = "b".repeat(64);
-    const parentTokenHash = createHash("sha256").update(parentToken).digest("hex");
     const parentRuntimeProvenance = { ffmpegVersion: "ffmpeg version 7.1.1",
       ffmpegBuildFingerprint: "7".repeat(64),
       libopusEncoderFingerprint: "8".repeat(64) };
@@ -1565,7 +1498,7 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
         truePeakDbtp: 4.22, truePeakDbtpExact: "4.22",
         loudnessRangeLu: 14.4, loudnessRangeLuExact: "14.40" }, "7".repeat(64)),
     ];
-    const parentResult = { accepted: true, schemaVersion: 1,
+    const shadowResult = { accepted: true, schemaVersion: 1,
       evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
       boundary: "POST_OPUS_TRUE_PEAK_FEEDBACK",
       source: { correctionOrdinal: 2,
@@ -1585,41 +1518,45 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
         truePeakDbtp: 4.22, truePeakDbtpExact: "4.22",
         loudnessRangeLu: 14.4, loudnessRangeLuExact: "14.40" },
       failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_ABOVE_MAX"],
-      shadowOutcome: "FAIL", workerImageDigest: shadowImageDigest,
+      shadowOutcome: "FAIL",
+      workerImageDigest: shadowImageDigest,
       expectedWorkerImageDigest: shadowImageDigest,
-      algorithmFingerprint: shadowAlgorithmFingerprint, thresholdSnapshotSha256,
+      algorithmFingerprint: shadowAlgorithmFingerprint,
+      thresholdSnapshotSha256,
       runtimeProvenance: parentRuntimeProvenance,
       correctionPassLimit: 3, correctedOutputUploaded: false,
       historicalBackfill: false, providerCallCount: 0, providerDispatch: "OFF",
       calibration: false, finalize: false, releaseEligible: false,
       productionActivation: false, autoPublish: "OFF" };
-    await d1.prepare(`INSERT INTO stage12_codec_safe_true_peak_shadow_job
-      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
-       diagnostic_replay_job_id,diagnostic_replay_evidence_id,idempotency_key,
-       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
-       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
-       source_receipt_sha256,correction_pass_limit,expected_worker_image_digest,
-       algorithm_fingerprint,threshold_snapshot_sha256,created_at,updated_at)
-      VALUES ('stage12-codec-safe-shadow-lra-parent','stage12-contract-attempt-3',
-       'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
-       'stage12-loudness-replay-1',?,?,?,
-       'owner@example.com','RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY','PENDING',
-       'CODEC_SAFE_SHADOW_NOT_CORRECTION',?,?,?,?,3,?,?,?,'2099-01-01T00:00:00.000Z',
-       '2099-01-01T00:00:00.000Z')`)
-      .bind(replayEvidence.id, parentKey, parentTokenHash, source.ordinalTwoR2Key,
-        source.ordinalTwoSha256, source.ordinalTwoByteLength,
-        source.ordinalTwoReceiptSha256, shadowImageDigest, shadowAlgorithmFingerprint,
-        thresholdSnapshotSha256).run();
-    const parentCallback = await mf.dispatchFetch(
+    const shadowCallback = await mf.dispatchFetch(
       "https://factory.test/api/media-worker/stage12-codec-safe-true-peak-shadow-replay",
-      { method: "POST", headers: { authorization: `Bearer ${parentToken}`,
+      { method: "POST", headers: { authorization: `Bearer ${shadowToken}`,
         "content-type": "application/json" },
-      body: JSON.stringify({ idempotencyKey: parentKey, result: parentResult }) },
+      body: JSON.stringify({ idempotencyKey: shadowKey, result: shadowResult }) },
     );
-    assert.equal(parentCallback.status, 201, await parentCallback.text());
+    assert.equal(shadowCallback.status, 201, await shadowCallback.text());
+    assert.deepEqual(await d1.prepare(`SELECT state,shadow_outcome,terminal_candidate_pass,
+      corrected_output_uploaded,historical_backfill,provider_call_count,provider_dispatch,
+      calibration_executed,finalize_executed,release_eligible,
+      production_activation_executed,auto_publish
+      FROM stage12_codec_safe_true_peak_shadow_job`).first(), {
+      state: "READY", shadow_outcome: "FAIL", terminal_candidate_pass: 3,
+      corrected_output_uploaded: 0, historical_backfill: 0, provider_call_count: 0,
+      provider_dispatch: "OFF", calibration_executed: 0, finalize_executed: 0,
+      release_eligible: 0, production_activation_executed: 0, auto_publish: "OFF",
+    });
+    const shadowReady = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(shadowReady.structuredContent.operationState, "READY");
+    const shadowDiagnostic = JSON.parse(shadowReady.structuredContent.diagnosticJson);
+    assert.equal(shadowDiagnostic.result.shadowOutcome, "FAIL");
+    assert.equal(shadowDiagnostic.result.productionActivation, false);
+
     const parentEvidence = await d1.prepare(`SELECT id FROM
       stage12_codec_safe_true_peak_shadow_evidence
-      WHERE shadow_job_id='stage12-codec-safe-shadow-lra-parent'`).first();
+      WHERE shadow_job_id='stage12-codec-safe-shadow-1'`).first();
     assert.match(parentEvidence.id, /^[a-f0-9]{64}$/u);
 
     const guardEligible = await client.callTool({ name: "diagnose_factory_command", arguments: {
@@ -1654,7 +1591,7 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
        parent_render_runtime_fingerprint)
       VALUES ('stage12-codec-safe-lra-guard-1','stage12-contract-attempt-3',
        'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
-       'stage12-loudness-replay-1',?,'stage12-codec-safe-shadow-lra-parent',?,?,?,?,
+       'stage12-loudness-replay-1',?,'stage12-codec-safe-shadow-1',?,?,?,?,
        'owner@example.com','RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY','PENDING',
        'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION',?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(replayEvidence.id, parentEvidence.id, guardKey, guardTokenHash,
@@ -1719,9 +1656,9 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
         errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
       diagnosticReplay: { jobId: "stage12-loudness-replay-1",
         evidenceId: replayEvidence.id },
-      parentShadow: { jobId: "stage12-codec-safe-shadow-lra-parent",
+      parentShadow: { jobId: "stage12-codec-safe-shadow-1",
         evidenceId: parentEvidence.id },
-      losslessReference: parentResult.losslessReference,
+      losslessReference: shadowResult.losslessReference,
       anchorReference: parentCandidates[1], highBracketReference: parentCandidates[3],
       controllerPolicy, candidates: guardCandidates, shadowOutcome: "PASS",
       terminalReason: "PASS", lastEvaluatedCandidatePass: 2,
