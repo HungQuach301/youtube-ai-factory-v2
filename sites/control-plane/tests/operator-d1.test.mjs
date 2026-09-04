@@ -1591,7 +1591,7 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
        parent_render_runtime_fingerprint)
       VALUES ('stage12-codec-safe-lra-guard-1','stage12-contract-attempt-3',
        'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
-       'stage12-loudness-replay-1',?,'stage12-codec-safe-shadow-1',?,?,?,?,
+       'stage12-loudness-replay-1',?,'stage12-codec-safe-shadow-1',?,?,?,
        'owner@example.com','RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY','PENDING',
        'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION',?,?,?,?,?,?,?,?,?,?,?)`)
       .bind(replayEvidence.id, parentEvidence.id, guardKey, guardTokenHash,
