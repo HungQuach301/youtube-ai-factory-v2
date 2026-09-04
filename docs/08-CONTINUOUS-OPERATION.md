@@ -255,3 +255,35 @@ không upload, không Finalize và không activate. `READY/FAIL` hoặc `FAILED`
 - Image, algorithm, threshold, FFmpeg và libopus provenance đầy đủ.
 - Ordinal 2/3 và diagnostic replay unchanged; output/provider/calibration/finalize/
   release/production activation/publish đều `false`, `0` hoặc `OFF`.
+
+---
+
+## 10. Runbook Stage 12 codec-safe LRA guard shadow replay
+
+Guard replay chỉ tạo append-only controller evidence; không phải correction và
+không được upload hay activate output.
+
+### Preflight bắt buộc
+
+1. Có exact typed owner approval riêng; protected main/Sites/Fly exact-tree và health PASS.
+2. Stage vẫn `STAGE_12_READY`; ordinal 2/3 và diagnostic replay unchanged.
+3. Parent shadow evidence là `READY/FAIL`, đúng evidence ID đã phê duyệt, pass 1
+   true-peak-safe/LRA-low và pass 3 LRA-high.
+4. Fly health trả `codecSafeLraGuardShadowReady=true`; pin exact current image.
+5. Parent/current FFmpeg + libopus provenance khớp; chưa có guard job cho parent evidence.
+
+### Thực thi và điểm dừng
+
+Gửi `RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY` đúng một lần. Khi `PENDING`,
+chỉ poll read-back. `READY/PASS` chỉ chứng minh controller hội tụ trong shadow;
+không tạo corrected output hoặc promotion. `READY/FAIL`/`FAILED` đều dừng và đọc
+anchor drift, budget hoặc typed error; không chạy shadow lần hai nếu chưa có owner
+approval mới và work package riêng.
+
+### Xác minh
+
+- Candidate 0 exact anchor; mọi candidate dùng cùng lossless SHA và runtime pin.
+- Bracket/trim/rollback recurrence, selected best-safe pass và final predicates nhất quán.
+- LUFS/true peak/LRA terminal vẫn đạt thresholds hiện hành nếu outcome PASS.
+- `correctedOutputUploaded=false`, provider count `0`; calibration/finalize/release/
+  activation false và auto-publish OFF; ordinal/attempt 4 không tồn tại.

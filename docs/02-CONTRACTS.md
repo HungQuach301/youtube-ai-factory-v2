@@ -847,3 +847,47 @@ Result có semantics `CODEC_SAFE_SHADOW_NOT_CORRECTION`. Nó không có pre-mast
 pointer, write URL hay đường upload. `READY/PASS` chỉ là shadow evidence, không
 kích hoạt Production algorithm, không sửa ordinal 2/3 hoặc diagnostic replay và
 không cấp quyền Finalize/release/publish.
+
+---
+
+## 14. Stage 12 codec-safe LRA convergence guard shadow contract
+
+```ts
+type RunStage12CodecSafeLraGuardShadowCommand = {
+  commandType: 'RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY'
+  ownerApprovalText: 'RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY'
+  sourceAttemptOrdinal: 3
+  sourceCorrectionOrdinal: 2
+  historicalFailureCorrectionOrdinal: 3
+  parentShadowEvidenceId: string
+  expectedWorkerImageDigest: `sha256:${string}`
+  controllerPolicy: {
+    maxCandidateCount: 8
+    codecOvershootRegressionMaxDb: 0.25
+    integratedBoundaryMarginLu: 0.05
+    maxIntegratedTargetStepLu: 0.25
+  }
+  historicalBackfill: false
+  uploadCorrectedOutput: false
+  providerDispatch: 'OFF'
+  providerCallCount: 0
+  calibration: false
+  finalize: false
+  release: false
+  productionActivation: false
+  autoPublish: 'OFF'
+}
+```
+
+Controller chỉ nhận parent shadow `READY/FAIL` có candidate pass 1 true-peak-safe
+và LRA dưới `4 LU`, cùng candidate pass 3 nằm trên `8 LU`. Candidate 0 phải tái tạo
+bit-exact anchor pass 1 từ cùng canonical lossless source và cùng FFmpeg/libopus
+provenance. Sau đó LRA được tìm bằng bracket/bisection bounded, giữ nguyên limiter
+ceiling và LUFS target của anchor. Chỉ khi LRA đã nằm trong range, LUFS mới được
+trim về biên trong gần nhất với bước tối đa `0.25 LU`.
+
+Bất kỳ true-peak fail hoặc codec overshoot tăng quá `0.25 dB` đều bị
+`REGRESSION_REJECTED`, rollback về best safe candidate và thu hẹp bracket/trim.
+Threshold QA vẫn là `-14 ±1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`.
+Result có semantics `CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION`; không có output
+pointer, không sửa history và không cấp quyền activation hoặc downstream action.

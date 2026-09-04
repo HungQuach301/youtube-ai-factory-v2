@@ -8,6 +8,20 @@ import { Miniflare } from "miniflare";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+function canonicalTestValue(value) {
+  if (value === null) return "null";
+  if (typeof value === "string") return JSON.stringify(value.normalize("NFC"));
+  if (typeof value === "number") return Object.is(value, -0) ? "0" : String(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) return `[${value.map(canonicalTestValue).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key.normalize("NFC"))}:${canonicalTestValue(value[key])}`).join(",")}}`;
+}
+
+function canonicalTestSha256(value) {
+  return createHash("sha256").update(canonicalTestValue(value)).digest("hex");
+}
+
 test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)),
@@ -241,6 +255,35 @@ test("Stage 12 codec-safe true-peak engine remains shadow-only and lossless-sour
   assert.doesNotMatch(route, /export async function PUT/u);
   assert.match(mcpRoute, /RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY/u);
   assert.match(workflow, /stage12-codec-safe-true-peak-shadow-smoke\.mjs/u);
+});
+
+test("Stage 12 codec-safe LRA guard remains bounded, pinned and shadow-only", async () => {
+  const [runtime, worker, domain, schema, migration, route, mcpRoute] = await Promise.all([
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../db/schema.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+  ]);
+  assert.match(runtime, /executeStage12CodecSafeLraGuardShadowReplay/u);
+  assert.match(runtime, /anchor: 'PRIOR_SHADOW_CANDIDATE_PASS_1'/u);
+  assert.match(runtime, /lraSearch: 'BOUNDED_BISECTION'/u);
+  assert.match(runtime, /integratedTrim: 'NEAREST_INTERIOR_BOUNDARY'/u);
+  assert.match(runtime, /regression: 'ROLLBACK_TO_BEST_SAFE'/u);
+  assert.match(worker, /codecSafeLraGuardShadowReady: stage12Ready\(\)/u);
+  assert.match(worker, /\/stage12\/codec-safe-lra-guard-shadow-replay/u);
+  assert.match(domain, /parentShadowEvidenceId/u);
+  assert.match(domain, /parentRenderRuntimeFingerprint/u);
+  assert.match(schema, /stage12CodecSafeLraGuardShadowEvidence/u);
+  assert.match(migration, /CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION/u);
+  assert.match(migration, /STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_EVIDENCE_IMMUTABLE/u);
+  assert.match(route, /export async function GET/u);
+  assert.match(route, /export async function POST/u);
+  assert.doesNotMatch(route, /export async function PUT/u);
+  assert.match(mcpRoute, /RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY/u);
+  assert.match(mcpRoute, /RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY/u);
 });
 
 const ownerHeaders = {
@@ -1479,6 +1522,253 @@ test("diagnostic replay reads ordinal 2 and persists only new append-only eviden
     const shadowDiagnostic = JSON.parse(shadowReady.structuredContent.diagnosticJson);
     assert.equal(shadowDiagnostic.result.shadowOutcome, "PASS");
     assert.equal(shadowDiagnostic.result.productionActivation, false);
+
+    const parentKey = createHash("sha256").update("codec-safe-lra-parent-key").digest("hex");
+    const parentToken = "b".repeat(64);
+    const parentTokenHash = createHash("sha256").update(parentToken).digest("hex");
+    const parentRuntimeProvenance = { ffmpegVersion: "ffmpeg version 7.1.1",
+      ffmpegBuildFingerprint: "7".repeat(64),
+      libopusEncoderFingerprint: "8".repeat(64) };
+    const parentCandidate = (candidatePass, controller, values, frameHash) => ({
+      candidatePass,
+      phase: candidatePass === 0 ? "INITIAL_CODEC_SAFE_CANDIDATE"
+        : "POST_OPUS_FEEDBACK_CANDIDATE",
+      losslessReferenceSha256,
+      ...controller,
+      codecOvershootDb: Math.max(0, values.truePeakDbtp - controller.limiterCeilingDbtp),
+      ...values,
+      failedPredicates: [
+        ...(values.integratedLufs < -15 ? ["INTEGRATED_LUFS_BELOW_MIN"] : []),
+        ...(values.integratedLufs > -13 ? ["INTEGRATED_LUFS_ABOVE_MAX"] : []),
+        ...(values.truePeakDbtp > -1 ? ["TRUE_PEAK_DBTP_ABOVE_MAX"] : []),
+        ...(values.loudnessRangeLu < 4 ? ["LOUDNESS_RANGE_LU_BELOW_MIN"] : []),
+        ...(values.loudnessRangeLu > 8 ? ["LOUDNESS_RANGE_LU_ABOVE_MAX"] : []),
+      ],
+      audioFrameMd5Sha256: frameHash,
+    });
+    const parentCandidates = [
+      parentCandidate(0, { integratedTargetLufs: -14, limiterCeilingDbtp: -2,
+        macroDepthDb: 5 }, { integratedLufs: -14.8, integratedLufsExact: "-14.80",
+        truePeakDbtp: -0.33, truePeakDbtpExact: "-0.33",
+        loudnessRangeLu: 3.2, loudnessRangeLuExact: "3.20" }, "4".repeat(64)),
+      parentCandidate(1, { integratedTargetLufs: -14, limiterCeilingDbtp: -2.67,
+        macroDepthDb: 7.8 }, { integratedLufs: -15.09, integratedLufsExact: "-15.09",
+        truePeakDbtp: -1.04, truePeakDbtpExact: "-1.04",
+        loudnessRangeLu: 2.8, loudnessRangeLuExact: "2.80" }, "5".repeat(64)),
+      parentCandidate(2, { integratedTargetLufs: -12.91, limiterCeilingDbtp: -2.67,
+        macroDepthDb: 11 }, { integratedLufs: -15.12, integratedLufsExact: "-15.12",
+        truePeakDbtp: -1, truePeakDbtpExact: "-1.00",
+        loudnessRangeLu: 3, loudnessRangeLuExact: "3.00" }, "6".repeat(64)),
+      parentCandidate(3, { integratedTargetLufs: -11.790000000000001,
+        limiterCeilingDbtp: -2.67, macroDepthDb: 14 }, {
+        integratedLufs: -14.94, integratedLufsExact: "-14.94",
+        truePeakDbtp: 4.22, truePeakDbtpExact: "4.22",
+        loudnessRangeLu: 14.4, loudnessRangeLuExact: "14.40" }, "7".repeat(64)),
+    ];
+    const parentResult = { accepted: true, schemaVersion: 1,
+      evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+      boundary: "POST_OPUS_TRUE_PEAK_FEEDBACK",
+      source: { correctionOrdinal: 2,
+        correctionJobId: "stage12-audio-p0-correction-2",
+        r2Key: source.ordinalTwoR2Key, sha256: source.ordinalTwoSha256,
+        byteLength: source.ordinalTwoByteLength,
+        receiptSha256: source.ordinalTwoReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: "stage12-audio-p0-correction-3",
+        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+      diagnosticReplay: { jobId: "stage12-loudness-replay-1",
+        evidenceId: replayEvidence.id },
+      losslessReference: { sha256: losslessReferenceSha256, byteLength: 33554432,
+        audioFrameMd5Sha256: "3".repeat(64), codec: "pcm_f32le", sampleRateHz: 48000 },
+      candidates: parentCandidates, terminalCandidatePass: 3,
+      finalMeasurements: { integratedLufs: -14.94, integratedLufsExact: "-14.94",
+        truePeakDbtp: 4.22, truePeakDbtpExact: "4.22",
+        loudnessRangeLu: 14.4, loudnessRangeLuExact: "14.40" },
+      failedPredicates: ["TRUE_PEAK_DBTP_ABOVE_MAX", "LOUDNESS_RANGE_LU_ABOVE_MAX"],
+      shadowOutcome: "FAIL", workerImageDigest: shadowImageDigest,
+      expectedWorkerImageDigest: shadowImageDigest,
+      algorithmFingerprint: shadowAlgorithmFingerprint, thresholdSnapshotSha256,
+      runtimeProvenance: parentRuntimeProvenance,
+      correctionPassLimit: 3, correctedOutputUploaded: false,
+      historicalBackfill: false, providerCallCount: 0, providerDispatch: "OFF",
+      calibration: false, finalize: false, releaseEligible: false,
+      productionActivation: false, autoPublish: "OFF" };
+    await d1.prepare(`INSERT INTO stage12_codec_safe_true_peak_shadow_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,idempotency_key,
+       callback_token_hash,actor_identity,owner_approval_text,state,evidence_semantics,
+       source_pre_master_r2_key,source_pre_master_sha256,source_pre_master_byte_length,
+       source_receipt_sha256,correction_pass_limit,expected_worker_image_digest,
+       algorithm_fingerprint,threshold_snapshot_sha256,created_at,updated_at)
+      VALUES ('stage12-codec-safe-shadow-lra-parent','stage12-contract-attempt-3',
+       'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
+       'stage12-loudness-replay-1',?,?,?,?,
+       'owner@example.com','RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY','PENDING',
+       'CODEC_SAFE_SHADOW_NOT_CORRECTION',?,?,?,?,3,?,?,?,'2099-01-01T00:00:00.000Z',
+       '2099-01-01T00:00:00.000Z')`)
+      .bind(replayEvidence.id, parentKey, parentTokenHash, source.ordinalTwoR2Key,
+        source.ordinalTwoSha256, source.ordinalTwoByteLength,
+        source.ordinalTwoReceiptSha256, shadowImageDigest, shadowAlgorithmFingerprint,
+        thresholdSnapshotSha256).run();
+    const parentCallback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-codec-safe-true-peak-shadow-replay",
+      { method: "POST", headers: { authorization: `Bearer ${parentToken}`,
+        "content-type": "application/json" },
+      body: JSON.stringify({ idempotencyKey: parentKey, result: parentResult }) },
+    );
+    assert.equal(parentCallback.status, 201, await parentCallback.text());
+    const parentEvidence = await d1.prepare(`SELECT id FROM
+      stage12_codec_safe_true_peak_shadow_evidence
+      WHERE shadow_job_id='stage12-codec-safe-shadow-lra-parent'`).first();
+    assert.match(parentEvidence.id, /^[a-f0-9]{64}$/u);
+
+    const guardEligible = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(guardEligible.isError, undefined, JSON.stringify(guardEligible));
+    assert.equal(guardEligible.structuredContent.operationState, "ELIGIBLE");
+    assert.equal(guardEligible.structuredContent.diagnosticState, "PASS");
+
+    const controllerPolicy = { maxCandidateCount: 8,
+      codecOvershootRegressionMaxDb: 0.25, integratedBoundaryMarginLu: 0.05,
+      maxIntegratedTargetStepLu: 0.25 };
+    const controllerPolicySha256 = canonicalTestSha256(controllerPolicy);
+    const renderKernelFingerprint = "c".repeat(64);
+    const parentRenderRuntimeFingerprint = canonicalTestSha256({
+      renderKernelFingerprint, runtimeProvenance: parentRuntimeProvenance,
+    });
+    const guardAlgorithmFingerprint = "d".repeat(64);
+    const guardImageDigest = `sha256:${"e".repeat(64)}`;
+    const guardKey = createHash("sha256").update("codec-safe-lra-guard-key").digest("hex");
+    const guardToken = "f".repeat(64);
+    const guardTokenHash = createHash("sha256").update(guardToken).digest("hex");
+    await d1.prepare(`INSERT INTO stage12_codec_safe_lra_guard_shadow_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,parent_shadow_job_id,
+       parent_shadow_evidence_id,idempotency_key,callback_token_hash,actor_identity,
+       owner_approval_text,state,evidence_semantics,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256,
+       expected_worker_image_digest,parent_worker_image_digest,algorithm_fingerprint,
+       threshold_snapshot_sha256,controller_policy_sha256,render_kernel_fingerprint,
+       parent_render_runtime_fingerprint)
+      VALUES ('stage12-codec-safe-lra-guard-1','stage12-contract-attempt-3',
+       'stage12-audio-p0-correction-2','stage12-audio-p0-correction-3',
+       'stage12-loudness-replay-1',?,'stage12-codec-safe-shadow-lra-parent',?,?,?,?,
+       'owner@example.com','RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY','PENDING',
+       'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION',?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(replayEvidence.id, parentEvidence.id, guardKey, guardTokenHash,
+        source.ordinalTwoR2Key, source.ordinalTwoSha256, source.ordinalTwoByteLength,
+        source.ordinalTwoReceiptSha256, guardImageDigest, shadowImageDigest,
+        guardAlgorithmFingerprint, thresholdSnapshotSha256, controllerPolicySha256,
+        renderKernelFingerprint, parentRenderRuntimeFingerprint).run();
+    const guardSourceRead = await mf.dispatchFetch(
+      `https://factory.test/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay?kind=codec-safe-lra-guard-source-ordinal-2&idempotencyKey=${guardKey}&sha256=${source.ordinalTwoSha256}`,
+      { headers: { authorization: `Bearer ${guardToken}` } },
+    );
+    assert.equal(guardSourceRead.status, 200, await guardSourceRead.clone().text());
+    assert.equal(createHash("sha256").update(
+      Buffer.from(await guardSourceRead.arrayBuffer()),
+    ).digest("hex"), source.ordinalTwoSha256);
+
+    const guardCandidates = [
+      { done: false, candidatePass: 0, phase: "ANCHOR_REPRODUCTION",
+        decision: "ANCHOR", disposition: "SAFE_ANCHOR", parentCandidatePass: null,
+        rollbackToCandidatePass: null, bracketLowDepthDb: 7.8,
+        bracketHighDepthDb: 14, integratedTargetLufs: -14,
+        limiterCeilingDbtp: -2.67, macroDepthDb: 7.8, targetStepLufs: 0,
+        losslessReferenceSha256, codecOvershootDb: Math.max(0, -1.04 - -2.67),
+        integratedLufs: -15.09, integratedLufsExact: "-15.09",
+        truePeakDbtp: -1.04, truePeakDbtpExact: "-1.04",
+        loudnessRangeLu: 2.8, loudnessRangeLuExact: "2.80",
+        failedPredicates: ["INTEGRATED_LUFS_BELOW_MIN", "LOUDNESS_RANGE_LU_BELOW_MIN"],
+        audioFrameMd5Sha256: "5".repeat(64) },
+      { done: false, candidatePass: 1, phase: "LRA_BRACKET_SEARCH",
+        decision: "BISECTION", disposition: "LRA_ACCEPTED", parentCandidatePass: 0,
+        rollbackToCandidatePass: null, bracketLowDepthDb: 7.8,
+        bracketHighDepthDb: 14, integratedTargetLufs: -14,
+        limiterCeilingDbtp: -2.67, macroDepthDb: 10.9, targetStepLufs: 0,
+        losslessReferenceSha256, codecOvershootDb: Math.max(0, -1.08 - -2.67),
+        integratedLufs: -15.09, integratedLufsExact: "-15.09",
+        truePeakDbtp: -1.08, truePeakDbtpExact: "-1.08",
+        loudnessRangeLu: 5.5, loudnessRangeLuExact: "5.50",
+        failedPredicates: ["INTEGRATED_LUFS_BELOW_MIN"],
+        audioFrameMd5Sha256: "9".repeat(64) },
+      { done: false, candidatePass: 2, phase: "INTEGRATED_LUFS_TRIM",
+        decision: "NEAREST_BOUNDARY_TRIM", disposition: "FULL_PASS",
+        parentCandidatePass: 1, rollbackToCandidatePass: null,
+        bracketLowDepthDb: 10.9, bracketHighDepthDb: 10.9,
+        integratedTargetLufs: -13.86, limiterCeilingDbtp: -2.67,
+        macroDepthDb: 10.9, targetStepLufs: 0.14, losslessReferenceSha256,
+        codecOvershootDb: Math.max(0, -1.03 - -2.67),
+        integratedLufs: -14.98, integratedLufsExact: "-14.98",
+        truePeakDbtp: -1.03, truePeakDbtpExact: "-1.03",
+        loudnessRangeLu: 5.3, loudnessRangeLuExact: "5.30",
+        failedPredicates: [], audioFrameMd5Sha256: "a".repeat(64) },
+    ];
+    const guardResult = { accepted: true, schemaVersion: 1,
+      evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION",
+      boundary: "POST_OPUS_LRA_GUARD_FEEDBACK",
+      source: { correctionOrdinal: 2,
+        correctionJobId: "stage12-audio-p0-correction-2",
+        r2Key: source.ordinalTwoR2Key, sha256: source.ordinalTwoSha256,
+        byteLength: source.ordinalTwoByteLength,
+        receiptSha256: source.ordinalTwoReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: "stage12-audio-p0-correction-3",
+        errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+      diagnosticReplay: { jobId: "stage12-loudness-replay-1",
+        evidenceId: replayEvidence.id },
+      parentShadow: { jobId: "stage12-codec-safe-shadow-lra-parent",
+        evidenceId: parentEvidence.id },
+      losslessReference: parentResult.losslessReference,
+      anchorReference: parentCandidates[1], highBracketReference: parentCandidates[3],
+      controllerPolicy, candidates: guardCandidates, shadowOutcome: "PASS",
+      terminalReason: "PASS", lastEvaluatedCandidatePass: 2,
+      bestSafeCandidatePass: 2, selectedCandidatePass: 2,
+      finalMeasurements: { integratedLufs: -14.98, integratedLufsExact: "-14.98",
+        truePeakDbtp: -1.03, truePeakDbtpExact: "-1.03",
+        loudnessRangeLu: 5.3, loudnessRangeLuExact: "5.30" },
+      failedPredicates: [], workerImageDigest: guardImageDigest,
+      expectedWorkerImageDigest: guardImageDigest,
+      parentWorkerImageDigest: shadowImageDigest,
+      algorithmFingerprint: guardAlgorithmFingerprint, thresholdSnapshotSha256,
+      controllerPolicySha256, renderKernelFingerprint,
+      parentRenderRuntimeFingerprint, renderRuntimeFingerprint: parentRenderRuntimeFingerprint,
+      parentRuntimeProvenance, runtimeProvenance: parentRuntimeProvenance,
+      correctedOutputUploaded: false, historicalBackfill: false,
+      providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+      finalize: false, releaseEligible: false, productionActivation: false,
+      autoPublish: "OFF" };
+    const guardCallback = await mf.dispatchFetch(
+      "https://factory.test/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay",
+      { method: "POST", headers: { authorization: `Bearer ${guardToken}`,
+        "content-type": "application/json" },
+      body: JSON.stringify({ idempotencyKey: guardKey, result: guardResult }) },
+    );
+    assert.equal(guardCallback.status, 201, await guardCallback.text());
+    assert.deepEqual(await d1.prepare(`SELECT state,shadow_outcome,terminal_reason,
+      last_evaluated_candidate_pass,best_safe_candidate_pass,selected_candidate_pass,
+      corrected_output_uploaded,historical_backfill,provider_call_count,provider_dispatch,
+      calibration_executed,finalize_executed,release_eligible,
+      production_activation_executed,auto_publish
+      FROM stage12_codec_safe_lra_guard_shadow_job`).first(), {
+      state: "READY", shadow_outcome: "PASS", terminal_reason: "PASS",
+      last_evaluated_candidate_pass: 2, best_safe_candidate_pass: 2,
+      selected_candidate_pass: 2, corrected_output_uploaded: 0,
+      historical_backfill: 0, provider_call_count: 0, provider_dispatch: "OFF",
+      calibration_executed: 0, finalize_executed: 0, release_eligible: 0,
+      production_activation_executed: 0, auto_publish: "OFF",
+    });
+    const guardReady = await client.callTool({ name: "diagnose_factory_command", arguments: {
+      commandType: "RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY",
+      trackCode: "G", videoNumber: 1, stageCode: "12", attemptOrdinal: 3,
+    } });
+    assert.equal(guardReady.structuredContent.operationState, "READY");
+    const guardDiagnostic = JSON.parse(guardReady.structuredContent.diagnosticJson);
+    assert.equal(guardDiagnostic.result.shadowOutcome, "PASS");
+    assert.equal(guardDiagnostic.result.correctedOutputUploaded, false);
+    assert.equal(guardDiagnostic.result.productionActivation, false);
     assert.equal((await d1.prepare(
       "SELECT count(*) AS count FROM stage12_media_job WHERE attempt_ordinal=4",
     ).first()).count, 0);

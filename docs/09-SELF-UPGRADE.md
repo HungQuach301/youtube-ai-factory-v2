@@ -261,3 +261,18 @@ evidence append-only, khóa exact ordinal 2/3 + diagnostic replay lineage và pi
 runtime provenance. Shadow PASS không được tự promote thành correction path; cần
 proposal/promotion riêng sau Production shadow evidence. Không output upload,
 ordinal/attempt 4, provider, calibration, Finalize, release hoặc publish.
+
+### Evolution record: EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
+
+Thay đổi `NEUTRAL` về QA threshold và `SHADOW_ONLY` về activation. Controller mới
+reproduce exact parent pass 1 làm true-peak-safe anchor, dùng parent pass 3 làm
+high bracket, rồi search LRA bằng bounded bisection mà không thay LUFS target hoặc
+limiter ceiling. Sau khi LRA an toàn, LUFS chỉ trim về interior boundary gần nhất
+với step tối đa 0.25 LU; true-peak fail hoặc codec overshoot regression >0.25 dB
+phải rollback về best-safe candidate.
+
+Migration 0032 tạo job/evidence append-only, khóa exact ordinal 2/3, diagnostic
+replay và parent shadow evidence cùng lossless/image/FFmpeg/libopus/render runtime
+provenance. PR/CI không chạy Production replay; shadow PASS không upload hoặc tự
+activate correction path. Không ordinal/attempt 4, provider, calibration,
+Finalize, release hoặc publish.

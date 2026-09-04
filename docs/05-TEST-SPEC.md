@@ -313,3 +313,18 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Job/evidence append-only và shadow-only | Migration test UPDATE/DELETE → ABORT; READY bắt buộc matching evidence; activation flag luôn 0 |
 | Không ordinal/attempt 4, provider, output, calibration, Finalize/release/publish | Unit, static guardrail, migration checks và smoke zero-write kiểm literals `false`, `0`, `OFF` |
 | Merge/deploy không tự chạy Production shadow | CI chỉ build/test; invocation cần owner OPERATE approval riêng sau promotion |
+
+## 12. EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
+
+| Acceptance | Test/evidence |
+|---|---|
+| Candidate 0 tái tạo exact parent pass 1 | Controller unit + FFmpeg smoke so raw measurements và audio frame-MD5; drift → terminal fail |
+| LRA search tách khỏi LUFS/limiter feedback | Unit test khóa target/ceiling của anchor và midpoint bracket `7.8..14 → 10.9` |
+| Bisection bounded và deterministic | Unit/parser/migration khóa pass order, bracket recurrence, macro bounds và tối đa 8 candidates |
+| LUFS trim về biên trong gần nhất | Unit test khóa `-15.09 → -14.95`, step `+0.14`, target `-13.86`; mỗi step tuyệt đối ≤0.25 LU |
+| True-peak/codec regression rollback | Vector `+4.22 dBTP` bị `REGRESSION_REJECTED`, high bound thu về `10.9`, candidate kế `9.35` |
+| Threshold giữ nguyên | Worker/control-plane threshold fingerprint parity và guardrail khóa `-14±1`, `≤-1`, `4..8` |
+| Exact parent evidence/runtime provenance | Migration 0032 + strict parser khóa parent job/evidence, lossless SHA, image, FFmpeg/libopus và render fingerprint |
+| Job/evidence append-only, shadow-only | UPDATE/DELETE/terminal-shape tests; source route chỉ GET/POST; FFmpeg smoke zero write |
+| Không ordinal/attempt 4 hoặc side effect | Migration/static/Sites tests kiểm no attempt 4, output/provider/calibration/finalize/activation/publish false/0/OFF |
+| PR/CI không chạy Production replay | Workflow chỉ build/test smoke; invocation cần owner OPERATE approval riêng sau merge/deploy/health PASS |

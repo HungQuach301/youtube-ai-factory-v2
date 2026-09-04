@@ -315,3 +315,17 @@ root/Sites CI PASS; mọi candidate khóa cùng lossless SHA/frame-MD5, image/ru
 algorithm/threshold provenance; threshold giữ nguyên. PR không tự chạy Production
 shadow replay, không tạo ordinal/attempt 4, output, provider, calibration, Finalize,
 release hoặc publish; shadow PASS không tự kích hoạt correction algorithm.
+
+### 🟡 WP-37 · EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
+
+**Phạm vi.** Shadow-only controller tái tạo candidate pass 1 làm safe anchor,
+tách LRA bracket/bisection khỏi LUFS trim và limiter feedback, rollback mọi
+true-peak/codec regression. Typed command riêng và migration 0032 chỉ ghi
+append-only job/evidence trên exact parent shadow lineage.
+
+**DoD.** Anchor reproduction drift phải fail-closed; LRA search nằm trong bracket
+pass 1/pass 3 và tối đa 8 candidates; LUFS trim hướng tới biên trong gần nhất với
+bước tối đa 0.25 LU; overshoot regression >0.25 dB bị reject và rollback. Unit,
+migration, guardrail, real FFmpeg zero-write smoke, root/Sites CI PASS. Threshold
+không đổi; không Production replay, ordinal/attempt 4, output, provider,
+calibration, Finalize, release, activation hoặc publish.

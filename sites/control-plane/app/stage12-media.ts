@@ -1,5 +1,7 @@
 import { createHash, createPrivateKey, sign } from "node:crypto";
-import type { Stage12MediaReceipt, Stage12MediaRequest } from "./stage12-pre-master";
+import type { Stage12CodecSafeLraGuardControllerPolicy,
+  Stage12CodecSafeTruePeakCandidate, Stage12MediaReceipt,
+  Stage12MediaRequest } from "./stage12-pre-master";
 import { getFactoryEnv } from "./runtime-env";
 
 export type Stage12MediaStartRequest = Stage12MediaRequest & {
@@ -109,6 +111,49 @@ export type Stage12MediaCodecSafeTruePeakShadowReplayRequest = Stage12MediaStart
   };
 };
 
+export type Stage12MediaCodecSafeLraGuardShadowReplayRequest = Stage12MediaStartRequest & {
+  codecSafeLraGuardShadowReplay: {
+    schemaVersion: 1;
+    evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION";
+    sourceAttemptOrdinal: 3;
+    sourceCorrectionOrdinal: 2;
+    historicalFailureCorrectionOrdinal: 3;
+    sourceCorrectionJobId: string;
+    historicalFailureJobId: string;
+    diagnosticReplayJobId: string;
+    diagnosticReplayEvidenceId: string;
+    codecSafeTruePeakShadowJobId: string;
+    codecSafeTruePeakShadowEvidenceId: string;
+    sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number };
+    sourceCorrectionReceiptSha256: string;
+    parentWorkerImageDigest: string;
+    parentAlgorithmFingerprint: string;
+    parentThresholdSnapshotSha256: string;
+    parentLosslessReference: { sha256: string; byteLength: number;
+      audioFrameMd5Sha256: string; codec: "pcm_f32le"; sampleRateHz: number };
+    parentRuntimeProvenance: { ffmpegVersion: string; ffmpegBuildFingerprint: string;
+      libopusEncoderFingerprint: string };
+    anchorReference: Stage12CodecSafeTruePeakCandidate;
+    highBracketReference: Stage12CodecSafeTruePeakCandidate;
+    controllerPolicy: Stage12CodecSafeLraGuardControllerPolicy;
+    expectedWorkerImageDigest: string;
+    algorithmFingerprint: string;
+    thresholdSnapshotSha256: string;
+    controllerPolicySha256: string;
+    renderKernelFingerprint: string;
+    parentRenderRuntimeFingerprint: string;
+    historicalBackfill: false;
+    uploadCorrectedOutput: false;
+    providerDispatch: "OFF";
+    providerCallCount: 0;
+    calibration: false;
+    finalize: false;
+    release: false;
+    productionActivation: false;
+    autoPublish: "OFF";
+  };
+};
+
 export type Stage12MediaJobReceipt = {
   accepted: true;
   jobStatus: "PENDING" | "READY";
@@ -122,6 +167,7 @@ export type Stage12MediaWorkerHealth = {
   stage12Ready: true;
   encodedLoudnessDiagnosticReplayReady: true;
   codecSafeTruePeakShadowReady: true;
+  codecSafeLraGuardShadowReady: true;
 };
 
 function sha256(bytes: Uint8Array): string {
@@ -165,6 +211,7 @@ export async function readStage12MediaWorkerHealth(): Promise<Stage12MediaWorker
   if (!response.ok || value.ok !== true || value.stage12Ready !== true
     || value.encodedLoudnessDiagnosticReplayReady !== true
     || value.codecSafeTruePeakShadowReady !== true
+    || value.codecSafeLraGuardShadowReady !== true
     || !/^sha256:[a-f0-9]{64}$/u.test(value.imageDigest ?? "")) {
     throw new Error(`TRACK_G_STAGE_12_MEDIA_WORKER_HEALTH_FAILED:${value.code ?? response.status}`);
   }
@@ -182,6 +229,22 @@ export async function dispatchStage12CodecSafeTruePeakShadowReplay(
     || result.imageDigest !== payload.codecSafeShadowReplay.expectedWorkerImageDigest) {
     throw new Error(
       `TRACK_G_STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY_FAILED:${result.code ?? response.status}`,
+    );
+  }
+  return result;
+}
+
+export async function dispatchStage12CodecSafeLraGuardShadowReplay(
+  payload: Stage12MediaCodecSafeLraGuardShadowReplayRequest,
+): Promise<Stage12MediaJobReceipt> {
+  const response = await signedMediaFetch("/stage12/codec-safe-lra-guard-shadow-replay", payload);
+  const result = await response.json() as Stage12MediaJobReceipt & { code?: string };
+  if (!response.ok || result.accepted !== true
+    || !["PENDING", "READY"].includes(result.jobStatus)
+    || result.idempotencyKey !== payload.idempotencyKey
+    || result.imageDigest !== payload.codecSafeLraGuardShadowReplay.expectedWorkerImageDigest) {
+    throw new Error(
+      `TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY_FAILED:${result.code ?? response.status}`,
     );
   }
   return result;

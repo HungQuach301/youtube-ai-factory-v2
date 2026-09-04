@@ -1,5 +1,25 @@
 # EVOLUTION QUEUE
 
+## EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
+
+- Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy và chưa
+  chạy Production LRA guard shadow replay.
+- Kind: `PIPELINE_CODE`; strictness direction: `SHADOW_ONLY_CODEC_SAFETY`.
+- Source: immutable parent shadow evidence
+  `41209f9c50604dd8e1963d83717eaf6734c1c6fdee1857c6647af483f89243eb`
+  có pass 1 true-peak-safe/LRA-low và pass 3 overshoot/LRA-high.
+- Diff: deterministic anchor reproduction, bounded LRA bracket/bisection,
+  nearest-boundary LUFS trim, regression rollback, typed shadow command/route,
+  migration 0032 append-only job/evidence và pinned render/runtime provenance.
+- Boundary: thresholds không đổi; ordinal 2/3, diagnostic replay và parent shadow
+  history immutable; không ordinal/attempt 4, output upload, provider, calibration,
+  Finalize, release, Production activation hoặc publish.
+- Local evidence: full root CI PASS; 15 focused controller/migration/guardrail tests
+  PASS; real FFmpeg zero-write smoke PASS; canonical/Sites worker mirrors exact-match;
+  source manifests và Sites source-lock PASS.
+- Activation: PR/CI không cấp quyền Production replay. Invocation cần owner OPERATE
+  approval riêng sau merge/deploy/exact-tree/health PASS.
+
 ## EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE
 
 - Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy

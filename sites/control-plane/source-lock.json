@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "62b22642a11c78c99c0e826ed61dfbb91414f9efe5f999490ea8b4ec1d7c66c3",
+  "aggregate_sha256": "15fbbec41491eba7142ecae33856efeaeb61af1ea425d762262253d872284ba9",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -25,15 +25,15 @@
     },
     {
       "path": "G01A2-MCP-COMMAND-SURFACE.md",
-      "sha256": "f7c68fef642720612ae99acb3a56d753aa19c45668732e1746b3fdaeba009806"
+      "sha256": "d0266a9427663d143b9776f437c19c69274c81763cf09fa5d7059227018f0cb2"
     },
     {
       "path": "README.md",
-      "sha256": "d6cea53d1f0d0bf7d8f14d43e8ee686152b0f256ad78b0e8591b93087624e0fd"
+      "sha256": "24bcceb50214bc958f7aad5dbde5f3e597df91b37f7b7ec6a4e1b023cb5043de"
     },
     {
       "path": "SSOT-CONTRACT.md",
-      "sha256": "0f4971bf559fdf2533ff0068945f1dabca83423b1c3ffb960fb164383e4c22d1"
+      "sha256": "279561582cf881306396a1ee5db0e772893d71cc891fef9047696420951dccaa"
     },
     {
       "path": "app/[...path]/route.ts",
@@ -50,6 +50,10 @@
     {
       "path": "app/api/media-worker/stage12-audio-p0-correction/route.ts",
       "sha256": "448e001c5c2a580608e5dbee45cd9902f0ffed86a9a9e198f98ad04c2e85e96f"
+    },
+    {
+      "path": "app/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay/route.ts",
+      "sha256": "6ac1624566a42ccd8b495f37168d2243f42a1f9b06a47686a765f31293669de1"
     },
     {
       "path": "app/api/media-worker/stage12-codec-safe-true-peak-shadow-replay/route.ts",
@@ -101,7 +105,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "aa0b343cab6a5258e122c778b82f99fd1c39a5b301d05744fe1a7f13d2c499e3"
+      "sha256": "429b43c8186d5df11e6eed1feb0112f204171ff8e132dcd0c8834f4e72f5203f"
     },
     {
       "path": "app/oauth-server.ts",
@@ -153,15 +157,15 @@
     },
     {
       "path": "app/stage12-media.ts",
-      "sha256": "d26598aa058d1ff987efc3228ecb8f46d15e21ce366dfa848dffcbbb78553b61"
+      "sha256": "547226fb9d9f61052e3991a0ff21a9406051cb4dc75583c9048e85f4606431da"
     },
     {
       "path": "app/stage12-pre-master.ts",
-      "sha256": "1d4c118b7cc4d932ddc4bbc5e843e6992bc01cbde8dfb1a0110520a285200494"
+      "sha256": "a6ff75dbd7a8dcd0e293862a181de6b26ba85f8273197acf89153fc9be312e5c"
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "b06f452ab71997f4502566fed7eb07dace0160b627387d554d832df1db60b59f"
+      "sha256": "3f343ca475f9d20b2c3774e9ac045f629facc1c328a348bfa5dfcc996be75fe4"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -177,7 +181,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "5ebb700c14ea0e71357555a6937cbab9928e1bb78140b2ab5f7e9af3b78e91cc"
+      "sha256": "e8ea462037ec53960bac813536f4ba3a49029751fe3aee7d35d861c37ce25cb1"
     },
     {
       "path": "drizzle.config.ts",
@@ -312,6 +316,10 @@
       "sha256": "ace85ed9df8fdd0b0059ff3df4bedbade7b6c0c839ea1885fd64e805747f69db"
     },
     {
+      "path": "drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql",
+      "sha256": "007c663760f0c59c8d0813be1b2b217fc6f7fcb17b7b8362cd794df2fba67c18"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -377,7 +385,7 @@
     },
     {
       "path": "packages/contracts/src/thresholds.ts",
-      "sha256": "049c6c5b6986d84db64029944fe6d100c91d6a508ec39538aacd7bcc3d03297f"
+      "sha256": "ac91efcbba037881eac637e1c58a2c70c6133608b32549a3b713d19a5d1962c8"
     },
     {
       "path": "packages/media-worker/Dockerfile",
@@ -385,7 +393,7 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "4ec9ffd069af81456824f9fe2bc7791664fe1851134d900a5d5764050c117e8f"
+      "sha256": "6ff5832f1fba140c40799677028f5d28386feac335771da52e7aff1819881f1a"
     },
     {
       "path": "packages/media-worker/fly.toml",
@@ -409,7 +417,7 @@
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
-      "sha256": "12dcd80e2259aba1794da60568c91c3d89cc5c0800f9a0d6b8a23fe4f47c0abd"
+      "sha256": "b3a29e69b09357c9af7cb4405d5c7cf8a7079d62385921ae73299570bc66cb26"
     },
     {
       "path": "postcss.config.mjs",
@@ -485,7 +493,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "1dc77c9e1f710d0edb4eba5301f29f82057fa53d9fc0d3c95d3b26b181bddeff"
+      "sha256": "ad2afd26d561125b314b3938704feb3960456dbadb0dea8d12b29f352498dab5"
     },
     {
       "path": "tests/rendered-html.test.mjs",

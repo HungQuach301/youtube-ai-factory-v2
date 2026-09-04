@@ -1633,3 +1633,26 @@ approval riêng sau merge/deploy/exact-tree/health PASS.
 Work package chỉ tạo branch/PR và chạy CI. Không merge, deploy hoặc chạy Production
 shadow replay. Shadow PASS sau này cũng không tự kích hoạt correction algorithm;
 promotion cần owner approval và work package riêng.
+
+---
+
+## EVO-STAGE12-CODEC-SAFE-LRA-CONVERGENCE-GUARD · Shadow-only bounded controller
+
+## Mode: EVOLVE
+
+| Acceptance | Bằng chứng cưỡng chế |
+|---|---|
+| Exact pass-1 anchor reproduction | Controller unit, strict parser và real FFmpeg smoke so measurements/frame-MD5 |
+| Bounded LRA bracket/bisection | Unit vectors khóa `7.8..14 → 10.9`, bracket rollback và max 8 candidates |
+| Nearest-boundary LUFS trim | Vector `-15.09 → -14.95`, bounded step `+0.14`, target `-13.86` |
+| True-peak/codec regression rollback | `+4.22 dBTP` reject; next bracket midpoint `9.35`; best-safe selection |
+| Threshold contract unchanged | Worker/control-plane fingerprint parity và guardrails khóa `-14±1`, `≤-1`, `4..8` |
+| Exact parent/runtime lineage append-only | Migration 0032 triggers, mutation vectors và callback read-back |
+| Không output hoặc downstream side effect | Authenticated read-only source route, zero-write FFmpeg smoke, flags false/0/OFF |
+| Không ordinal/attempt 4 | Static/migration/Sites integration assertions |
+
+## Production boundary
+
+Work package chỉ implement trên branch riêng, tạo PR và chạy CI. Không merge,
+deploy hoặc chạy Production guard shadow replay. Mọi invocation/promotion sau đó
+cần owner approval riêng; shadow PASS không tự activate correction algorithm.

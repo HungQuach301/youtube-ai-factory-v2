@@ -22,6 +22,7 @@ import {
   diagnoseTrackGVideoOneStage12AttemptThreeQa,
   diagnoseTrackGVideoOneStage12AudioP0Correction,
   diagnoseTrackGVideoOneStage12CorrectedPreMaster,
+  diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow,
   diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow,
   diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   createTrackGVideoOneStage12AudioP0Correction,
@@ -34,6 +35,7 @@ import {
   prepareTrackGVideoOneStage07AVoiceTournament,
   prepareTrackGVideoOneStage09VisualReview,
   recoverTrackGVideoOneStage12AttemptThree,
+  runTrackGVideoOneStage12CodecSafeLraGuardShadow,
   runTrackGVideoOneStage12CodecSafeTruePeakShadow,
   runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   scanTrackGVideoOneStage12AttemptThree,
@@ -1381,6 +1383,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       } else if (commandType === "RUN_STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_REPLAY") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = (await diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow()) as unknown as Record<string, unknown>;
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = (await diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow()) as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1574,6 +1579,33 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
             historicalFailureCorrectionOrdinal: 3, shadowState: shadow.shadowState,
             shadowOutcome: shadow.shadowOutcome,
             evidenceSemantics: "CODEC_SAFE_SHADOW_NOT_CORRECTION",
+            correctedOutputUploaded: false, historicalBackfill: false,
+            providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+            finalize: false, releaseEligible: false, productionActivation: false,
+            autoPublish: "OFF" } };
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY") {
+        if (attemptOrdinal !== 3
+          || ownerApprovalText !== "RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const shadowRoute = new URL(
+          "/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay", request.url,
+        ).toString();
+        const shadow = await runTrackGVideoOneStage12CodecSafeLraGuardShadow(user, {
+          objective,
+          ownerApprovalText,
+          callbackUrl: shadowRoute,
+          objectAccessUrl: shadowRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: shadow.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: shadow.shadowState,
+          receipt: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+            historicalFailureCorrectionOrdinal: 3, shadowState: shadow.shadowState,
+            shadowOutcome: shadow.shadowOutcome, terminalReason: shadow.terminalReason,
+            parentShadowEvidenceId: shadow.parentShadowEvidenceId,
+            evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION",
             correctedOutputUploaded: false, historicalBackfill: false,
             providerCallCount: 0, providerDispatch: "OFF", calibration: false,
             finalize: false, releaseEligible: false, productionActivation: false,

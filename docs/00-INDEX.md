@@ -19,7 +19,7 @@ Bộ tài liệu đầy đủ để một coding agent (ChatGPT Work / Codex) x�
 |---|---|
 | `00-AGENT-BRIEF.md` | 10 nguyên lý gốc, guardrail, giới hạn tự động hóa |
 | `01-REPO-STRUCTURE.md` | Layout monorepo, stack, namespace, CI |
-| `04-BUILD-ORDER.md` | **v2** — 36 work package, hai track, điểm dừng bắt buộc |
+| `04-BUILD-ORDER.md` | **v2** — 37 work package, hai track, điểm dừng bắt buộc |
 | `05-TEST-SPEC.md` | Ma trận Acceptance ↔ Test, quy tắc chống test giả |
 | `06-PROMPT-PACK.md` | Prompt sẵn dùng cho từng tình huống BUILD |
 | `07-DECISIONS-REQUIRED.md` | **v2** — 11 quyết định agent không được tự làm + form trả lời |
@@ -36,7 +36,7 @@ Bộ tài liệu đầy đủ để một coding agent (ChatGPT Work / Codex) x�
 | `14-STAGE-INDEX.md` | Ánh xạ 18 stage ↔ module ↔ gate ↔ capability |
 | `15-MODULE-ADDENDUM.md` | 4 module mới (EVO-01, LRN-04, HUM-01, POL-01) + bảng hiệu chỉnh 44 module cũ |
 | `16-ARCHITECTURE-ADDENDUM.md` | Cập nhật kiến trúc: P11–P13, X5, VS4, Evolution Plane, 3 bounded context mới |
-| `17-STAGE12-QA-REMEDIATION.md` | Evolution Stage 12: immutable QA, diagnostic replay và codec-safe true-peak shadow |
+| `17-STAGE12-QA-REMEDIATION.md` | Evolution Stage 12: immutable QA, diagnostic replay, codec-safe true-peak và LRA-guard shadow |
 
 ### Tham chiếu (nạp cùng, đọc khi cần chi tiết module)
 ```
