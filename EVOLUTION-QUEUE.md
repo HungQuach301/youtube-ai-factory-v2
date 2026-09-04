@@ -1,5 +1,14 @@
 # EVOLUTION QUEUE
 
+## EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+- Status: `IMPLEMENTED_ON_BRANCH_CI_PENDING`; activation `SHADOW_ONLY`.
+- Replaces no historical evidence: migration 0033 is a new append-only lineage bound to
+  immutable correction ordinal 2 plus exact parent and LRA-guard evidence.
+- Deterministic largest-gap lattice maps `10.9..14 dB` without monotonic assumptions;
+  post-Opus true peak, LUFS trim, final verification and safe rollback retain separate budgets.
+- Threshold direction `NEUTRAL`; no Production invocation path or downstream side effect.
+
 ## EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD
 
 - Status: `LOCAL_EVIDENCE_READY_REMOTE_CI_PENDING`; branch riêng, chưa merge/deploy và chưa

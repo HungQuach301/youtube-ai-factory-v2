@@ -1656,3 +1656,19 @@ promotion cần owner approval và work package riêng.
 Work package chỉ implement trên branch riêng, tạo PR và chạy CI. Không merge,
 deploy hoặc chạy Production guard shadow replay. Mọi invocation/promotion sau đó
 cần owner approval riêng; shadow PASS không tự activate correction algorithm.
+## EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH — implementation-only
+
+MODE: `EVOLVE`. Exact base `11cde9b22e63191133fe3f0791b3093e8d888e49` / tree
+`fd0db89b64402d5c16abc3cb04e78a96408c8c48`.
+
+| Acceptance | Evidence |
+|---|---|
+| Non-monotonic LRA lattice `10.9..14 dB`; TP cannot narrow the map | `stage12-lra-feasibility-controller.test.ts` |
+| TP containment, LUFS trim, final verify and rollback have independent budgets | controller unit vectors and policy fingerprint |
+| Same post-Opus candidate must pass unchanged `-14±1`, `≤-1`, `4..8` predicates | candidate verification unit + G11 threshold diff |
+| Exact ordinal-2 and parent/LRA-guard lineage; append-only evidence | migration `0033` tests |
+| Root/Sites typed mirrors; no invocation/attempt 4/output/provider/activation | feasibility static guardrail tests |
+| Real media tooling without upload | `stage12-lra-feasibility-zero-upload-smoke.mjs` |
+
+Boundary: implementation, tests and PR only. No Production job/evidence, merge,
+deploy, replay, upload, provider, calibration, Finalize, activation, release or publish.

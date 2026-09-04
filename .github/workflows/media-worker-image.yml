@@ -46,6 +46,8 @@ jobs:
         run: docker run --rm --entrypoint node factory-media-worker:test stage12-codec-safe-true-peak-shadow-smoke.mjs
       - name: Verify Stage 12 codec-safe LRA guard shadow smoke
         run: docker run --rm --entrypoint node factory-media-worker:test stage12-codec-safe-lra-guard-shadow-smoke.mjs
+      - name: Verify Stage 12 LRA feasibility real-FFmpeg zero-upload smoke
+        run: docker run --rm --entrypoint node factory-media-worker:test stage12-lra-feasibility-zero-upload-smoke.mjs
       - name: Prove health and absence of D1 binding
         run: |
           docker run --detach --name factory-media-worker \
