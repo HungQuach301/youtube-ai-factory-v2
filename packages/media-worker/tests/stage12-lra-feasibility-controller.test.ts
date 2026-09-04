@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildStage12LraFeasibilityMap, planStage12LraFeasibilityStep,
-  selectStage12LraFeasibilitySeeds, STAGE12_LRA_FEASIBILITY_POLICY,
+  runStage12LraFeasibilityController, selectStage12LraFeasibilitySeeds,
+  STAGE12_LRA_FEASIBILITY_POLICY,
   validateStage12LraFeasibilityLineage, verifyStage12LraFeasibilityCandidate,
 } from '../stage12-lra-feasibility-controller.mjs'
 
@@ -77,5 +78,64 @@ describe('Stage 12 codec-safe LRA feasibility controller', () => {
     expect(step.phase).toBe('TRUE_PEAK_CONTAINMENT')
     expect(step.macroDepthDb).toBe(step.seed.macroDepthDb)
     expect(step.limiterCeilingDbtp).toBeLessThan(-2.67)
+  })
+
+  it('runs containment, bounded LUFS trim and same-artifact verification from one seed', async () => {
+    const plans: Array<Record<string, number | string | null>> = []
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67,
+      safeRollbackCandidate: { candidatePass: 5, macroDepthDb: 10.70625,
+        integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 },
+      probe: async (plan: Record<string, number | string | null>) => {
+        plans.push(plan)
+        const phase = String(plan.phase)
+        const phaseOrdinal = Number(plan.phaseOrdinal)
+        const feasible = phase !== 'LRA_MAP' || phaseOrdinal === 2
+        const integratedLufs = phase === 'LUFS_TRIM'
+          ? (phaseOrdinal === 0 ? -15 : -14.9) : phase === 'FINAL_VERIFICATION'
+            ? -14.9 : -15.25
+        const truePeakDbtp = phase === 'TRUE_PEAK_CONTAINMENT'
+          || phase === 'LUFS_TRIM' || phase === 'FINAL_VERIFICATION' ? -1.1 : -0.8
+        const ordinal = plans.length.toString(16).padStart(64, '0')
+        return { integratedLufs, integratedLufsExact: integratedLufs.toFixed(2),
+          truePeakDbtp, truePeakDbtpExact: truePeakDbtp.toFixed(2),
+          loudnessRangeLu: feasible ? 4.5 : 3.5,
+          loudnessRangeLuExact: feasible ? '4.50' : '3.50',
+          candidateSha256: ordinal, audioFrameMd5Sha256: ordinal }
+      } })
+    expect(result.outcome).toBe('PASS')
+    expect(result.phaseBudgetUsed).toEqual({ LRA_MAP: 8, TRUE_PEAK_CONTAINMENT: 1,
+      LUFS_TRIM: 2, POST_TRIM_TRUE_PEAK: 0, FINAL_VERIFICATION: 1, SAFE_ROLLBACK: 0 })
+    const nonMap = result.candidateTrace.filter((candidate: { phase: string }) =>
+      candidate.phase !== 'LRA_MAP')
+    expect(new Set(nonMap.map((candidate: { macroDepthDb: number }) => candidate.macroDepthDb)))
+      .toEqual(new Set([11.675]))
+    expect(result.candidateTrace.filter((candidate: { phase: string }) =>
+      candidate.phase === 'LUFS_TRIM').every(
+        (candidate: { targetStepLufs: number }) => Math.abs(candidate.targetStepLufs) <= 0.25,
+      )).toBe(true)
+  })
+
+  it('spends only the rollback reserve after a complete map proves no LRA seed', async () => {
+    let ordinal = 0
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67,
+      safeRollbackCandidate: { candidatePass: 5, macroDepthDb: 10.70625,
+        integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 },
+      probe: async (plan: { phase: string }) => {
+        ordinal += 1
+        const hash = ordinal.toString(16).padStart(64, '0')
+        return { integratedLufs: -15.25, integratedLufsExact: '-15.25',
+          truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
+          loudnessRangeLu: plan.phase === 'SAFE_ROLLBACK' ? 3.2 : 3.5,
+          loudnessRangeLuExact: plan.phase === 'SAFE_ROLLBACK' ? '3.20' : '3.50',
+          candidateSha256: hash, audioFrameMd5Sha256: hash }
+      } })
+    expect(result).toMatchObject({ outcome: 'FAIL',
+      terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED' })
+    expect(result.phaseBudgetUsed).toEqual({ LRA_MAP: 8, TRUE_PEAK_CONTAINMENT: 0,
+      LUFS_TRIM: 0, POST_TRIM_TRUE_PEAK: 0, FINAL_VERIFICATION: 0, SAFE_ROLLBACK: 1 })
+    expect(result.candidateTrace.at(-1)?.disposition).toBe('SAFE_ROLLBACK')
+    expect(result.selectedCandidateSha256).toBe(result.candidateTrace.at(-1)?.candidateSha256)
   })
 })

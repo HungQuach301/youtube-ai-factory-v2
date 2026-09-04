@@ -27,6 +27,8 @@ import {
   stage12AudioP0CorrectionRetryJobs,
   stage12CodecSafeLraGuardShadowEvidence,
   stage12CodecSafeLraGuardShadowJobs,
+  stage12CodecSafeLraFeasibilityEvidence,
+  stage12CodecSafeLraFeasibilityJobs,
   stage12CodecSafeTruePeakShadowEvidence,
   stage12CodecSafeTruePeakShadowJobs,
   stage12CorrectedPreMasterJobs,
@@ -63,6 +65,7 @@ import {
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
+  dispatchStage12CodecSafeLraFeasibilitySearch,
   dispatchStage12CodecSafeLraGuardShadowReplay,
   dispatchStage12CodecSafeTruePeakShadowReplay,
   dispatchStage12EncodedLoudnessDiagnosticReplay,
@@ -74,6 +77,15 @@ import {
   parseStage12MediaReceipt,
   readStage12MediaWorkerHealth,
 } from "./stage12-media";
+import {
+  parseStage12LraFeasibilityResult,
+  stage12LraFeasibilityFingerprints,
+  STAGE12_LRA_FEASIBILITY_COMMAND,
+  STAGE12_LRA_FEASIBILITY_LINEAGE,
+  STAGE12_LRA_FEASIBILITY_POLICY,
+  terminalStage12LraFeasibilityFailure,
+  type Stage12CodecSafeLraFeasibilityResult,
+} from "./stage12-lra-feasibility-contract";
 import {
   buildTrackGVideoOneStage12Request,
   evaluateTrackGVideoOneStage12Receipt,
@@ -221,6 +233,8 @@ const STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT =
   "RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY";
 const STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_TEXT =
   "RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY";
+const STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_OWNER_APPROVAL_TEXT =
+  "RUN STAGE 12 CODEC SAFE LRA FEASIBILITY SEARCH";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -325,6 +339,13 @@ export type RunTrackGVideoOneStage12CodecSafeTruePeakShadowInput = {
 export type RunTrackGVideoOneStage12CodecSafeLraGuardShadowInput = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type RunTrackGVideoOneStage12CodecSafeLraFeasibilityInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -7452,6 +7473,514 @@ export async function runTrackGVideoOneStage12CodecSafeLraGuardShadow(
     throw error;
   }
   return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow()),
+    replayed: false };
+}
+
+const STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE =
+  "RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH";
+
+type Stage12LraFeasibilityCommandPayload = {
+  sourceCorrectionJobId: string;
+  lraGuardJobId: string;
+  sourcePreMasterR2Key: string;
+  sourcePreMasterSha256: string;
+  sourcePreMasterByteLength: number;
+  sourceReceiptSha256: string;
+  parentEvidenceId: string;
+  lraGuardEvidenceId: string;
+  expectedWorkerImageDigest: string;
+  algorithmFingerprint: string;
+  thresholdSnapshotSha256: string;
+  safeRollbackCandidate: { candidatePass: 5; macroDepthDb: number;
+    integratedTargetLufs: number; limiterCeilingDbtp: number };
+  parentLosslessReference: { sha256: string; byteLength: number;
+    audioFrameMd5Sha256: string; codec: "pcm_f32le"; sampleRateHz: 48000 };
+  parentRuntimeProvenance: Stage12CodecSafeLraFeasibilityResult["parentRuntimeProvenance"];
+};
+
+function stage12LraFeasibilityIdempotencyKey(input: {
+  sourceSha256: string;
+  sourceReceiptSha256: string;
+  parentEvidenceId: string;
+  lraGuardEvidenceId: string;
+  expectedWorkerImageDigest: string;
+  algorithmFingerprint: string;
+}) {
+  return createHash("sha256").update([
+    STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE,
+    input.sourceSha256,
+    input.sourceReceiptSha256,
+    input.parentEvidenceId,
+    input.lraGuardEvidenceId,
+    input.expectedWorkerImageDigest,
+    input.algorithmFingerprint,
+  ].join("\0")).digest("hex");
+}
+
+function stage12LraFeasibilityCallbackToken(idempotencyKey: string) {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+async function latestStage12LraFeasibilityCommand() {
+  const [command] = await getDb().select().from(commandLog)
+    .where(eq(commandLog.commandType, STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE))
+    .orderBy(desc(commandLog.createdAt)).limit(1);
+  return command ?? null;
+}
+
+async function latestStage12LraFeasibilityJob() {
+  const [job] = await getDb().select().from(stage12CodecSafeLraFeasibilityJobs)
+    .orderBy(desc(stage12CodecSafeLraFeasibilityJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function readStage12LraFeasibilityEvidence(jobId: string) {
+  const [evidence] = await getDb().select().from(stage12CodecSafeLraFeasibilityEvidence)
+    .where(eq(stage12CodecSafeLraFeasibilityEvidence.jobId, jobId)).limit(1);
+  return evidence ?? null;
+}
+
+async function stage12LraFeasibilitySource() {
+  const lineage = await stage12CodecSafeLraGuardShadowSource();
+  const [lraGuardEvidence] = await getDb().select()
+    .from(stage12CodecSafeLraGuardShadowEvidence)
+    .where(eq(stage12CodecSafeLraGuardShadowEvidence.id,
+      STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId)).limit(1);
+  const [lraGuardJob] = lraGuardEvidence
+    ? await getDb().select().from(stage12CodecSafeLraGuardShadowJobs)
+      .where(eq(stage12CodecSafeLraGuardShadowJobs.id,
+        lraGuardEvidence.shadowJobId)).limit(1) : [];
+  const lraGuardResult = lraGuardEvidence
+    ? stage12CodecSafeLraGuardEvidenceResult(lraGuardEvidence) : null;
+  const safeRollbackCandidate = lraGuardResult?.candidates.find(
+    (candidate) => candidate.candidatePass === 5,
+  ) ?? null;
+  const eligible = Boolean(lineage.eligible && lineage.source && lraGuardJob
+    && lraGuardEvidence && lraGuardResult && safeRollbackCandidate
+    && lineage.bootstrap.run.currentStep === "STAGE_12_READY"
+    && lineage.source.correctedPreMasterSha256
+      === STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    && lraGuardEvidence.id === STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId
+    && lraGuardEvidence.parentShadowEvidenceId
+      === STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+    && lraGuardJob.state === "READY" && lraGuardJob.shadowOutcome === "FAIL"
+    && lraGuardResult.shadowOutcome === "FAIL"
+    && lraGuardResult.terminalReason === "BUDGET_EXHAUSTED"
+    && lraGuardResult.selectedCandidatePass === 5
+    && lraGuardResult.source.sha256 === STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    && lraGuardResult.source.correctionOrdinal === 2
+    && lraGuardResult.historicalFailure.correctionOrdinal === 3
+    && lraGuardResult.parentShadow.evidenceId
+      === STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+    && lraGuardResult.losslessReference.codec === "pcm_f32le"
+    && lraGuardResult.losslessReference.sampleRateHz === 48000
+    && lraGuardResult.correctedOutputUploaded === false
+    && lraGuardResult.providerCallCount === 0
+    && lraGuardResult.providerDispatch === "OFF"
+    && lraGuardResult.calibration === false && lraGuardResult.finalize === false
+    && lraGuardResult.productionActivation === false
+    && lraGuardResult.releaseEligible === false && lraGuardResult.autoPublish === "OFF");
+  return { ...lineage, lraGuardJob: lraGuardJob ?? null,
+    lraGuardEvidence: lraGuardEvidence ?? null, lraGuardResult,
+    safeRollbackCandidate, eligible };
+}
+
+function parseStage12LraFeasibilityCommandPayload(value: string):
+Stage12LraFeasibilityCommandPayload {
+  const parsed = JSON.parse(value) as Partial<Stage12LraFeasibilityCommandPayload>
+    & Record<string, unknown>;
+  if (parsed.sourcePreMasterSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    || parsed.parentEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+    || parsed.lraGuardEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId
+    || typeof parsed.sourceCorrectionJobId !== "string"
+    || typeof parsed.lraGuardJobId !== "string"
+    || !String(parsed.sourcePreMasterR2Key ?? "").startsWith("prod/")
+    || !Number.isInteger(parsed.sourcePreMasterByteLength)
+    || Number(parsed.sourcePreMasterByteLength) < 1
+    || !HEX64.test(String(parsed.sourceReceiptSha256 ?? ""))
+    || !/^sha256:[a-f0-9]{64}$/u.test(String(parsed.expectedWorkerImageDigest ?? ""))
+    || !HEX64.test(String(parsed.algorithmFingerprint ?? ""))
+    || !HEX64.test(String(parsed.thresholdSnapshotSha256 ?? ""))
+    || parsed.safeRollbackCandidate?.candidatePass !== 5
+    || !["macroDepthDb", "integratedTargetLufs", "limiterCeilingDbtp"].every(
+      (key) => Number.isFinite((parsed.safeRollbackCandidate as Record<string, unknown>)[key]),
+    )
+    || parsed.parentLosslessReference?.codec !== "pcm_f32le"
+    || parsed.parentLosslessReference?.sampleRateHz !== 48000
+    || !HEX64.test(String(parsed.parentLosslessReference?.sha256 ?? ""))
+    || !HEX64.test(String(parsed.parentLosslessReference?.audioFrameMd5Sha256 ?? ""))
+    || typeof parsed.parentRuntimeProvenance?.ffmpegVersion !== "string"
+    || !HEX64.test(String(parsed.parentRuntimeProvenance?.ffmpegBuildFingerprint ?? ""))
+    || !HEX64.test(String(parsed.parentRuntimeProvenance?.libopusEncoderFingerprint ?? ""))) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_COMMAND_PAYLOAD_INVALID");
+  }
+  return parsed as Stage12LraFeasibilityCommandPayload;
+}
+
+async function requireStage12LraFeasibilityCommandToken(
+  idempotencyKey: string,
+  token: string,
+) {
+  const [command] = await getDb().select().from(commandLog).where(and(
+    eq(commandLog.commandType, STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE),
+    eq(commandLog.idempotencyKey, idempotencyKey),
+  )).limit(1);
+  if (!command || !HEX64.test(token)
+    || token !== stage12LraFeasibilityCallbackToken(idempotencyKey)) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_UNAUTHORIZED");
+  }
+  const payload = parseStage12LraFeasibilityCommandPayload(command.payloadJson);
+  const expectedKey = stage12LraFeasibilityIdempotencyKey({
+    sourceSha256: payload.sourcePreMasterSha256,
+    sourceReceiptSha256: payload.sourceReceiptSha256,
+    parentEvidenceId: payload.parentEvidenceId,
+    lraGuardEvidenceId: payload.lraGuardEvidenceId,
+    expectedWorkerImageDigest: payload.expectedWorkerImageDigest,
+    algorithmFingerprint: payload.algorithmFingerprint,
+  });
+  if (expectedKey !== idempotencyKey) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_UNAUTHORIZED");
+  }
+  return { command, payload };
+}
+
+function stage12LraFeasibilityEvidenceResult(
+  job: NonNullable<Awaited<ReturnType<typeof latestStage12LraFeasibilityJob>>>,
+  evidence: NonNullable<Awaited<ReturnType<typeof readStage12LraFeasibilityEvidence>>>,
+) {
+  const stored = JSON.parse(evidence.candidateTraceJson) as Record<string, unknown>;
+  return parseStage12LraFeasibilityResult({
+    accepted: true, schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: "POST_OPUS_CODEC_SAFE_LRA_FEASIBILITY",
+    lineage: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: job.sourceCorrectionOrdinal,
+      historicalFailureCorrectionOrdinal: job.historicalFailureCorrectionOrdinal,
+      sourceSha256: job.sourceSha256, parentEvidenceId: job.parentEvidenceId,
+      lraGuardEvidenceId: job.lraGuardEvidenceId },
+    phaseBudget: JSON.parse(evidence.phaseBudgetJson) as unknown,
+    phaseBudgetUsed: stored.phaseBudgetUsed,
+    candidateTrace: stored.candidateTrace,
+    outcome: stored.outcome,
+    terminalReason: evidence.terminalReason,
+    errorCode: stored.errorCode,
+    selectedCandidateSha256: evidence.selectedCandidateSha256,
+    losslessReference: stored.losslessReference,
+    parentRuntimeProvenance: stored.parentRuntimeProvenance,
+    runtimeProvenance: stored.runtimeProvenance,
+    expectedWorkerImageDigest: stored.expectedWorkerImageDigest,
+    workerImageDigest: stored.workerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    shadowOnly: true, correctedOutputUploaded: false, historicalBackfill: false,
+    providerDispatch: "OFF", providerCallCount: 0, calibration: false, finalize: false,
+    productionActivation: false, releaseEligible: false, autoPublish: "OFF",
+  });
+}
+
+export async function diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility() {
+  const source = await stage12LraFeasibilitySource();
+  const command = await latestStage12LraFeasibilityCommand();
+  const job = await latestStage12LraFeasibilityJob();
+  const evidence = job ? await readStage12LraFeasibilityEvidence(job.id) : null;
+  if ((job === null) !== (evidence === null)) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_TERMINAL_READ_BACK_FAILED");
+  }
+  const result = job && evidence ? stage12LraFeasibilityEvidenceResult(job, evidence) : null;
+  if (job && (job.sourceCorrectionOrdinal !== 2
+    || job.historicalFailureCorrectionOrdinal !== 3
+    || job.sourceSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    || job.parentEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+    || job.lraGuardEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId
+    || job.shadowOnly !== 1 || job.uploadCorrectedOutput !== 0
+    || job.providerCallCount !== 0 || job.calibration !== 0 || job.finalize !== 0
+    || job.productionActivation !== 0 || job.release !== 0 || job.autoPublish !== 0
+    || !result || (job.status === "READY") !== (["PASS",
+      "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED"].includes(result.terminalReason)))) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_TERMINAL_READ_BACK_FAILED");
+  }
+  const feasibilityState = job?.status ?? (command ? "PENDING"
+    : source.eligible ? "ELIGIBLE" : "BLOCKED");
+  return {
+    feasibilityState,
+    errorCode: result?.errorCode ?? (source.eligible ? null
+      : "STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SOURCE_NOT_ELIGIBLE"),
+    currentStep: source.bootstrap.run.currentStep,
+    ...STAGE12_LRA_FEASIBILITY_LINEAGE,
+    sourceCorrectionJobId: source.source?.id ?? null,
+    lraGuardJobId: source.lraGuardJob?.id ?? null,
+    commandAccepted: command !== null,
+    terminalReceipt: result,
+    outcome: result?.outcome ?? null,
+    terminalReason: result?.terminalReason ?? null,
+    selectedCandidateSha256: result?.selectedCandidateSha256 ?? null,
+    evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION" as const,
+    shadowOnly: true as const,
+    correctedOutputUploaded: false as const,
+    historicalBackfill: false as const,
+    providerCallCount: 0 as const,
+    providerDispatch: "OFF" as const,
+    calibration: false as const,
+    finalize: false as const,
+    releaseEligible: false as const,
+    productionActivation: false as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
+export async function readTrackGVideoOneStage12CodecSafeLraFeasibilitySource(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+) {
+  const { payload } = await requireStage12LraFeasibilityCommandToken(idempotencyKey, token);
+  if (await latestStage12LraFeasibilityJob()
+    || expectedSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    || expectedSha256 !== payload.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_SOURCE_CONFLICT");
+  }
+  const source = await stage12LraFeasibilitySource();
+  if (!source.eligible || !source.source
+    || source.source.correctedPreMasterR2Key !== payload.sourcePreMasterR2Key
+    || source.source.correctedPreMasterByteLength !== payload.sourcePreMasterByteLength
+    || source.source.receiptSha256 !== payload.sourceReceiptSha256) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_SOURCE_CONFLICT");
+  }
+  return readVerifiedProductionEvidence(payload.sourcePreMasterR2Key,
+    payload.sourcePreMasterSha256);
+}
+
+function stage12LraFeasibilityTerminalReason(errorCode: string) {
+  if (/ENCODE|DECODE|FFMPEG/u.test(errorCode)) return "ENCODE_FAILED" as const;
+  if (/LOUDNESS|MEASUREMENT/u.test(errorCode)) return "MEASUREMENT_FAILED" as const;
+  return "LINEAGE_DRIFT" as const;
+}
+
+async function persistStage12LraFeasibilityTerminal(
+  result: Stage12CodecSafeLraFeasibilityResult,
+) {
+  const existingJob = await latestStage12LraFeasibilityJob();
+  if (existingJob) {
+    const existingEvidence = await readStage12LraFeasibilityEvidence(existingJob.id);
+    if (!existingEvidence) {
+      throw new Error("STAGE_12_LRA_FEASIBILITY_TERMINAL_STATE_CONFLICT");
+    }
+    const existingResult = stage12LraFeasibilityEvidenceResult(existingJob, existingEvidence);
+    if (canonicalize(existingResult) !== canonicalize(result)) {
+      throw new Error("STAGE_12_LRA_FEASIBILITY_TERMINAL_STATE_CONFLICT");
+    }
+    return { accepted: true, replayed: true,
+      jobStatus: existingJob.status as "READY" | "FAILED" };
+  }
+  const jobId = `stage12_lra_feasibility_${STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId}`;
+  const evidenceId = sha256(new TextEncoder().encode(canonicalize({ jobId, result })));
+  const status = ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED"]
+    .includes(result.terminalReason) ? "READY" as const : "FAILED" as const;
+  const now = new Date().toISOString();
+  const storedTrace = canonicalize({ phaseBudgetUsed: result.phaseBudgetUsed,
+    candidateTrace: result.candidateTrace, outcome: result.outcome,
+    errorCode: result.errorCode, losslessReference: result.losslessReference,
+    parentRuntimeProvenance: result.parentRuntimeProvenance,
+    runtimeProvenance: result.runtimeProvenance,
+    expectedWorkerImageDigest: result.expectedWorkerImageDigest,
+    workerImageDigest: result.workerImageDigest });
+  try {
+    await getD1().batch([
+      getD1().prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_job
+        (id,source_correction_ordinal,historical_failure_correction_ordinal,source_sha256,
+         parent_evidence_id,lra_guard_evidence_id,status,shadow_only,
+         upload_corrected_output,provider_call_count,calibration,finalize,
+         production_activation,release,auto_publish,created_at)
+        VALUES (?,2,3,?,?,?, ?,1,0,0,0,0,0,0,0,?)`).bind(jobId,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId, status, now),
+      getD1().prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_evidence
+        (id,job_id,algorithm_fingerprint,threshold_snapshot_sha256,phase_budget_json,
+         candidate_trace_json,selected_candidate_sha256,terminal_reason,
+         evidence_semantics,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+        evidenceId, jobId, result.algorithmFingerprint, result.thresholdSnapshotSha256,
+        canonicalize(result.phaseBudget), storedTrace, result.selectedCandidateSha256,
+        result.terminalReason, result.evidenceSemantics, now),
+    ]);
+  } catch (error) {
+    const replayJob = await latestStage12LraFeasibilityJob();
+    const replayEvidence = replayJob
+      ? await readStage12LraFeasibilityEvidence(replayJob.id) : null;
+    if (!replayJob || !replayEvidence) throw error;
+    const replayResult = stage12LraFeasibilityEvidenceResult(replayJob, replayEvidence);
+    if (canonicalize(replayResult) !== canonicalize(result)) throw error;
+    return { accepted: true, replayed: true,
+      jobStatus: replayJob.status as "READY" | "FAILED" };
+  }
+  return { accepted: true, replayed: false, jobStatus: status };
+}
+
+export async function recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback(input: {
+  idempotencyKey: string;
+  token: string;
+  result?: Stage12CodecSafeLraFeasibilityResult;
+  errorCode?: string;
+}) {
+  const { payload } = await requireStage12LraFeasibilityCommandToken(
+    input.idempotencyKey, input.token,
+  );
+  const existing = await latestStage12LraFeasibilityJob();
+  if (existing) {
+    const evidence = await readStage12LraFeasibilityEvidence(existing.id);
+    if (!evidence) throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+    const stored = stage12LraFeasibilityEvidenceResult(existing, evidence);
+    const sameResult = input.result
+      ? canonicalize(parseStage12LraFeasibilityResult(input.result)) === canonicalize(stored)
+      : input.errorCode === stored.errorCode;
+    if (!sameResult) {
+      throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+    }
+    return { accepted: true, replayed: true,
+      jobStatus: existing.status as "READY" | "FAILED" };
+  }
+  let result: Stage12CodecSafeLraFeasibilityResult;
+  if (input.result) {
+    result = parseStage12LraFeasibilityResult(input.result);
+  } else {
+    const errorCode = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_CODEC_SAFE_LRA_FEASIBILITY_FAILED";
+    result = terminalStage12LraFeasibilityFailure({ errorCode,
+      terminalReason: stage12LraFeasibilityTerminalReason(errorCode),
+      expectedWorkerImageDigest: payload.expectedWorkerImageDigest,
+      algorithmFingerprint: payload.algorithmFingerprint,
+      thresholdSnapshotSha256: payload.thresholdSnapshotSha256,
+      parentRuntimeProvenance: payload.parentRuntimeProvenance });
+  }
+  if (result.lineage.sourceSha256 !== payload.sourcePreMasterSha256
+    || result.lineage.parentEvidenceId !== payload.parentEvidenceId
+    || result.lineage.lraGuardEvidenceId !== payload.lraGuardEvidenceId
+    || result.expectedWorkerImageDigest !== payload.expectedWorkerImageDigest
+    || result.workerImageDigest !== payload.expectedWorkerImageDigest
+    || result.algorithmFingerprint !== payload.algorithmFingerprint
+    || result.thresholdSnapshotSha256 !== payload.thresholdSnapshotSha256
+    || canonicalize(result.parentRuntimeProvenance)
+      !== canonicalize(payload.parentRuntimeProvenance)
+    || (result.losslessReference && canonicalize(result.losslessReference)
+      !== canonicalize(payload.parentLosslessReference))) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_RESULT_LINEAGE_INVALID");
+  }
+  return persistStage12LraFeasibilityTerminal(result);
+}
+
+export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
+  user: ChatGPTUser,
+  input: RunTrackGVideoOneStage12CodecSafeLraFeasibilityInput,
+) {
+  if (input.ownerApprovalText
+    !== STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.objective.trim().length < 12 || input.objective.trim().length > 500
+    || !input.callbackUrl.startsWith("https://")
+    || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_INPUT_INVALID");
+  }
+  const existing = await latestStage12LraFeasibilityCommand();
+  if (existing) {
+    return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility()),
+      replayed: true };
+  }
+  const source = await stage12LraFeasibilitySource();
+  if (!source.eligible || !source.source || !source.lraGuardJob
+    || !source.lraGuardEvidence || !source.lraGuardResult
+    || !source.safeRollbackCandidate || !source.source.correctedPreMasterR2Key
+    || !source.source.correctedPreMasterByteLength || !source.source.receiptSha256) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_SOURCE_NOT_ELIGIBLE");
+  }
+  const health = await readStage12MediaWorkerHealth();
+  const prepared = await prepareStage12MediaRequest(3);
+  const fingerprints = stage12LraFeasibilityFingerprints(prepared.payload);
+  if (fingerprints.thresholdSnapshotSha256
+    !== source.lraGuardResult.thresholdSnapshotSha256) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_THRESHOLD_DRIFT");
+  }
+  const safeRollbackCandidate = { candidatePass: 5 as const,
+    macroDepthDb: source.safeRollbackCandidate.macroDepthDb,
+    integratedTargetLufs: source.safeRollbackCandidate.integratedTargetLufs,
+    limiterCeilingDbtp: source.safeRollbackCandidate.limiterCeilingDbtp };
+  const parentLosslessReference = { ...source.lraGuardResult.losslessReference,
+    sampleRateHz: 48000 as const };
+  const key = stage12LraFeasibilityIdempotencyKey({
+    sourceSha256: STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+    sourceReceiptSha256: source.source.receiptSha256,
+    parentEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId,
+    lraGuardEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId,
+    expectedWorkerImageDigest: health.imageDigest,
+    algorithmFingerprint: fingerprints.algorithmFingerprint,
+  });
+  const token = stage12LraFeasibilityCallbackToken(key);
+  const commandPayload: Stage12LraFeasibilityCommandPayload = {
+    sourceCorrectionJobId: source.source.id,
+    lraGuardJobId: source.lraGuardJob.id,
+    sourcePreMasterR2Key: source.source.correctedPreMasterR2Key,
+    sourcePreMasterSha256: STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+    sourcePreMasterByteLength: source.source.correctedPreMasterByteLength,
+    sourceReceiptSha256: source.source.receiptSha256,
+    parentEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId,
+    lraGuardEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId,
+    expectedWorkerImageDigest: health.imageDigest,
+    ...fingerprints, safeRollbackCandidate, parentLosslessReference,
+    parentRuntimeProvenance: source.lraGuardResult.runtimeProvenance,
+  };
+  const now = new Date().toISOString();
+  await getD1().prepare(`INSERT INTO command_log
+    (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+     trace_id,created_at) VALUES (?,?,?,?,?,
+     'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL',
+     'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_PENDING',?,?)`).bind(
+    crypto.randomUUID(), STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE,
+    canonicalize({ objective: input.objective.trim(), ...commandPayload,
+      ...STAGE12_LRA_FEASIBILITY_COMMAND }), key, user.email.toLowerCase(),
+    crypto.randomUUID(), now,
+  ).run();
+  try {
+    await dispatchStage12CodecSafeLraFeasibilitySearch({
+      ...prepared.payload,
+      idempotencyKey: key,
+      objectAccess: { url: input.objectAccessUrl, token },
+      callback: { url: input.callbackUrl, token },
+      codecSafeLraFeasibilitySearch: {
+        schemaVersion: 1,
+        evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION",
+        ...STAGE12_LRA_FEASIBILITY_LINEAGE,
+        sourceCorrectionJobId: source.source.id,
+        lraGuardJobId: source.lraGuardJob.id,
+        sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
+          sha256: STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+          byteLength: source.source.correctedPreMasterByteLength },
+        sourceCorrectionReceiptSha256: source.source.receiptSha256,
+        safeRollbackCandidate,
+        parentLosslessReference,
+        parentRuntimeProvenance: source.lraGuardResult.runtimeProvenance,
+        policy: STAGE12_LRA_FEASIBILITY_POLICY,
+        expectedWorkerImageDigest: health.imageDigest,
+        ...fingerprints,
+        shadowOnly: true,
+        historicalBackfill: false,
+        uploadCorrectedOutput: false,
+        providerDispatch: "OFF", providerCallCount: 0,
+        calibration: false, finalize: false, release: false,
+        productionActivation: false, autoPublish: "OFF",
+      },
+    });
+  } catch (error) {
+    const errorCode = error instanceof Error
+      ? error.message.slice(0, 160) : "STAGE12_CODEC_SAFE_LRA_FEASIBILITY_START_FAILED";
+    await recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback({
+      idempotencyKey: key, token, errorCode,
+    });
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility()),
     replayed: false };
 }
 

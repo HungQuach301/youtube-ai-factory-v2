@@ -14,14 +14,55 @@ describe('Stage 12 feasibility-search static guardrails', () => {
     expect(mirror).toMatch(/packages\/contracts\/src\/stage12-lra-feasibility/u)
   })
 
-  it('contains no attempt/ordinal 4 or Production invocation path', () => {
+  it('wires one authenticated diagnostic/execution path with no object write route', () => {
+    const gateway = read('sites/control-plane/app/mcp/route.ts')
+    const route = read('sites/control-plane/app/api/media-worker/'
+      + 'stage12-codec-safe-lra-feasibility-search/route.ts')
+    const worker = read('packages/media-worker/container-entry.mjs')
+    expect(gateway).toMatch(/RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH/u)
+    expect(gateway).toMatch(/diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility/u)
+    expect(gateway).toMatch(/runTrackGVideoOneStage12CodecSafeLraFeasibility/u)
+    expect(route).toMatch(/export async function GET/u)
+    expect(route).toMatch(/export async function POST/u)
+    expect(route).not.toMatch(/export async function PUT|putImmutable|upload/u)
+    expect(worker).toMatch(/codecSafeLraFeasibilitySearchReady: stage12Ready\(\)/u)
+    expect(worker).toMatch(/\/stage12\/codec-safe-lra-feasibility-search/u)
+  })
+
+  it('persists one terminal snapshot in migration-0033 tables without updates', () => {
+    const domain = read('sites/control-plane/app/track-g-video-one.ts')
+    const start = domain.indexOf('async function persistStage12LraFeasibilityTerminal')
+    const end = domain.indexOf('export async function recordTrackGVideoOneStage12', start)
+    const persistence = domain.slice(start, end)
+    expect(persistence).toMatch(/INSERT INTO stage12_codec_safe_lra_feasibility_job/u)
+    expect(persistence).toMatch(/INSERT INTO stage12_codec_safe_lra_feasibility_evidence/u)
+    expect(persistence).not.toMatch(/UPDATE|DELETE/u)
+    expect(domain).toMatch(/commandAccepted: command !== null/u)
+    expect(domain).toMatch(/replayed: true/u)
+  })
+
+  it('keeps root and Sites worker mirrors exact', () => {
+    expect(read('packages/media-worker/stage12-runtime.mjs'))
+      .toBe(read('sites/control-plane/packages/media-worker/stage12-runtime.mjs'))
+    expect(read('packages/media-worker/container-entry.mjs'))
+      .toBe(read('sites/control-plane/packages/media-worker/container-entry.mjs'))
+    expect(read('packages/media-worker/stage12-lra-feasibility-controller.mjs'))
+      .toBe(read('sites/control-plane/packages/media-worker/'
+        + 'stage12-lra-feasibility-controller.mjs'))
+  })
+
+  it('contains no attempt/ordinal 4, provider path or output upload', () => {
     const scope = [read('packages/media-worker/stage12-lra-feasibility-controller.mjs'),
+      read('packages/media-worker/stage12-runtime.mjs'),
       read('packages/contracts/src/stage12-lra-feasibility.ts'),
+      read('sites/control-plane/app/api/media-worker/'
+        + 'stage12-codec-safe-lra-feasibility-search/route.ts'),
       read('sites/control-plane/drizzle/0033_stage12_codec_safe_lra_feasibility_search.sql')]
       .join('\n')
     expect(scope).not.toMatch(/attempt(?:Ordinal)?\s*[:=_ ]\s*4/iu)
     expect(scope).not.toMatch(/correction(?:Ordinal)?\s*[:=_ ]\s*4/iu)
-    expect(scope).not.toMatch(/dispatchStage12|authenticatedFetch|writeFile|r2Key/iu)
+    expect(scope).not.toMatch(/providerDispatch:\s*['"]ON|provider_call_count[^\n]*[1-9]/iu)
+    expect(scope).not.toMatch(/uploadCorrectedOutput:\s*true|export async function PUT/iu)
   })
 
   it('does not change acceptance thresholds', () => {

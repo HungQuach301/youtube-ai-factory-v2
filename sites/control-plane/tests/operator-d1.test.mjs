@@ -32,6 +32,58 @@ test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
   assert.match(source, /slice\(offset, offset \+ TTS_BATCH_SIZE\)/);
 });
 
+test("Stage 12 LRA feasibility command is exactly-once, terminal and zero-upload", async () => {
+  const [domain, gateway, route, worker, runtime, controller, rootWorker, rootRuntime,
+    rootController, migration] = await Promise.all([
+    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../app/api/media-worker/stage12-codec-safe-lra-feasibility-search/route.ts",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../packages/media-worker/stage12-lra-feasibility-controller.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../../../packages/media-worker/container-entry.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../../../packages/media-worker/stage12-runtime.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../../../packages/media-worker/stage12-lra-feasibility-controller.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../drizzle/0034_stage12_lra_feasibility_command_contract.sql",
+      import.meta.url)), "utf8"),
+  ]);
+  assert.equal(worker, rootWorker);
+  assert.equal(runtime, rootRuntime);
+  assert.equal(controller, rootController);
+  assert.match(gateway, /RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH/g);
+  assert.match(gateway, /diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility/u);
+  assert.match(gateway, /runTrackGVideoOneStage12CodecSafeLraFeasibility/u);
+  assert.match(worker, /stage12Jobs\.get\(payload\.idempotencyKey\)/u);
+  assert.match(worker, /\/stage12\/codec-safe-lra-feasibility-search/u);
+  assert.match(runtime, /kind=codec-safe-lra-feasibility-source-ordinal-2/u);
+  assert.doesNotMatch(route, /export async function PUT|putImmutable|upload/u);
+  const persistStart = domain.indexOf("async function persistStage12LraFeasibilityTerminal");
+  const persistEnd = domain.indexOf(
+    "export async function recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback",
+    persistStart,
+  );
+  const persistence = domain.slice(persistStart, persistEnd);
+  assert.match(persistence, /getD1\(\)\.batch/u);
+  assert.match(persistence, /INSERT INTO stage12_codec_safe_lra_feasibility_job/u);
+  assert.match(persistence, /INSERT INTO stage12_codec_safe_lra_feasibility_evidence/u);
+  assert.doesNotMatch(persistence, /UPDATE|DELETE/u);
+  assert.match(migration,
+    /RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH/u);
+  assert.match(migration,
+    /TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL/u);
+});
+
 test("Stage 10 observes all tournament takes in one WhisperX batch", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../scripts/whisperx-phoneme-observer.py", import.meta.url)),

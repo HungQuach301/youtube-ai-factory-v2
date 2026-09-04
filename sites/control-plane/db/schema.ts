@@ -963,6 +963,54 @@ export const stage12CodecSafeLraGuardShadowEvidence = sqliteTable(
   ],
 );
 
+export const stage12CodecSafeLraFeasibilityJobs = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_job",
+  {
+    id: text("id").primaryKey(),
+    sourceCorrectionOrdinal: integer("source_correction_ordinal").notNull(),
+    historicalFailureCorrectionOrdinal:
+      integer("historical_failure_correction_ordinal").notNull(),
+    sourceSha256: text("source_sha256").notNull(),
+    parentEvidenceId: text("parent_evidence_id").notNull(),
+    lraGuardEvidenceId: text("lra_guard_evidence_id").notNull(),
+    status: text("status", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+    shadowOnly: integer("shadow_only").notNull().default(1),
+    uploadCorrectedOutput: integer("upload_corrected_output").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    calibration: integer("calibration").notNull().default(0),
+    finalize: integer("finalize").notNull().default(0),
+    productionActivation: integer("production_activation").notNull().default(0),
+    release: integer("release").notNull().default(0),
+    autoPublish: integer("auto_publish").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+);
+
+export const stage12CodecSafeLraFeasibilityEvidence = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_evidence",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id").notNull()
+      .references(() => stage12CodecSafeLraFeasibilityJobs.id),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    phaseBudgetJson: text("phase_budget_json").notNull(),
+    candidateTraceJson: text("candidate_trace_json").notNull(),
+    selectedCandidateSha256: text("selected_candidate_sha256"),
+    terminalReason: text("terminal_reason", {
+      enum: ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED", "ENCODE_FAILED",
+        "MEASUREMENT_FAILED", "LINEAGE_DRIFT"],
+    }).notNull(),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION"],
+    }).notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_codec_safe_lra_feasibility_evidence_job_unique").on(table.jobId),
+  ],
+);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

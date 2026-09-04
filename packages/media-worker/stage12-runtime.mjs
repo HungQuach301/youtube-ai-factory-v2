@@ -4,6 +4,11 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { runStage12LraFeasibilityController, STAGE12_LRA_FEASIBILITY_POLICY,
+  stage12LraFeasibilityFingerprint, stage12LraFeasibilityThresholdSnapshot,
+  validateStage12LraFeasibilityLineage,
+} from './stage12-lra-feasibility-controller.mjs'
+
 const HEX64 = /^[0-9a-f]{64}$/u
 const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
   ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
@@ -1580,6 +1585,182 @@ export async function executeStage12CodecSafeLraGuardShadowReplay(payloadInput, 
       renderRuntimeFingerprint,
       runtimeProvenance,
     })
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+function stage12LraFeasibilityThresholds(payload) {
+  return {
+    integratedLufs: payload.qa.loudness.integratedLufs,
+    toleranceLufs: payload.qa.loudness.toleranceLufs,
+    truePeakMaxDbtp: payload.qa.loudness.truePeakMaxDbtp,
+    lraMin: payload.qa.loudness.lraMin,
+    lraMax: payload.qa.loudness.lraMax,
+    nearStaticMaxSec: payload.qa.nearStaticMaxSec,
+    sampleRateHz: payload.render.sampleRateHz,
+  }
+}
+
+function validStage12LraFeasibilityRuntimeProvenance(value) {
+  return typeof value?.ffmpegVersion === 'string' && value.ffmpegVersion.length > 0
+    && HEX64.test(value.ffmpegBuildFingerprint ?? '')
+    && HEX64.test(value.libopusEncoderFingerprint ?? '')
+}
+
+export function validateStage12CodecSafeLraFeasibilityPayload(payload, imageDigest) {
+  const value = validateStage12Payload(payload)
+  const search = value.codecSafeLraFeasibilitySearch
+  const thresholds = stage12LraFeasibilityThresholds(value)
+  const expectedAlgorithmFingerprint = stage12LraFeasibilityFingerprint(thresholds)
+  const expectedThresholdSnapshotSha256 = stage12LraFeasibilityThresholdSnapshot(thresholds)
+  try {
+    validateStage12LraFeasibilityLineage(search)
+  } catch {
+    throw Object.assign(new Error('Invalid Stage 12 LRA feasibility lineage.'), {
+      code: 'INVALID_STAGE12_LRA_FEASIBILITY_LINEAGE',
+    })
+  }
+  if (search?.schemaVersion !== 1
+    || search.evidenceSemantics !== 'CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION'
+    || typeof search.sourceCorrectionJobId !== 'string'
+    || typeof search.lraGuardJobId !== 'string'
+    || !String(search.sourceCorrectedPreMaster?.r2Key ?? '').startsWith('prod/')
+    || search.sourceCorrectedPreMaster?.sha256 !== search.sourceSha256
+    || !Number.isInteger(search.sourceCorrectedPreMaster?.byteLength)
+    || search.sourceCorrectedPreMaster.byteLength < 1
+    || !HEX64.test(search.sourceCorrectionReceiptSha256 ?? '')
+    || search.safeRollbackCandidate?.candidatePass !== 5
+    || !['macroDepthDb', 'integratedTargetLufs', 'limiterCeilingDbtp']
+      .every((key) => Number.isFinite(search.safeRollbackCandidate?.[key]))
+    || !HEX64.test(search.parentLosslessReference?.sha256 ?? '')
+    || !Number.isInteger(search.parentLosslessReference?.byteLength)
+    || search.parentLosslessReference.byteLength < 1
+    || !HEX64.test(search.parentLosslessReference?.audioFrameMd5Sha256 ?? '')
+    || search.parentLosslessReference?.codec !== 'pcm_f32le'
+    || search.parentLosslessReference?.sampleRateHz !== 48000
+    || !validStage12LraFeasibilityRuntimeProvenance(search.parentRuntimeProvenance)
+    || canonicalize(search.policy) !== canonicalize(STAGE12_LRA_FEASIBILITY_POLICY)
+    || search.algorithmFingerprint !== expectedAlgorithmFingerprint
+    || search.thresholdSnapshotSha256 !== expectedThresholdSnapshotSha256
+    || !/^sha256:[a-f0-9]{64}$/u.test(search.expectedWorkerImageDigest ?? '')
+    || search.historicalBackfill !== false) {
+    throw Object.assign(new Error('Invalid Stage 12 LRA feasibility envelope.'), {
+      code: 'INVALID_STAGE12_LRA_FEASIBILITY_ENVELOPE',
+    })
+  }
+  if (imageDigest !== undefined && search.expectedWorkerImageDigest !== imageDigest) {
+    throw Object.assign(new Error('LRA feasibility worker image does not match the pin.'), {
+      code: 'STAGE12_LRA_FEASIBILITY_WORKER_IMAGE_MISMATCH',
+    })
+  }
+  return value
+}
+
+export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, imageDigest) {
+  const payload = validateStage12CodecSafeLraFeasibilityPayload(payloadInput, imageDigest)
+  const search = payload.codecSafeLraFeasibilitySearch
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-lra-feasibility-'))
+  const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
+  const losslessReferencePath = join(workRoot, 'canonical-lossless-reference.wav')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=codec-safe-lra-feasibility-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${search.sourceSha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== search.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== search.sourceSha256) {
+      throw Object.assign(new Error('LRA feasibility source read-back mismatch.'), {
+        code: 'STAGE12_LRA_FEASIBILITY_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:a:0', '-map_metadata', '-1', '-fflags', '+bitexact',
+      '-flags:a', '+bitexact', '-c:a', 'pcm_f32le',
+      '-ar', String(payload.render.sampleRateHz), losslessReferencePath], workRoot,
+    'STAGE12_LRA_FEASIBILITY_LOSSLESS_DECODE_FAILED')
+    const losslessBytes = await readFile(losslessReferencePath)
+    const losslessReference = {
+      sha256: sha256(losslessBytes),
+      byteLength: losslessBytes.byteLength,
+      audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(losslessReferencePath, workRoot),
+      codec: 'pcm_f32le',
+      sampleRateHz: payload.render.sampleRateHz,
+    }
+    if (canonicalize(losslessReference) !== canonicalize(search.parentLosslessReference)) {
+      throw Object.assign(new Error('LRA feasibility lossless reference drifted.'), {
+        code: 'STAGE12_LRA_FEASIBILITY_LOSSLESS_REFERENCE_DRIFT',
+      })
+    }
+    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    if (canonicalize(runtimeProvenance) !== canonicalize(search.parentRuntimeProvenance)) {
+      throw Object.assign(new Error('LRA feasibility runtime provenance drifted.'), {
+        code: 'STAGE12_LRA_FEASIBILITY_RUNTIME_DRIFT',
+      })
+    }
+    const thresholds = stage12LraFeasibilityThresholds(payload)
+    const controller = await runStage12LraFeasibilityController({
+      thresholds,
+      policy: search.policy,
+      anchorLimiterCeilingDbtp: search.safeRollbackCandidate.limiterCeilingDbtp,
+      safeRollbackCandidate: search.safeRollbackCandidate,
+      probe: async (plan) => {
+        const candidatePath = join(workRoot,
+          `lra-feasibility-${plan.phase.toLowerCase()}-${plan.phaseOrdinal}.webm`)
+        await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+          workRoot, plan)
+        const measured = await measureStage12EncodedLoudness(payload, candidatePath, workRoot,
+          (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2)
+        const candidateBytes = await readFile(candidatePath)
+        return {
+          integratedLufs: measured.integratedLufs,
+          integratedLufsExact: measured.integratedLufsExact,
+          truePeakDbtp: measured.truePeakDbtp,
+          truePeakDbtpExact: measured.truePeakDbtpExact,
+          loudnessRangeLu: measured.loudnessRangeLu,
+          loudnessRangeLuExact: measured.loudnessRangeLuExact,
+          candidateSha256: sha256(candidateBytes),
+          audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(candidatePath, workRoot),
+        }
+      },
+    })
+    return {
+      accepted: true,
+      schemaVersion: 1,
+      evidenceSemantics: search.evidenceSemantics,
+      boundary: 'POST_OPUS_CODEC_SAFE_LRA_FEASIBILITY',
+      lineage: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3, sourceSha256: search.sourceSha256,
+        parentEvidenceId: search.parentEvidenceId,
+        lraGuardEvidenceId: search.lraGuardEvidenceId },
+      phaseBudget: search.policy.phaseBudget,
+      phaseBudgetUsed: controller.phaseBudgetUsed,
+      candidateTrace: controller.candidateTrace,
+      outcome: controller.outcome,
+      terminalReason: controller.terminalReason,
+      errorCode: null,
+      selectedCandidateSha256: controller.selectedCandidateSha256,
+      losslessReference,
+      parentRuntimeProvenance: search.parentRuntimeProvenance,
+      runtimeProvenance,
+      expectedWorkerImageDigest: search.expectedWorkerImageDigest,
+      workerImageDigest: imageDigest,
+      algorithmFingerprint: search.algorithmFingerprint,
+      thresholdSnapshotSha256: search.thresholdSnapshotSha256,
+      shadowOnly: true,
+      correctedOutputUploaded: false,
+      historicalBackfill: false,
+      providerDispatch: 'OFF',
+      providerCallCount: 0,
+      calibration: false,
+      finalize: false,
+      productionActivation: false,
+      releaseEligible: false,
+      autoPublish: 'OFF',
+    }
   } finally {
     await rm(workRoot, { recursive: true, force: true })
   }
