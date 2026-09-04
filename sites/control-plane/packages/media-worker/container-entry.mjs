@@ -13,10 +13,12 @@ import {
   stage12WorkerErrorCode,
 } from './stage12-callback-error.mjs'
 import { executeStage12, executeStage12AudioP0Correction,
+  executeStage12CodecSafeLraGuardShadowReplay,
   executeStage12CodecSafeTruePeakShadowReplay,
   executeStage12EncodedLoudnessDiagnosticReplay, executeStage12Recovery,
   executeStage12Remediation, stage12EncodedLoudnessFailureDiagnostic,
   validateStage12AudioP0CorrectionPayload,
+  validateStage12CodecSafeLraGuardShadowPayload,
   validateStage12CodecSafeTruePeakShadowPayload,
   validateStage12EncodedLoudnessDiagnosticReplayPayload,
   validateStage12Payload, validateStage12RemediationPayload } from './stage12-runtime.mjs'
@@ -743,6 +745,32 @@ function startStage12CodecSafeTruePeakShadowJob(payload) {
   return job.status
 }
 
+function startStage12CodecSafeLraGuardShadowJob(payload) {
+  const existing = stage12Jobs.get(payload.idempotencyKey)
+  if (existing) return existing.status
+  validateStage12CodecSafeLraGuardShadowPayload(payload, IMAGE_DIGEST)
+  const job = { status: 'PENDING' }
+  stage12Jobs.set(payload.idempotencyKey, job)
+  void executeStage12CodecSafeLraGuardShadowReplay(payload, IMAGE_DIGEST)
+    .then(async (result) => {
+      await publishStage12Callback(payload.callback, payload.idempotencyKey, result)
+      job.status = 'READY'
+    })
+    .catch(async (error) => {
+      job.status = 'FAILED'
+      console.error('STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY_FAILED', JSON.stringify({
+        trace_id: payload.idempotencyKey,
+        errorCode: stage12WorkerErrorCode(error),
+      }))
+      try { await publishStage12Failure(payload.callback, payload.idempotencyKey, error) }
+      catch (callbackError) {
+        console.error('STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_CALLBACK_FAILED',
+          stage12WorkerErrorCode(callbackError))
+      }
+    })
+  return job.status
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -755,6 +783,7 @@ const server = createServer(async (request, response) => {
       stage12Ready: stage12Ready(),
       encodedLoudnessDiagnosticReplayReady: stage12Ready(),
       codecSafeTruePeakShadowReady: stage12Ready(),
+      codecSafeLraGuardShadowReady: stage12Ready(),
       stage12FontVerified: existsSync(STAGE12_FONT_PATH),
       pythonRuntimeVerified: PYTHON_RUNTIME_VERIFIED,
       calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
@@ -982,6 +1011,36 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       const code = typeof error === 'object' && error !== null && 'code' in error
         ? String(error.code) : 'STAGE12_CODEC_SAFE_TRUE_PEAK_SHADOW_START_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST'
+    && request.url === '/stage12/codec-safe-lra-guard-shadow-replay') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' })
+        .end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' })
+          .end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage12CodecSafeLraGuardShadowPayload(
+        JSON.parse(body.toString('utf8')), IMAGE_DIGEST,
+      )
+      const jobStatus = startStage12CodecSafeLraGuardShadowJob(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        accepted: true, jobStatus, idempotencyKey: payload.idempotencyKey,
+        imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : 'STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' })
         .end(JSON.stringify({ ok: false, code }))
     }

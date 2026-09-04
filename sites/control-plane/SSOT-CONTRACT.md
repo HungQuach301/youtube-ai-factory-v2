@@ -33,6 +33,11 @@ Source authority and runtime authority must not be conflated. GitHub governs
 what the Factory is allowed to execute; D1 records what the approved Factory
 actually executed. Chat text or a dashboard-only projection satisfies neither.
 
+Stage 12 diagnostic and codec-safe shadow evidence is append-only runtime truth,
+but it is not a correction output and does not authorize algorithm activation.
+Migration 0032 preserves ordinal 2/3 and prior replay evidence, pins exact
+source/parent/render/runtime lineage, and records only shadow job/evidence state.
+
 ## Change protocol
 
 1. Start from a clean checkout of GitHub `main`.

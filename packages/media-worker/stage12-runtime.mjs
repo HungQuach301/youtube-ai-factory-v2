@@ -325,6 +325,310 @@ export function stage12CodecSafeTruePeakFingerprints(payload, correctionPassLimi
   return { algorithmFingerprint, thresholdSnapshotSha256 }
 }
 
+export function stage12CodecSafeLraGuardFingerprints(payload, controllerPolicy) {
+  const thresholdSnapshot = {
+    integratedLufs: payload.qa.loudness.integratedLufs,
+    toleranceLufs: payload.qa.loudness.toleranceLufs,
+    truePeakMaxDbtp: payload.qa.loudness.truePeakMaxDbtp,
+    lraMin: payload.qa.loudness.lraMin,
+    lraMax: payload.qa.loudness.lraMax,
+    nearStaticMaxSec: payload.qa.nearStaticMaxSec,
+    sampleRateHz: payload.render.sampleRateHz,
+  }
+  const thresholdSnapshotSha256 = sha256(Buffer.from(canonicalize(thresholdSnapshot), 'utf8'))
+  const controllerPolicySha256 = sha256(Buffer.from(canonicalize(controllerPolicy), 'utf8'))
+  const renderKernelFingerprint = sha256(Buffer.from(canonicalize({
+    renderKernelVersion: 'stage12-codec-safe-render-kernel-v1',
+    losslessCodec: 'pcm_f32le',
+    candidateInput: 'CANONICAL_LOSSLESS_REFERENCE',
+    macroDynamics: 'ALTERNATING_HALF_PERIOD_V1',
+    loudnormMode: 'TWO_PASS_LINEAR_FALSE_WITH_LIMITER',
+    sampleRateHz: payload.render.sampleRateHz,
+  }), 'utf8'))
+  const algorithmFingerprint = sha256(Buffer.from(canonicalize({
+    algorithmVersion: 'stage12-codec-safe-lra-guard-shadow-v1',
+    anchor: 'PRIOR_SHADOW_CANDIDATE_PASS_1',
+    highBracket: 'PRIOR_SHADOW_CANDIDATE_PASS_3',
+    lraSearch: 'BOUNDED_BISECTION',
+    integratedTrim: 'NEAREST_INTERIOR_BOUNDARY',
+    regression: 'ROLLBACK_TO_BEST_SAFE',
+    controllerPolicySha256,
+    renderKernelFingerprint,
+    thresholdSnapshotSha256,
+  }), 'utf8'))
+  return { algorithmFingerprint, thresholdSnapshotSha256, controllerPolicySha256,
+    renderKernelFingerprint }
+}
+
+function finiteLraGuardPolicy(policy) {
+  return policy && Number.isInteger(policy.maxCandidateCount)
+    && policy.maxCandidateCount > 0
+    && Number.isFinite(policy.codecOvershootRegressionMaxDb)
+    && policy.codecOvershootRegressionMaxDb >= 0
+    && Number.isFinite(policy.integratedBoundaryMarginLu)
+    && policy.integratedBoundaryMarginLu > 0
+    && Number.isFinite(policy.maxIntegratedTargetStepLu)
+    && policy.maxIntegratedTargetStepLu > 0
+}
+
+function lraGuardRound(value) {
+  return Number(value.toFixed(6))
+}
+
+function lraGuardReferenceValid(payload, replay) {
+  const anchor = replay?.anchorReference
+  const high = replay?.highBracketReference
+  return finiteLraGuardPolicy(replay?.controllerPolicy)
+    && anchor?.candidatePass === 1 && high?.candidatePass === 3
+    && Number.isFinite(anchor.integratedTargetLufs)
+    && Number.isFinite(anchor.limiterCeilingDbtp)
+    && Number.isFinite(anchor.macroDepthDb)
+    && Number.isFinite(anchor.codecOvershootDb)
+    && Number.isFinite(anchor.integratedLufs) && Number.isFinite(anchor.truePeakDbtp)
+    && Number.isFinite(anchor.loudnessRangeLu)
+    && Number.isFinite(high.macroDepthDb) && high.macroDepthDb > anchor.macroDepthDb
+    && Number.isFinite(high.loudnessRangeLu)
+    && anchor.truePeakDbtp <= payload.qa.loudness.truePeakMaxDbtp
+    && anchor.loudnessRangeLu < payload.qa.loudness.lraMin
+    && high.loudnessRangeLu > payload.qa.loudness.lraMax
+    && HEX64.test(anchor.audioFrameMd5Sha256 ?? '')
+    && HEX64.test(high.audioFrameMd5Sha256 ?? '')
+}
+
+function lraGuardCandidateSafe(payload, replay, candidate) {
+  return candidate.disposition !== 'ANCHOR_DRIFT'
+    && candidate.disposition !== 'REGRESSION_REJECTED'
+    && candidate.disposition !== 'HIGH_BRACKET'
+    && candidate.truePeakDbtp <= payload.qa.loudness.truePeakMaxDbtp
+    && candidate.codecOvershootDb <= replay.anchorReference.codecOvershootDb
+      + replay.controllerPolicy.codecOvershootRegressionMaxDb
+}
+
+function lraGuardDistance(value, min, max) {
+  return value < min ? min - value : value > max ? value - max : 0
+}
+
+function bestLraGuardCandidatePass(payload, replay, candidates) {
+  const safe = candidates.filter((candidate) => lraGuardCandidateSafe(payload, replay, candidate))
+  safe.sort((left, right) => {
+    const leftScore = [left.failedPredicates.length,
+      lraGuardDistance(left.loudnessRangeLu, payload.qa.loudness.lraMin,
+        payload.qa.loudness.lraMax),
+      lraGuardDistance(left.integratedLufs,
+        payload.qa.loudness.integratedLufs - payload.qa.loudness.toleranceLufs,
+        payload.qa.loudness.integratedLufs + payload.qa.loudness.toleranceLufs),
+      left.candidatePass]
+    const rightScore = [right.failedPredicates.length,
+      lraGuardDistance(right.loudnessRangeLu, payload.qa.loudness.lraMin,
+        payload.qa.loudness.lraMax),
+      lraGuardDistance(right.integratedLufs,
+        payload.qa.loudness.integratedLufs - payload.qa.loudness.toleranceLufs,
+        payload.qa.loudness.integratedLufs + payload.qa.loudness.toleranceLufs),
+      right.candidatePass]
+    for (let index = 0; index < leftScore.length; index += 1) {
+      if (leftScore[index] !== rightScore[index]) return leftScore[index] - rightScore[index]
+    }
+    return 0
+  })
+  return safe[0]?.candidatePass ?? null
+}
+
+function lraGuardFullPass(payload, candidate) {
+  return stage12LoudnessFailedPredicates(payload, candidate).length === 0
+}
+
+export function finalizeStage12CodecSafeLraGuardTrace(payload, replay, candidates) {
+  if (!lraGuardReferenceValid(payload, replay) || !Array.isArray(candidates)
+    || candidates.length < 1 || candidates.some((candidate, index) =>
+      candidate.candidatePass !== index)) {
+    throw Object.assign(new Error('Invalid Stage 12 LRA guard trace.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_TRACE',
+    })
+  }
+  const last = candidates.at(-1)
+  let terminalReason = null
+  if (last.disposition === 'FULL_PASS' && lraGuardFullPass(payload, last)) {
+    terminalReason = 'PASS'
+  } else if (candidates[0].disposition === 'ANCHOR_DRIFT') {
+    terminalReason = 'ANCHOR_REPRODUCTION_DRIFT'
+  } else if (candidates.length >= replay.controllerPolicy.maxCandidateCount) {
+    terminalReason = 'BUDGET_EXHAUSTED'
+  }
+  if (!terminalReason) {
+    throw Object.assign(new Error('Stage 12 LRA guard trace is not terminal.'), {
+      code: 'STAGE12_CODEC_SAFE_LRA_GUARD_TRACE_INCOMPLETE',
+    })
+  }
+  const bestSafeCandidatePass = bestLraGuardCandidatePass(payload, replay, candidates)
+  const selectedCandidatePass = terminalReason === 'PASS'
+    ? last.candidatePass : bestSafeCandidatePass ?? 0
+  const selected = candidates[selectedCandidatePass]
+  return {
+    shadowOutcome: terminalReason === 'PASS' ? 'PASS' : 'FAIL',
+    terminalReason,
+    lastEvaluatedCandidatePass: last.candidatePass,
+    bestSafeCandidatePass,
+    selectedCandidatePass,
+    finalMeasurements: {
+      integratedLufs: selected.integratedLufs,
+      integratedLufsExact: selected.integratedLufsExact,
+      truePeakDbtp: selected.truePeakDbtp,
+      truePeakDbtpExact: selected.truePeakDbtpExact,
+      loudnessRangeLu: selected.loudnessRangeLu,
+      loudnessRangeLuExact: selected.loudnessRangeLuExact,
+    },
+    failedPredicates: selected.failedPredicates,
+  }
+}
+
+export function planStage12CodecSafeLraGuardCandidate(payload, replay, candidates) {
+  if (!lraGuardReferenceValid(payload, replay) || !Array.isArray(candidates)
+    || candidates.some((candidate, index) => candidate.candidatePass !== index)) {
+    throw Object.assign(new Error('Invalid Stage 12 LRA guard planner input.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_CONTROLLER',
+    })
+  }
+  if (candidates.length > 0 && (candidates.at(-1).disposition === 'FULL_PASS'
+    || candidates[0].disposition === 'ANCHOR_DRIFT'
+    || candidates.length >= replay.controllerPolicy.maxCandidateCount)) {
+    return { done: true, ...finalizeStage12CodecSafeLraGuardTrace(payload, replay, candidates) }
+  }
+  const anchor = replay.anchorReference
+  const high = replay.highBracketReference
+  if (candidates.length === 0) {
+    return { done: false, candidatePass: 0, phase: 'ANCHOR_REPRODUCTION',
+      decision: 'ANCHOR', parentCandidatePass: null, rollbackToCandidatePass: null,
+      bracketLowDepthDb: anchor.macroDepthDb, bracketHighDepthDb: high.macroDepthDb,
+      integratedTargetLufs: anchor.integratedTargetLufs,
+      limiterCeilingDbtp: anchor.limiterCeilingDbtp,
+      macroDepthDb: anchor.macroDepthDb, targetStepLufs: 0 }
+  }
+  const lraSafe = candidates.filter((candidate) => lraGuardCandidateSafe(payload, replay, candidate)
+    && candidate.loudnessRangeLu >= payload.qa.loudness.lraMin
+    && candidate.loudnessRangeLu <= payload.qa.loudness.lraMax)
+  if (lraSafe.length > 0) {
+    const acceptedTrim = lraSafe.filter((candidate) =>
+      ['SAFE_ANCHOR', 'LRA_ACCEPTED', 'TRIM_ACCEPTED'].includes(candidate.disposition))
+    const parent = acceptedTrim.at(-1)
+    if (!parent) {
+      throw Object.assign(new Error('Missing Stage 12 LRA guard trim anchor.'), {
+        code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_CONTROLLER',
+      })
+    }
+    const last = candidates.at(-1)
+    const rollback = last.phase === 'INTEGRATED_LUFS_TRIM'
+      && last.disposition === 'REGRESSION_REJECTED'
+    const minimum = payload.qa.loudness.integratedLufs - payload.qa.loudness.toleranceLufs
+      + replay.controllerPolicy.integratedBoundaryMarginLu
+    const maximum = payload.qa.loudness.integratedLufs + payload.qa.loudness.toleranceLufs
+      - replay.controllerPolicy.integratedBoundaryMarginLu
+    let targetStepLufs
+    if (rollback) {
+      targetStepLufs = last.targetStepLufs / 2
+    } else {
+      const desired = parent.integratedLufs < minimum ? minimum
+        : parent.integratedLufs > maximum ? maximum : parent.integratedLufs
+      targetStepLufs = desired - parent.integratedLufs
+      targetStepLufs = Math.max(-replay.controllerPolicy.maxIntegratedTargetStepLu,
+        Math.min(replay.controllerPolicy.maxIntegratedTargetStepLu, targetStepLufs))
+    }
+    targetStepLufs = lraGuardRound(targetStepLufs)
+    return { done: false, candidatePass: candidates.length,
+      phase: 'INTEGRATED_LUFS_TRIM', decision: 'NEAREST_BOUNDARY_TRIM',
+      parentCandidatePass: parent.candidatePass,
+      rollbackToCandidatePass: rollback ? parent.candidatePass : null,
+      bracketLowDepthDb: parent.macroDepthDb, bracketHighDepthDb: parent.macroDepthDb,
+      integratedTargetLufs: lraGuardRound(parent.integratedTargetLufs + targetStepLufs),
+      limiterCeilingDbtp: parent.limiterCeilingDbtp,
+      macroDepthDb: parent.macroDepthDb, targetStepLufs }
+  }
+  let bracketLowDepthDb = anchor.macroDepthDb
+  let bracketHighDepthDb = high.macroDepthDb
+  let parentCandidatePass = 0
+  for (const candidate of candidates.slice(1)) {
+    if (candidate.phase !== 'LRA_BRACKET_SEARCH') continue
+    if (candidate.disposition === 'LOW_BRACKET') {
+      bracketLowDepthDb = Math.max(bracketLowDepthDb, candidate.macroDepthDb)
+      parentCandidatePass = candidate.candidatePass
+    } else if (candidate.disposition === 'HIGH_BRACKET'
+      || candidate.disposition === 'REGRESSION_REJECTED') {
+      bracketHighDepthDb = Math.min(bracketHighDepthDb, candidate.macroDepthDb)
+    }
+  }
+  const last = candidates.at(-1)
+  const rollback = last.disposition === 'REGRESSION_REJECTED'
+    || last.disposition === 'HIGH_BRACKET'
+  return { done: false, candidatePass: candidates.length, phase: 'LRA_BRACKET_SEARCH',
+    decision: 'BISECTION', parentCandidatePass,
+    rollbackToCandidatePass: rollback ? parentCandidatePass : null,
+    bracketLowDepthDb: lraGuardRound(bracketLowDepthDb),
+    bracketHighDepthDb: lraGuardRound(bracketHighDepthDb),
+    integratedTargetLufs: anchor.integratedTargetLufs,
+    limiterCeilingDbtp: anchor.limiterCeilingDbtp,
+    macroDepthDb: lraGuardRound((bracketLowDepthDb + bracketHighDepthDb) / 2),
+    targetStepLufs: 0 }
+}
+
+export function classifyStage12CodecSafeLraGuardCandidate(payload, replay, plan, measured) {
+  if (plan?.done !== false || !lraGuardReferenceValid(payload, replay)
+    || !Number.isFinite(measured?.integratedLufs)
+    || !Number.isFinite(measured?.truePeakDbtp)
+    || !Number.isFinite(measured?.loudnessRangeLu)
+    || !/^-?\d+(?:\.\d+)?$/u.test(measured?.integratedLufsExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(measured?.truePeakDbtpExact ?? '')
+    || !/^-?\d+(?:\.\d+)?$/u.test(measured?.loudnessRangeLuExact ?? '')
+    || Number(measured.integratedLufsExact) !== measured.integratedLufs
+    || Number(measured.truePeakDbtpExact) !== measured.truePeakDbtp
+    || Number(measured.loudnessRangeLuExact) !== measured.loudnessRangeLu
+    || !HEX64.test(measured?.audioFrameMd5Sha256 ?? '')) {
+    throw Object.assign(new Error('Invalid Stage 12 LRA guard measurement.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_MEASUREMENT',
+    })
+  }
+  const codecOvershootDb = Math.max(0,
+    measured.truePeakDbtp - plan.limiterCeilingDbtp)
+  const failedPredicates = stage12LoudnessFailedPredicates(payload, measured)
+  let disposition
+  if (plan.phase === 'ANCHOR_REPRODUCTION') {
+    const reference = replay.anchorReference
+    const drifted = measured.integratedLufs !== reference.integratedLufs
+      || measured.integratedLufsExact !== reference.integratedLufsExact
+      || measured.truePeakDbtp !== reference.truePeakDbtp
+      || measured.truePeakDbtpExact !== reference.truePeakDbtpExact
+      || measured.loudnessRangeLu !== reference.loudnessRangeLu
+      || measured.loudnessRangeLuExact !== reference.loudnessRangeLuExact
+      || measured.audioFrameMd5Sha256 !== reference.audioFrameMd5Sha256
+    disposition = drifted ? 'ANCHOR_DRIFT'
+      : failedPredicates.length === 0 ? 'FULL_PASS' : 'SAFE_ANCHOR'
+  } else {
+    const truePeakRegression = measured.truePeakDbtp > payload.qa.loudness.truePeakMaxDbtp
+      || codecOvershootDb > replay.anchorReference.codecOvershootDb
+        + replay.controllerPolicy.codecOvershootRegressionMaxDb
+    if (truePeakRegression || (plan.phase === 'INTEGRATED_LUFS_TRIM'
+      && (measured.loudnessRangeLu < payload.qa.loudness.lraMin
+        || measured.loudnessRangeLu > payload.qa.loudness.lraMax))) {
+      disposition = 'REGRESSION_REJECTED'
+    } else if (failedPredicates.length === 0) {
+      disposition = 'FULL_PASS'
+    } else if (plan.phase === 'LRA_BRACKET_SEARCH') {
+      disposition = measured.loudnessRangeLu < payload.qa.loudness.lraMin
+        ? 'LOW_BRACKET' : measured.loudnessRangeLu > payload.qa.loudness.lraMax
+          ? 'HIGH_BRACKET' : 'LRA_ACCEPTED'
+    } else {
+      disposition = 'TRIM_ACCEPTED'
+    }
+  }
+  return { ...plan, disposition,
+    losslessReferenceSha256: replay.losslessReferenceSha256
+      ?? replay.anchorReference.losslessReferenceSha256,
+    codecOvershootDb, integratedLufs: measured.integratedLufs,
+    integratedLufsExact: measured.integratedLufsExact,
+    truePeakDbtp: measured.truePeakDbtp, truePeakDbtpExact: measured.truePeakDbtpExact,
+    loudnessRangeLu: measured.loudnessRangeLu,
+    loudnessRangeLuExact: measured.loudnessRangeLuExact,
+    failedPredicates, audioFrameMd5Sha256: measured.audioFrameMd5Sha256 }
+}
+
 export function initialStage12CodecSafeTruePeakController(payload) {
   return {
     integratedTargetLufs: payload.qa.loudness.integratedLufs,
@@ -546,6 +850,205 @@ export function validateStage12CodecSafeTruePeakShadowPayload(payload, imageDige
     })
   }
   return value
+}
+
+function validLraGuardReferenceCandidate(payload, candidate, candidatePass) {
+  return candidate?.candidatePass === candidatePass
+    && candidate.losslessReferenceSha256 && HEX64.test(candidate.losslessReferenceSha256)
+    && Number.isFinite(candidate.integratedTargetLufs)
+    && Number.isFinite(candidate.limiterCeilingDbtp)
+    && Number.isFinite(candidate.macroDepthDb)
+    && Number.isFinite(candidate.codecOvershootDb)
+    && Number.isFinite(candidate.integratedLufs)
+    && Number.isFinite(candidate.truePeakDbtp)
+    && Number.isFinite(candidate.loudnessRangeLu)
+    && /^-?\d+(?:\.\d+)?$/u.test(candidate.integratedLufsExact ?? '')
+    && /^-?\d+(?:\.\d+)?$/u.test(candidate.truePeakDbtpExact ?? '')
+    && /^-?\d+(?:\.\d+)?$/u.test(candidate.loudnessRangeLuExact ?? '')
+    && Number(candidate.integratedLufsExact) === candidate.integratedLufs
+    && Number(candidate.truePeakDbtpExact) === candidate.truePeakDbtp
+    && Number(candidate.loudnessRangeLuExact) === candidate.loudnessRangeLu
+    && candidate.codecOvershootDb === Math.max(0,
+      candidate.truePeakDbtp - candidate.limiterCeilingDbtp)
+    && HEX64.test(candidate.audioFrameMd5Sha256 ?? '')
+    && canonicalize(candidate.failedPredicates) === canonicalize(
+      stage12LoudnessFailedPredicates(payload, candidate),
+    )
+}
+
+function validLraGuardRuntimeProvenance(value) {
+  return value && typeof value.ffmpegVersion === 'string' && value.ffmpegVersion.length >= 8
+    && HEX64.test(value.ffmpegBuildFingerprint ?? '')
+    && HEX64.test(value.libopusEncoderFingerprint ?? '')
+}
+
+function stage12CodecSafeLraGuardRenderRuntimeFingerprint(renderKernelFingerprint,
+  runtimeProvenance) {
+  return sha256(Buffer.from(canonicalize({ renderKernelFingerprint, runtimeProvenance }), 'utf8'))
+}
+
+export function validateStage12CodecSafeLraGuardShadowPayload(payload, imageDigest) {
+  const value = validateStage12Payload(payload)
+  const replay = payload?.codecSafeLraGuardShadowReplay
+  const fingerprints = stage12CodecSafeLraGuardFingerprints(
+    payload, replay?.controllerPolicy,
+  )
+  if (!replay || replay.schemaVersion !== 1
+    || replay.evidenceSemantics !== 'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION'
+    || replay.sourceAttemptOrdinal !== 3 || replay.sourceCorrectionOrdinal !== 2
+    || replay.historicalFailureCorrectionOrdinal !== 3
+    || typeof replay.sourceCorrectionJobId !== 'string'
+    || typeof replay.historicalFailureJobId !== 'string'
+    || typeof replay.diagnosticReplayJobId !== 'string'
+    || !HEX64.test(replay.diagnosticReplayEvidenceId ?? '')
+    || typeof replay.codecSafeTruePeakShadowJobId !== 'string'
+    || !HEX64.test(replay.codecSafeTruePeakShadowEvidenceId ?? '')
+    || !String(replay.sourceCorrectedPreMaster?.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(replay.sourceCorrectedPreMaster?.sha256 ?? '')
+    || !Number.isInteger(replay.sourceCorrectedPreMaster?.byteLength)
+    || replay.sourceCorrectedPreMaster.byteLength < 1
+    || !HEX64.test(replay.sourceCorrectionReceiptSha256 ?? '')
+    || !/^sha256:[a-f0-9]{64}$/u.test(replay.parentWorkerImageDigest ?? '')
+    || !HEX64.test(replay.parentAlgorithmFingerprint ?? '')
+    || replay.parentThresholdSnapshotSha256 !== fingerprints.thresholdSnapshotSha256
+    || !validLraGuardRuntimeProvenance(replay.parentRuntimeProvenance)
+    || !replay.parentLosslessReference
+    || !HEX64.test(replay.parentLosslessReference.sha256 ?? '')
+    || !HEX64.test(replay.parentLosslessReference.audioFrameMd5Sha256 ?? '')
+    || !Number.isInteger(replay.parentLosslessReference.byteLength)
+    || replay.parentLosslessReference.byteLength < 1
+    || replay.parentLosslessReference.codec !== 'pcm_f32le'
+    || replay.parentLosslessReference.sampleRateHz !== payload.render.sampleRateHz
+    || !validLraGuardReferenceCandidate(payload, replay.anchorReference, 1)
+    || !validLraGuardReferenceCandidate(payload, replay.highBracketReference, 3)
+    || replay.anchorReference.losslessReferenceSha256
+      !== replay.parentLosslessReference.sha256
+    || replay.highBracketReference.losslessReferenceSha256
+      !== replay.parentLosslessReference.sha256
+    || !lraGuardReferenceValid(payload, replay)
+    || !/^sha256:[a-f0-9]{64}$/u.test(replay.expectedWorkerImageDigest ?? '')
+    || replay.algorithmFingerprint !== fingerprints.algorithmFingerprint
+    || replay.thresholdSnapshotSha256 !== fingerprints.thresholdSnapshotSha256
+    || replay.controllerPolicySha256 !== fingerprints.controllerPolicySha256
+    || replay.renderKernelFingerprint !== fingerprints.renderKernelFingerprint
+    || replay.parentRenderRuntimeFingerprint
+      !== stage12CodecSafeLraGuardRenderRuntimeFingerprint(
+        replay.renderKernelFingerprint, replay.parentRuntimeProvenance,
+      )
+    || replay.historicalBackfill !== false || replay.uploadCorrectedOutput !== false
+    || replay.providerDispatch !== 'OFF' || replay.providerCallCount !== 0
+    || replay.calibration !== false || replay.finalize !== false || replay.release !== false
+    || replay.productionActivation !== false || replay.autoPublish !== 'OFF') {
+    throw Object.assign(new Error('Invalid Stage 12 codec-safe LRA guard envelope.'), {
+      code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_ENVELOPE',
+    })
+  }
+  if (imageDigest !== undefined && replay.expectedWorkerImageDigest !== imageDigest) {
+    throw Object.assign(new Error('LRA guard shadow worker image does not match the pin.'), {
+      code: 'STAGE12_CODEC_SAFE_LRA_GUARD_WORKER_IMAGE_MISMATCH',
+    })
+  }
+  return value
+}
+
+export function buildStage12CodecSafeLraGuardShadowEvidence(payload, evidence) {
+  const invalid = () => Object.assign(new Error('Invalid Stage 12 LRA guard evidence.'), {
+    code: 'INVALID_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_EVIDENCE',
+  })
+  const replay = evidence?.replay
+  const candidates = evidence?.candidates
+  if (evidence?.evidenceSemantics !== 'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION'
+    || !replay || !lraGuardReferenceValid(payload, replay)
+    || evidence?.source?.correctionOrdinal !== 2
+    || typeof evidence.source.correctionJobId !== 'string'
+    || !String(evidence.source.r2Key ?? '').startsWith('prod/')
+    || !HEX64.test(evidence.source.sha256 ?? '')
+    || !Number.isInteger(evidence.source.byteLength) || evidence.source.byteLength < 1
+    || !HEX64.test(evidence.source.receiptSha256 ?? '')
+    || evidence?.historicalFailure?.correctionOrdinal !== 3
+    || evidence.historicalFailure.errorCode !== 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED'
+    || typeof evidence?.diagnosticReplay?.jobId !== 'string'
+    || !HEX64.test(evidence?.diagnosticReplay?.evidenceId ?? '')
+    || typeof evidence?.parentShadow?.jobId !== 'string'
+    || !HEX64.test(evidence?.parentShadow?.evidenceId ?? '')
+    || !evidence.losslessReference || !HEX64.test(evidence.losslessReference.sha256 ?? '')
+    || !HEX64.test(evidence.losslessReference.audioFrameMd5Sha256 ?? '')
+    || evidence.losslessReference.codec !== 'pcm_f32le'
+    || evidence.losslessReference.sampleRateHz !== payload.render.sampleRateHz
+    || evidence.losslessReference.sha256 !== replay.parentLosslessReference.sha256
+    || evidence.losslessReference.byteLength !== replay.parentLosslessReference.byteLength
+    || evidence.losslessReference.audioFrameMd5Sha256
+      !== replay.parentLosslessReference.audioFrameMd5Sha256
+    || !Array.isArray(candidates) || candidates.length < 1
+    || candidates.length > replay.controllerPolicy.maxCandidateCount
+    || !/^sha256:[a-f0-9]{64}$/u.test(evidence.workerImageDigest ?? '')
+    || evidence.workerImageDigest !== evidence.expectedWorkerImageDigest
+    || !validLraGuardRuntimeProvenance(evidence.runtimeProvenance)
+    || canonicalize(evidence.runtimeProvenance)
+      !== canonicalize(replay.parentRuntimeProvenance)
+    || evidence.renderRuntimeFingerprint
+      !== stage12CodecSafeLraGuardRenderRuntimeFingerprint(
+        evidence.renderKernelFingerprint, evidence.runtimeProvenance,
+      )) throw invalid()
+  const replayState = { ...replay, losslessReferenceSha256: evidence.losslessReference.sha256 }
+  const accepted = []
+  for (const candidate of candidates) {
+    const plan = planStage12CodecSafeLraGuardCandidate(payload, replayState, accepted)
+    if (plan.done || candidate.candidatePass !== plan.candidatePass) throw invalid()
+    const expected = classifyStage12CodecSafeLraGuardCandidate(payload, replayState, plan, {
+      integratedLufs: candidate.integratedLufs,
+      integratedLufsExact: candidate.integratedLufsExact,
+      truePeakDbtp: candidate.truePeakDbtp,
+      truePeakDbtpExact: candidate.truePeakDbtpExact,
+      loudnessRangeLu: candidate.loudnessRangeLu,
+      loudnessRangeLuExact: candidate.loudnessRangeLuExact,
+      audioFrameMd5Sha256: candidate.audioFrameMd5Sha256,
+    })
+    if (canonicalize(expected) !== canonicalize(candidate)) throw invalid()
+    accepted.push(candidate)
+  }
+  let terminal
+  try {
+    terminal = finalizeStage12CodecSafeLraGuardTrace(payload, replayState, accepted)
+  } catch {
+    throw invalid()
+  }
+  return {
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: 'POST_OPUS_LRA_GUARD_FEEDBACK',
+    source: evidence.source,
+    historicalFailure: evidence.historicalFailure,
+    diagnosticReplay: evidence.diagnosticReplay,
+    parentShadow: evidence.parentShadow,
+    losslessReference: evidence.losslessReference,
+    anchorReference: replay.anchorReference,
+    highBracketReference: replay.highBracketReference,
+    controllerPolicy: replay.controllerPolicy,
+    candidates: accepted,
+    ...terminal,
+    workerImageDigest: evidence.workerImageDigest,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    parentWorkerImageDigest: replay.parentWorkerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    controllerPolicySha256: evidence.controllerPolicySha256,
+    renderKernelFingerprint: evidence.renderKernelFingerprint,
+    parentRenderRuntimeFingerprint: replay.parentRenderRuntimeFingerprint,
+    renderRuntimeFingerprint: evidence.renderRuntimeFingerprint,
+    parentRuntimeProvenance: replay.parentRuntimeProvenance,
+    runtimeProvenance: evidence.runtimeProvenance,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: 'OFF',
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    productionActivation: false,
+    autoPublish: 'OFF',
+  }
 }
 
 export function buildStage12EncodedLoudnessFailure(payload, correctionPassLimit,
@@ -968,6 +1471,113 @@ export async function executeStage12CodecSafeTruePeakShadowReplay(payloadInput, 
       expectedWorkerImageDigest: replay.expectedWorkerImageDigest,
       algorithmFingerprint: replay.algorithmFingerprint,
       thresholdSnapshotSha256: replay.thresholdSnapshotSha256,
+      runtimeProvenance,
+    })
+  } finally {
+    await rm(workRoot, { recursive: true, force: true })
+  }
+}
+
+export async function executeStage12CodecSafeLraGuardShadowReplay(payloadInput, imageDigest) {
+  const payload = validateStage12CodecSafeLraGuardShadowPayload(payloadInput, imageDigest)
+  const replay = payloadInput.codecSafeLraGuardShadowReplay
+  const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-codec-safe-lra-guard-'))
+  const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
+  const losslessReferencePath = join(workRoot, 'canonical-lossless-reference.wav')
+  try {
+    const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
+    const response = await authenticatedFetch(
+      `${payload.objectAccess.url}${separator}kind=codec-safe-lra-guard-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${replay.sourceCorrectedPreMaster.sha256}`,
+      payload.objectAccess.token,
+    )
+    const sourceBytes = Buffer.from(await response.arrayBuffer())
+    if (sourceBytes.byteLength !== replay.sourceCorrectedPreMaster.byteLength
+      || sha256(sourceBytes) !== replay.sourceCorrectedPreMaster.sha256) {
+      throw Object.assign(new Error('LRA guard shadow source read-back mismatch.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_GUARD_SOURCE_INTEGRITY_MISMATCH',
+      })
+    }
+    await writeFile(sourcePath, sourceBytes)
+    await runTool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', sourcePath,
+      '-map', '0:a:0', '-map_metadata', '-1', '-fflags', '+bitexact',
+      '-flags:a', '+bitexact', '-c:a', 'pcm_f32le',
+      '-ar', String(payload.render.sampleRateHz), losslessReferencePath], workRoot,
+    'STAGE12_CODEC_SAFE_LRA_GUARD_LOSSLESS_DECODE_FAILED')
+    const losslessBytes = await readFile(losslessReferencePath)
+    const losslessReference = {
+      sha256: sha256(losslessBytes),
+      byteLength: losslessBytes.byteLength,
+      audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(losslessReferencePath, workRoot),
+      codec: 'pcm_f32le',
+      sampleRateHz: payload.render.sampleRateHz,
+    }
+    if (canonicalize(losslessReference) !== canonicalize(replay.parentLosslessReference)) {
+      throw Object.assign(new Error('LRA guard lossless reference drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_GUARD_LOSSLESS_REFERENCE_DRIFT',
+      })
+    }
+    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    if (canonicalize(runtimeProvenance) !== canonicalize(replay.parentRuntimeProvenance)) {
+      throw Object.assign(new Error('LRA guard runtime provenance drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_GUARD_RUNTIME_DRIFT',
+      })
+    }
+    const renderRuntimeFingerprint = stage12CodecSafeLraGuardRenderRuntimeFingerprint(
+      replay.renderKernelFingerprint, runtimeProvenance,
+    )
+    if (renderRuntimeFingerprint !== replay.parentRenderRuntimeFingerprint) {
+      throw Object.assign(new Error('LRA guard render kernel provenance drifted.'), {
+        code: 'STAGE12_CODEC_SAFE_LRA_GUARD_RENDER_KERNEL_DRIFT',
+      })
+    }
+    const replayState = { ...replay, losslessReferenceSha256: losslessReference.sha256 }
+    const candidates = []
+    const lraTarget = (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2
+    while (candidates.length < replay.controllerPolicy.maxCandidateCount) {
+      const plan = planStage12CodecSafeLraGuardCandidate(payload, replayState, candidates)
+      if (plan.done) break
+      const candidatePath = join(workRoot, `codec-safe-lra-guard-${plan.candidatePass}.webm`)
+      await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+        workRoot, plan)
+      const measured = await measureStage12EncodedLoudness(
+        payload, candidatePath, workRoot, lraTarget,
+      )
+      candidates.push(classifyStage12CodecSafeLraGuardCandidate(payload, replayState, plan, {
+        integratedLufs: measured.integratedLufs,
+        integratedLufsExact: measured.integratedLufsExact,
+        truePeakDbtp: measured.truePeakDbtp,
+        truePeakDbtpExact: measured.truePeakDbtpExact,
+        loudnessRangeLu: measured.loudnessRangeLu,
+        loudnessRangeLuExact: measured.loudnessRangeLuExact,
+        audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(candidatePath, workRoot),
+      }))
+      if (candidates.at(-1).disposition === 'FULL_PASS'
+        || candidates.at(-1).disposition === 'ANCHOR_DRIFT') break
+    }
+    return buildStage12CodecSafeLraGuardShadowEvidence(payload, {
+      evidenceSemantics: replay.evidenceSemantics,
+      replay: replayState,
+      source: { correctionOrdinal: 2, correctionJobId: replay.sourceCorrectionJobId,
+        r2Key: replay.sourceCorrectedPreMaster.r2Key,
+        sha256: replay.sourceCorrectedPreMaster.sha256,
+        byteLength: replay.sourceCorrectedPreMaster.byteLength,
+        receiptSha256: replay.sourceCorrectionReceiptSha256 },
+      historicalFailure: { correctionOrdinal: 3,
+        correctionJobId: replay.historicalFailureJobId,
+        errorCode: 'STAGE12_ENCODED_LOUDNESS_UNRESOLVED' },
+      diagnosticReplay: { jobId: replay.diagnosticReplayJobId,
+        evidenceId: replay.diagnosticReplayEvidenceId },
+      parentShadow: { jobId: replay.codecSafeTruePeakShadowJobId,
+        evidenceId: replay.codecSafeTruePeakShadowEvidenceId },
+      losslessReference,
+      candidates,
+      workerImageDigest: imageDigest,
+      expectedWorkerImageDigest: replay.expectedWorkerImageDigest,
+      algorithmFingerprint: replay.algorithmFingerprint,
+      thresholdSnapshotSha256: replay.thresholdSnapshotSha256,
+      controllerPolicySha256: replay.controllerPolicySha256,
+      renderKernelFingerprint: replay.renderKernelFingerprint,
+      renderRuntimeFingerprint,
       runtimeProvenance,
     })
   } finally {

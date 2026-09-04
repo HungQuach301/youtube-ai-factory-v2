@@ -1458,3 +1458,23 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- provider, calibration, finalize, release, production activation và publish OFF.
 -- Command contract chỉ thêm typed CODEC_SAFE_SHADOW_PENDING transition.
 -- Xem drizzle/0031_stage12_codec_safe_true_peak_shadow.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD — migration 0032
+-- =====================================================================
+-- stage12_codec_safe_lra_guard_shadow_job chỉ nhận exact parent shadow
+-- READY/FAIL có candidate pass 1 true-peak-safe/LRA-low và candidate pass 3
+-- LRA-high. Lineage khóa ordinal 2/3, diagnostic replay, parent job/evidence,
+-- source R2/SHA/bytes/receipt, worker image, threshold, controller và render
+-- runtime fingerprints. Mỗi parent evidence chỉ tạo tối đa một guard job.
+--
+-- stage12_codec_safe_lra_guard_shadow_evidence lưu anchor/high references,
+-- controller policy, candidate trace tối đa 8 pass, exact LUFS/true peak/LRA,
+-- predicates, rollback selection và parent/current runtime provenance. Trigger
+-- khóa steps <= 0.25 LU, macro depth trong bracket, limiter bằng anchor và các
+-- side effect luôn false/0/OFF. Terminal READY bắt buộc evidence tương ứng;
+-- terminal job/evidence cấm UPDATE/DELETE.
+--
+-- Migration không backfill hay sửa ordinal 2/3, diagnostic replay hoặc parent
+-- shadow. Command contract chỉ thêm typed CODEC_SAFE_LRA_GUARD_SHADOW_PENDING.
+-- Xem drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql.

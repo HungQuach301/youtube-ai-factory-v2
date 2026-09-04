@@ -20,4 +20,5 @@ See [`SSOT-CONTRACT.md`](SSOT-CONTRACT.md) for the continuity and handoff rules.
 See [`G01A-PRODUCTION-COMMAND-RUNTIME.md`](G01A-PRODUCTION-COMMAND-RUNTIME.md)
 for the first real-user Production command boundary and its verification receipt.
 See [`G01A2-MCP-COMMAND-SURFACE.md`](G01A2-MCP-COMMAND-SURFACE.md) for the
-ChatGPT-native command surface that invokes the same authenticated D1 runtime.
+ChatGPT-native command surface that invokes the same authenticated D1 runtime,
+including append-only Stage 12 diagnostic and shadow-only command boundaries.

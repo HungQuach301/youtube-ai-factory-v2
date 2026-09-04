@@ -108,6 +108,15 @@ export const AUDIO = {
   PHONEME_MISMATCH_FLOOR_MULTIPLIER: 2
 } as const
 
+// Controller-only bounds for the Stage 12 shadow reproduction. These values do
+// not alter the AUDIO acceptance thresholds above and cannot authorize output.
+export const STAGE12_CODEC_SAFE_LRA_GUARD = {
+  MAX_CANDIDATES: 8,
+  CODEC_OVERSHOOT_REGRESSION_MAX_DB: 0.25,
+  INTEGRATED_BOUNDARY_MARGIN_LU: 0.05,
+  MAX_INTEGRATED_TARGET_STEP_LU: 0.25,
+} as const
+
 export const AV_SYNC_MS: Readonly<Record<string, number>> = {
   documentary_live_action: 45,
   source_authored_hybrid: 80,

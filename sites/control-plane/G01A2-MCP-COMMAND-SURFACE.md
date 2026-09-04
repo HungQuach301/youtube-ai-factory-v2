@@ -29,6 +29,20 @@ pillar and ten-episode queue, then reads the state back from Production D1.
 The result `PREPARED` does not mean `ACTIVE`. Provider dispatch and automatic
 publishing remain OFF, and the run incurs zero provider spend.
 
+### Stage 12 diagnostic and shadow commands
+
+Later reviewed migrations extend the same owner-authenticated MCP boundary with
+typed Stage 12 diagnostic and shadow-only commands. In particular,
+`RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY` may only reproduce the pinned
+ordinal-2 lossless source and append migration-0032 job/evidence records. It has
+no corrected-output upload path and cannot create ordinal 4, attempt 4, provider
+calls, calibration, Finalize, release, activation or publishing side effects.
+
+The command is eligible only from the exact immutable parent codec-safe shadow
+evidence. Its source and callback routes are media-worker-only, pin the render
+and runtime provenance, and fail closed on lineage, source, anchor, threshold or
+worker-image drift. A shadow PASS is evidence, never Production activation.
+
 ## Authorization
 
 - ChatGPT authentication is resolved server-side from trusted platform headers.
@@ -44,6 +58,8 @@ publishing remain OFF, and the run incurs zero provider spend.
 - MCP client initialization, tool discovery and state read;
 - owner-authorized command execution and read-back;
 - idempotent replay produces one command, one run and four receipt events;
+- Stage 12 LRA-guard replay produces at most one append-only shadow job/evidence
+  pair for an exact parent and preserves all earlier correction/replay history;
 - provider dispatch and automatic publishing remain OFF.
 
 ## Next boundary

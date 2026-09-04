@@ -25,6 +25,8 @@ import {
   stage12AudioP0CorrectionFailureEvidence,
   stage12AudioP0CorrectionJobs,
   stage12AudioP0CorrectionRetryJobs,
+  stage12CodecSafeLraGuardShadowEvidence,
+  stage12CodecSafeLraGuardShadowJobs,
   stage12CodecSafeTruePeakShadowEvidence,
   stage12CodecSafeTruePeakShadowJobs,
   stage12CorrectedPreMasterJobs,
@@ -61,6 +63,7 @@ import {
 } from "./stage10-media";
 import { buildTrackGVideoOneStage11AudioPlan } from "./stage11-audio";
 import {
+  dispatchStage12CodecSafeLraGuardShadowReplay,
   dispatchStage12CodecSafeTruePeakShadowReplay,
   dispatchStage12EncodedLoudnessDiagnosticReplay,
   dispatchStage12MediaAudioP0Correction,
@@ -74,12 +77,16 @@ import {
 import {
   buildTrackGVideoOneStage12Request,
   evaluateTrackGVideoOneStage12Receipt,
+  parseStage12CodecSafeLraGuardShadowResult,
   parseStage12CodecSafeTruePeakShadowResult,
   parseStage12EncodedLoudnessDiagnosticReplayResult,
   parseStage12EncodedLoudnessFailureDiagnostic,
+  stage12CodecSafeLraGuardFingerprints,
   stage12CodecSafeTruePeakFingerprints,
   stage12EncodedLoudnessDiagnosticReplayFingerprints,
   validateTrackGVideoOneStage12Receipt,
+  STAGE12_CODEC_SAFE_LRA_GUARD_CONTROLLER_POLICY,
+  type Stage12CodecSafeLraGuardShadowResult,
   type Stage12CodecSafeTruePeakShadowResult,
   type Stage12EncodedLoudnessFailureDiagnostic,
   type Stage12EncodedLoudnessDiagnosticReplayResult,
@@ -212,6 +219,8 @@ const STAGE_12_ENCODED_LOUDNESS_DIAGNOSTIC_REPLAY_OWNER_APPROVAL_TEXT =
   "RUN STAGE 12 ENCODED LOUDNESS DIAGNOSTIC REPLAY";
 const STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT =
   "RUN STAGE 12 CODEC SAFE TRUE PEAK SHADOW REPLAY";
+const STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_TEXT =
+  "RUN STAGE 12 CODEC SAFE LRA GUARD SHADOW REPLAY";
 const STAGE_12_FINALIZE_OWNER_APPROVAL_TEXT = "FINALIZE STAGE 12";
 export const trackGAdvanceStageCodes = [
   "01", "02", "03", "04", "05", "06", "07A", "07B",
@@ -309,6 +318,13 @@ export type RunTrackGVideoOneStage12EncodedLoudnessDiagnosticReplayInput = {
 export type RunTrackGVideoOneStage12CodecSafeTruePeakShadowInput = {
   objective: string;
   ownerApprovalText: typeof STAGE_12_CODEC_SAFE_TRUE_PEAK_SHADOW_OWNER_APPROVAL_TEXT;
+  callbackUrl: string;
+  objectAccessUrl: string;
+};
+
+export type RunTrackGVideoOneStage12CodecSafeLraGuardShadowInput = {
+  objective: string;
+  ownerApprovalText: typeof STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_TEXT;
   callbackUrl: string;
   objectAccessUrl: string;
 };
@@ -6964,6 +6980,478 @@ export async function runTrackGVideoOneStage12CodecSafeTruePeakShadow(
     throw error;
   }
   return { ...(await diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow()),
+    replayed: false };
+}
+
+function stage12CodecSafeLraGuardShadowIdempotencyKey(
+  sourceSha256: string,
+  sourceReceiptSha256: string,
+  parentShadowEvidenceId: string,
+  expectedWorkerImageDigest: string,
+  algorithmFingerprint: string,
+) {
+  return createHash("sha256").update(
+    ["RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY",
+      sourceSha256, sourceReceiptSha256, parentShadowEvidenceId,
+      expectedWorkerImageDigest, algorithmFingerprint].join("\0"),
+  ).digest("hex");
+}
+
+function stage12CodecSafeLraGuardShadowCallbackToken(idempotencyKey: string) {
+  const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
+  if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
+  return createHash("sha256").update(
+    `STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+  ).digest("hex");
+}
+
+async function latestStage12CodecSafeLraGuardShadowJob() {
+  const [job] = await getDb().select().from(stage12CodecSafeLraGuardShadowJobs)
+    .orderBy(desc(stage12CodecSafeLraGuardShadowJobs.createdAt)).limit(1);
+  return job ?? null;
+}
+
+async function readStage12CodecSafeLraGuardShadowEvidence(shadowJobId: string) {
+  const [evidence] = await getDb().select().from(stage12CodecSafeLraGuardShadowEvidence)
+    .where(eq(stage12CodecSafeLraGuardShadowEvidence.shadowJobId, shadowJobId)).limit(1);
+  return evidence ?? null;
+}
+
+async function stage12CodecSafeLraGuardShadowSource() {
+  const lineage = await stage12CodecSafeTruePeakShadowSource();
+  const parentShadowJob = await latestStage12CodecSafeTruePeakShadowJob();
+  const parentShadowEvidence = parentShadowJob
+    ? await readStage12CodecSafeTruePeakShadowEvidence(parentShadowJob.id) : null;
+  const parentShadowResult = parentShadowEvidence
+    ? stage12CodecSafeTruePeakShadowEvidenceResult(parentShadowEvidence) : null;
+  const anchorReference = parentShadowResult?.candidates.find(
+    (candidate) => candidate.candidatePass === 1,
+  ) ?? null;
+  const highBracketReference = parentShadowResult?.candidates.find(
+    (candidate) => candidate.candidatePass === 3,
+  ) ?? null;
+  const eligible = Boolean(lineage.eligible && lineage.source && lineage.historicalFailure
+    && lineage.diagnosticReplayJob && lineage.diagnosticReplayEvidence
+    && parentShadowJob && parentShadowEvidence && parentShadowResult
+    && parentShadowJob.state === "READY" && parentShadowJob.shadowOutcome === "FAIL"
+    && parentShadowResult.shadowOutcome === "FAIL"
+    && parentShadowJob.sourceCorrectionJobId === lineage.source.id
+    && parentShadowJob.historicalFailureJobId === lineage.historicalFailure.id
+    && parentShadowJob.diagnosticReplayJobId === lineage.diagnosticReplayJob.id
+    && parentShadowJob.diagnosticReplayEvidenceId === lineage.diagnosticReplayEvidence.id
+    && parentShadowEvidence.sourcePreMasterSha256
+      === lineage.source.correctedPreMasterSha256
+    && parentShadowEvidence.sourceReceiptSha256 === lineage.source.receiptSha256
+    && parentShadowEvidence.workerImageDigest
+      === parentShadowEvidence.expectedWorkerImageDigest
+    && parentShadowEvidence.correctedOutputUploaded === 0
+    && parentShadowEvidence.historicalBackfill === 0
+    && parentShadowEvidence.providerCallCount === 0
+    && parentShadowEvidence.providerDispatch === "OFF"
+    && parentShadowEvidence.calibrationExecuted === 0
+    && parentShadowEvidence.finalizeExecuted === 0
+    && parentShadowEvidence.releaseEligible === 0
+    && parentShadowEvidence.productionActivationExecuted === 0
+    && parentShadowEvidence.autoPublish === "OFF"
+    && anchorReference?.truePeakDbtp !== undefined
+    && anchorReference.truePeakDbtp <= AUDIO.TRUE_PEAK_MAX_DBTP
+    && anchorReference.loudnessRangeLu < AUDIO.LRA.min
+    && highBracketReference?.loudnessRangeLu !== undefined
+    && highBracketReference.loudnessRangeLu > AUDIO.LRA.max
+    && highBracketReference.macroDepthDb > anchorReference.macroDepthDb);
+  return { ...lineage, parentShadowJob, parentShadowEvidence, parentShadowResult,
+    anchorReference, highBracketReference, eligible };
+}
+
+function stage12CodecSafeLraGuardEvidenceResult(
+  evidence: NonNullable<Awaited<ReturnType<
+    typeof readStage12CodecSafeLraGuardShadowEvidence
+  >>>,
+) {
+  return parseStage12CodecSafeLraGuardShadowResult({
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: evidence.evidenceSemantics,
+    boundary: "POST_OPUS_LRA_GUARD_FEEDBACK",
+    source: { correctionOrdinal: 2, correctionJobId: evidence.sourceCorrectionJobId,
+      r2Key: evidence.sourcePreMasterR2Key, sha256: evidence.sourcePreMasterSha256,
+      byteLength: evidence.sourcePreMasterByteLength,
+      receiptSha256: evidence.sourceReceiptSha256 },
+    historicalFailure: { correctionOrdinal: 3,
+      correctionJobId: evidence.historicalFailureJobId,
+      errorCode: "STAGE12_ENCODED_LOUDNESS_UNRESOLVED" },
+    diagnosticReplay: { jobId: evidence.diagnosticReplayJobId,
+      evidenceId: evidence.diagnosticReplayEvidenceId },
+    parentShadow: { jobId: evidence.parentShadowJobId,
+      evidenceId: evidence.parentShadowEvidenceId },
+    losslessReference: { sha256: evidence.losslessReferenceSha256,
+      byteLength: evidence.losslessReferenceByteLength,
+      audioFrameMd5Sha256: evidence.losslessReferenceFrameMd5Sha256,
+      codec: evidence.losslessReferenceCodec,
+      sampleRateHz: evidence.losslessReferenceSampleRateHz },
+    anchorReference: JSON.parse(evidence.anchorReferenceJson) as unknown,
+    highBracketReference: JSON.parse(evidence.highBracketReferenceJson) as unknown,
+    controllerPolicy: JSON.parse(evidence.controllerPolicyJson) as unknown,
+    candidates: JSON.parse(evidence.candidatesJson) as unknown,
+    shadowOutcome: evidence.shadowOutcome,
+    terminalReason: evidence.terminalReason,
+    lastEvaluatedCandidatePass: evidence.lastEvaluatedCandidatePass,
+    bestSafeCandidatePass: evidence.bestSafeCandidatePass,
+    selectedCandidatePass: evidence.selectedCandidatePass,
+    finalMeasurements: { integratedLufs: evidence.finalIntegratedLufs,
+      integratedLufsExact: evidence.finalIntegratedLufsExact,
+      truePeakDbtp: evidence.finalTruePeakDbtp,
+      truePeakDbtpExact: evidence.finalTruePeakDbtpExact,
+      loudnessRangeLu: evidence.finalLoudnessRangeLu,
+      loudnessRangeLuExact: evidence.finalLoudnessRangeLuExact },
+    failedPredicates: JSON.parse(evidence.failedPredicatesJson) as unknown,
+    expectedWorkerImageDigest: evidence.expectedWorkerImageDigest,
+    parentWorkerImageDigest: evidence.parentWorkerImageDigest,
+    workerImageDigest: evidence.workerImageDigest,
+    algorithmFingerprint: evidence.algorithmFingerprint,
+    thresholdSnapshotSha256: evidence.thresholdSnapshotSha256,
+    controllerPolicySha256: evidence.controllerPolicySha256,
+    renderKernelFingerprint: evidence.renderKernelFingerprint,
+    parentRenderRuntimeFingerprint: evidence.parentRenderRuntimeFingerprint,
+    renderRuntimeFingerprint: evidence.renderRuntimeFingerprint,
+    parentRuntimeProvenance: JSON.parse(evidence.parentRuntimeProvenanceJson) as unknown,
+    runtimeProvenance: JSON.parse(evidence.runtimeProvenanceJson) as unknown,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerCallCount: 0,
+    providerDispatch: "OFF",
+    calibration: false,
+    finalize: false,
+    releaseEligible: false,
+    productionActivation: false,
+    autoPublish: "OFF",
+  });
+}
+
+export async function diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow() {
+  const source = await stage12CodecSafeLraGuardShadowSource();
+  const job = await latestStage12CodecSafeLraGuardShadowJob();
+  const evidence = job ? await readStage12CodecSafeLraGuardShadowEvidence(job.id) : null;
+  const result = evidence ? stage12CodecSafeLraGuardEvidenceResult(evidence) : null;
+  if (job?.state === "READY" && (!result
+    || result.workerImageDigest !== job.workerImageDigest
+    || result.shadowOutcome !== job.shadowOutcome
+    || result.terminalReason !== job.terminalReason
+    || result.lastEvaluatedCandidatePass !== job.lastEvaluatedCandidatePass
+    || result.bestSafeCandidatePass !== job.bestSafeCandidatePass
+    || result.selectedCandidatePass !== job.selectedCandidatePass)) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_READ_BACK_FAILED");
+  }
+  return {
+    shadowState: job?.state ?? (source.eligible ? "ELIGIBLE" : "BLOCKED"),
+    errorCode: job?.errorCode ?? (source.eligible ? null
+      : "STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_SOURCE_NOT_ELIGIBLE"),
+    currentStep: source.bootstrap.run.currentStep,
+    sourceAttemptOrdinal: 3 as const,
+    sourceCorrectionOrdinal: 2 as const,
+    historicalFailureCorrectionOrdinal: 3 as const,
+    sourceCorrectionJobId: job?.sourceCorrectionJobId ?? source.source?.id ?? null,
+    historicalFailureJobId: job?.historicalFailureJobId
+      ?? source.historicalFailure?.id ?? null,
+    diagnosticReplayJobId: job?.diagnosticReplayJobId
+      ?? source.diagnosticReplayJob?.id ?? null,
+    diagnosticReplayEvidenceId: job?.diagnosticReplayEvidenceId
+      ?? source.diagnosticReplayEvidence?.id ?? null,
+    parentShadowJobId: job?.parentShadowJobId ?? source.parentShadowJob?.id ?? null,
+    parentShadowEvidenceId: job?.parentShadowEvidenceId
+      ?? source.parentShadowEvidence?.id ?? null,
+    sourcePreMasterSha256: job?.sourcePreMasterSha256
+      ?? source.source?.correctedPreMasterSha256 ?? null,
+    expectedWorkerImageDigest: job?.expectedWorkerImageDigest ?? null,
+    parentWorkerImageDigest: job?.parentWorkerImageDigest
+      ?? source.parentShadowEvidence?.workerImageDigest ?? null,
+    workerImageDigest: job?.workerImageDigest ?? null,
+    shadowOutcome: job?.shadowOutcome ?? null,
+    terminalReason: job?.terminalReason ?? null,
+    lastEvaluatedCandidatePass: job?.lastEvaluatedCandidatePass ?? null,
+    bestSafeCandidatePass: job?.bestSafeCandidatePass ?? null,
+    selectedCandidatePass: job?.selectedCandidatePass ?? null,
+    result,
+    evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION" as const,
+    shadowExecuted: job !== null,
+    correctedOutputUploaded: false as const,
+    historicalBackfill: false as const,
+    providerCallCount: 0 as const,
+    providerDispatch: "OFF" as const,
+    calibration: false as const,
+    finalize: false as const,
+    releaseEligible: false as const,
+    productionActivation: false as const,
+    autoPublish: "OFF" as const,
+  };
+}
+
+function requireStage12CodecSafeLraGuardShadowToken(
+  job: Awaited<ReturnType<typeof latestStage12CodecSafeLraGuardShadowJob>>,
+  idempotencyKey: string,
+  token: string,
+): asserts job is NonNullable<typeof job> {
+  if (!job || job.idempotencyKey !== idempotencyKey || !HEX64.test(token)
+    || job.callbackTokenHash !== sha256(new TextEncoder().encode(token))) {
+    throw new Error("STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_UNAUTHORIZED");
+  }
+}
+
+export async function readTrackGVideoOneStage12CodecSafeLraGuardShadowSource(
+  idempotencyKey: string,
+  token: string,
+  expectedSha256: string,
+) {
+  const job = await latestStage12CodecSafeLraGuardShadowJob();
+  requireStage12CodecSafeLraGuardShadowToken(job, idempotencyKey, token);
+  if (job.state !== "PENDING" || expectedSha256 !== job.sourcePreMasterSha256) {
+    throw new Error("STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_SOURCE_CONFLICT");
+  }
+  return readVerifiedProductionEvidence(job.sourcePreMasterR2Key, job.sourcePreMasterSha256);
+}
+
+export async function recordTrackGVideoOneStage12CodecSafeLraGuardShadowCallback(input: {
+  idempotencyKey: string;
+  token: string;
+  result?: Stage12CodecSafeLraGuardShadowResult;
+  errorCode?: string;
+}) {
+  const job = await latestStage12CodecSafeLraGuardShadowJob();
+  requireStage12CodecSafeLraGuardShadowToken(job, input.idempotencyKey, input.token);
+  if (job.state === "READY") {
+    return { accepted: true, replayed: true, jobStatus: "READY" as const };
+  }
+  if (job.state !== "PENDING") {
+    throw new Error("STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_CALLBACK_STATE_CONFLICT");
+  }
+  if (!input.result) {
+    const code = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+      ? input.errorCode : "STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_FAILED";
+    await getD1().prepare(`UPDATE stage12_codec_safe_lra_guard_shadow_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`)
+      .bind(code, new Date().toISOString(), job.id).run();
+    return { accepted: true, replayed: false, jobStatus: "FAILED" as const };
+  }
+  const result = parseStage12CodecSafeLraGuardShadowResult(input.result);
+  if (result.source.correctionJobId !== job.sourceCorrectionJobId
+    || result.historicalFailure.correctionJobId !== job.historicalFailureJobId
+    || result.diagnosticReplay.jobId !== job.diagnosticReplayJobId
+    || result.diagnosticReplay.evidenceId !== job.diagnosticReplayEvidenceId
+    || result.parentShadow.jobId !== job.parentShadowJobId
+    || result.parentShadow.evidenceId !== job.parentShadowEvidenceId
+    || result.source.sha256 !== job.sourcePreMasterSha256
+    || result.source.receiptSha256 !== job.sourceReceiptSha256
+    || result.expectedWorkerImageDigest !== job.expectedWorkerImageDigest
+    || result.parentWorkerImageDigest !== job.parentWorkerImageDigest
+    || result.workerImageDigest !== job.expectedWorkerImageDigest
+    || result.algorithmFingerprint !== job.algorithmFingerprint
+    || result.thresholdSnapshotSha256 !== job.thresholdSnapshotSha256
+    || result.controllerPolicySha256 !== job.controllerPolicySha256
+    || result.renderKernelFingerprint !== job.renderKernelFingerprint
+    || result.parentRenderRuntimeFingerprint !== job.parentRenderRuntimeFingerprint
+    || result.renderRuntimeFingerprint !== job.parentRenderRuntimeFingerprint) {
+    throw new Error("STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_RESULT_LINEAGE_INVALID");
+  }
+  const evidenceId = sha256(new TextEncoder().encode(canonicalize({
+    shadowJobId: job.id, result,
+  })));
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO stage12_codec_safe_lra_guard_shadow_evidence
+      (id,shadow_job_id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,parent_shadow_job_id,
+       parent_shadow_evidence_id,evidence_semantics,lossless_reference_sha256,
+       lossless_reference_byte_length,lossless_reference_frame_md5_sha256,
+       lossless_reference_codec,lossless_reference_sample_rate_hz,anchor_reference_json,
+       high_bracket_reference_json,controller_policy_json,candidates_json,
+       last_evaluated_candidate_pass,best_safe_candidate_pass,selected_candidate_pass,
+       terminal_reason,final_integrated_lufs,final_integrated_lufs_exact,
+       final_true_peak_dbtp,final_true_peak_dbtp_exact,final_loudness_range_lu,
+       final_loudness_range_lu_exact,failed_predicates_json,shadow_outcome,
+       expected_worker_image_digest,parent_worker_image_digest,worker_image_digest,
+       algorithm_fingerprint,threshold_snapshot_sha256,controller_policy_sha256,
+       render_kernel_fingerprint,parent_render_runtime_fingerprint,render_runtime_fingerprint,
+       parent_runtime_provenance_json,runtime_provenance_json,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'pcm_f32le',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+       ?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      evidenceId, job.id, job.stage12JobId, job.sourceCorrectionJobId,
+      job.historicalFailureJobId, job.diagnosticReplayJobId,
+      job.diagnosticReplayEvidenceId, job.parentShadowJobId, job.parentShadowEvidenceId,
+      result.evidenceSemantics, result.losslessReference.sha256,
+      result.losslessReference.byteLength, result.losslessReference.audioFrameMd5Sha256,
+      result.losslessReference.sampleRateHz, canonicalize(result.anchorReference),
+      canonicalize(result.highBracketReference), canonicalize(result.controllerPolicy),
+      canonicalize(result.candidates), result.lastEvaluatedCandidatePass,
+      result.bestSafeCandidatePass, result.selectedCandidatePass, result.terminalReason,
+      result.finalMeasurements.integratedLufs, result.finalMeasurements.integratedLufsExact,
+      result.finalMeasurements.truePeakDbtp, result.finalMeasurements.truePeakDbtpExact,
+      result.finalMeasurements.loudnessRangeLu, result.finalMeasurements.loudnessRangeLuExact,
+      canonicalize(result.failedPredicates), result.shadowOutcome,
+      result.expectedWorkerImageDigest, result.parentWorkerImageDigest,
+      result.workerImageDigest, result.algorithmFingerprint,
+      result.thresholdSnapshotSha256, result.controllerPolicySha256,
+      result.renderKernelFingerprint, result.parentRenderRuntimeFingerprint,
+      result.renderRuntimeFingerprint, canonicalize(result.parentRuntimeProvenance),
+      canonicalize(result.runtimeProvenance), result.source.r2Key, result.source.sha256,
+      result.source.byteLength, result.source.receiptSha256),
+    getD1().prepare(`UPDATE stage12_codec_safe_lra_guard_shadow_job SET state='READY',
+      shadow_outcome=?,terminal_reason=?,last_evaluated_candidate_pass=?,
+      best_safe_candidate_pass=?,selected_candidate_pass=?,worker_image_digest=?,
+      render_runtime_fingerprint=?,updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      result.shadowOutcome, result.terminalReason, result.lastEvaluatedCandidatePass,
+      result.bestSafeCandidatePass, result.selectedCandidatePass, result.workerImageDigest,
+      result.renderRuntimeFingerprint, now, job.id),
+  ]);
+  return { accepted: true, replayed: false, jobStatus: "READY" as const };
+}
+
+export async function runTrackGVideoOneStage12CodecSafeLraGuardShadow(
+  user: ChatGPTUser,
+  input: RunTrackGVideoOneStage12CodecSafeLraGuardShadowInput,
+) {
+  if (input.ownerApprovalText
+    !== STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_TEXT) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_OWNER_APPROVAL_REQUIRED");
+  }
+  if (input.objective.trim().length < 12 || input.objective.trim().length > 500
+    || !input.callbackUrl.startsWith("https://")
+    || !input.objectAccessUrl.startsWith("https://")) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_INPUT_INVALID");
+  }
+  const existing = await latestStage12CodecSafeLraGuardShadowJob();
+  if (existing) {
+    return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow()),
+      replayed: true };
+  }
+  const source = await stage12CodecSafeLraGuardShadowSource();
+  if (!source.eligible || !source.source || !source.historicalFailure
+    || !source.diagnosticReplayJob || !source.diagnosticReplayEvidence
+    || !source.parentShadowJob || !source.parentShadowEvidence
+    || !source.parentShadowResult || !source.anchorReference
+    || !source.highBracketReference || !source.source.correctedPreMasterR2Key
+    || !source.source.correctedPreMasterSha256
+    || !source.source.correctedPreMasterByteLength || !source.source.receiptSha256) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_SOURCE_NOT_ELIGIBLE");
+  }
+  const health = await readStage12MediaWorkerHealth();
+  const prepared = await prepareStage12MediaRequest(3);
+  const controllerPolicy = STAGE12_CODEC_SAFE_LRA_GUARD_CONTROLLER_POLICY;
+  const fingerprints = stage12CodecSafeLraGuardFingerprints(
+    prepared.payload, controllerPolicy,
+  );
+  if (fingerprints.thresholdSnapshotSha256
+    !== source.parentShadowResult.thresholdSnapshotSha256) {
+    throw new Error("TRACK_G_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_THRESHOLD_DRIFT");
+  }
+  const parentRuntimeProvenance = source.parentShadowResult.runtimeProvenance;
+  const parentRenderRuntimeFingerprint = sha256(new TextEncoder().encode(canonicalize({
+    renderKernelFingerprint: fingerprints.renderKernelFingerprint,
+    runtimeProvenance: parentRuntimeProvenance,
+  })));
+  const key = stage12CodecSafeLraGuardShadowIdempotencyKey(
+    source.source.correctedPreMasterSha256, source.source.receiptSha256,
+    source.parentShadowEvidence.id, health.imageDigest, fingerprints.algorithmFingerprint,
+  );
+  const token = stage12CodecSafeLraGuardShadowCallbackToken(key);
+  const id = `stage12_codec_safe_lra_guard_shadow_${source.parentShadowEvidence.id}`;
+  const now = new Date().toISOString();
+  await getD1().batch([
+    getD1().prepare(`INSERT INTO command_log
+      (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+       trace_id,created_at)
+      VALUES (?,'RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY',?,?,?,
+       'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_SHADOW_FAIL',
+       'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_PENDING',?,?)`).bind(
+      crypto.randomUUID(), canonicalize({ objective: input.objective.trim(),
+        evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION",
+        sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        parentShadowJobId: source.parentShadowJob.id,
+        parentShadowEvidenceId: source.parentShadowEvidence.id,
+        sourcePreMasterSha256: source.source.correctedPreMasterSha256,
+        expectedWorkerImageDigest: health.imageDigest,
+        parentWorkerImageDigest: source.parentShadowResult.workerImageDigest,
+        ...fingerprints, correctedOutputUploaded: false, historicalBackfill: false,
+        providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+        finalize: false, releaseEligible: false, productionActivation: false,
+        autoPublish: "OFF" }), key, user.email.toLowerCase(), crypto.randomUUID(), now),
+    getD1().prepare(`INSERT INTO stage12_codec_safe_lra_guard_shadow_job
+      (id,stage12_job_id,source_correction_job_id,historical_failure_job_id,
+       diagnostic_replay_job_id,diagnostic_replay_evidence_id,parent_shadow_job_id,
+       parent_shadow_evidence_id,idempotency_key,callback_token_hash,actor_identity,
+       owner_approval_text,state,evidence_semantics,source_pre_master_r2_key,
+       source_pre_master_sha256,source_pre_master_byte_length,source_receipt_sha256,
+       expected_worker_image_digest,parent_worker_image_digest,algorithm_fingerprint,
+       threshold_snapshot_sha256,controller_policy_sha256,render_kernel_fingerprint,
+       parent_render_runtime_fingerprint,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION',
+       ?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, source.source.stage12JobId, source.source.id,
+      source.historicalFailure.id, source.diagnosticReplayJob.id,
+      source.diagnosticReplayEvidence.id, source.parentShadowJob.id,
+      source.parentShadowEvidence.id, key, sha256(new TextEncoder().encode(token)),
+      user.email.toLowerCase(), input.ownerApprovalText, "PENDING",
+      source.source.correctedPreMasterR2Key, source.source.correctedPreMasterSha256,
+      source.source.correctedPreMasterByteLength, source.source.receiptSha256,
+      health.imageDigest, source.parentShadowResult.workerImageDigest,
+      fingerprints.algorithmFingerprint, fingerprints.thresholdSnapshotSha256,
+      fingerprints.controllerPolicySha256, fingerprints.renderKernelFingerprint,
+      parentRenderRuntimeFingerprint, now, now),
+  ]);
+  try {
+    await dispatchStage12CodecSafeLraGuardShadowReplay({
+      ...prepared.payload,
+      idempotencyKey: key,
+      objectAccess: { url: input.objectAccessUrl, token },
+      callback: { url: input.callbackUrl, token },
+      codecSafeLraGuardShadowReplay: {
+        schemaVersion: 1,
+        evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION",
+        sourceAttemptOrdinal: 3,
+        sourceCorrectionOrdinal: 2,
+        historicalFailureCorrectionOrdinal: 3,
+        sourceCorrectionJobId: source.source.id,
+        historicalFailureJobId: source.historicalFailure.id,
+        diagnosticReplayJobId: source.diagnosticReplayJob.id,
+        diagnosticReplayEvidenceId: source.diagnosticReplayEvidence.id,
+        codecSafeTruePeakShadowJobId: source.parentShadowJob.id,
+        codecSafeTruePeakShadowEvidenceId: source.parentShadowEvidence.id,
+        sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
+          sha256: source.source.correctedPreMasterSha256,
+          byteLength: source.source.correctedPreMasterByteLength },
+        sourceCorrectionReceiptSha256: source.source.receiptSha256,
+        parentWorkerImageDigest: source.parentShadowResult.workerImageDigest,
+        parentAlgorithmFingerprint: source.parentShadowResult.algorithmFingerprint,
+        parentThresholdSnapshotSha256: source.parentShadowResult.thresholdSnapshotSha256,
+        parentLosslessReference: source.parentShadowResult.losslessReference,
+        parentRuntimeProvenance,
+        anchorReference: source.anchorReference,
+        highBracketReference: source.highBracketReference,
+        controllerPolicy,
+        expectedWorkerImageDigest: health.imageDigest,
+        ...fingerprints,
+        parentRenderRuntimeFingerprint,
+        historicalBackfill: false,
+        uploadCorrectedOutput: false,
+        providerDispatch: "OFF",
+        providerCallCount: 0,
+        calibration: false,
+        finalize: false,
+        release: false,
+        productionActivation: false,
+        autoPublish: "OFF",
+      },
+    });
+  } catch (error) {
+    await getD1().prepare(`UPDATE stage12_codec_safe_lra_guard_shadow_job
+      SET state='FAILED',error_code=?,updated_at=? WHERE id=? AND state='PENDING'`).bind(
+      error instanceof Error ? error.message.slice(0, 160)
+        : "STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_START_FAILED",
+      new Date().toISOString(), id,
+    ).run();
+    throw error;
+  }
+  return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow()),
     replayed: false };
 }
 

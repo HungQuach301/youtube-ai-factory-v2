@@ -44,6 +44,8 @@ jobs:
         run: docker run --rm --entrypoint node factory-media-worker:test stage12-diagnostic-replay-smoke.mjs
       - name: Verify Stage 12 codec-safe true-peak shadow smoke
         run: docker run --rm --entrypoint node factory-media-worker:test stage12-codec-safe-true-peak-shadow-smoke.mjs
+      - name: Verify Stage 12 codec-safe LRA guard shadow smoke
+        run: docker run --rm --entrypoint node factory-media-worker:test stage12-codec-safe-lra-guard-shadow-smoke.mjs
       - name: Prove health and absence of D1 binding
         run: |
           docker run --detach --name factory-media-worker \
@@ -57,6 +59,7 @@ jobs:
               '.ok == true and .jobDispatchEnabled == false and .pythonRuntimeVerified == true
                and .stage12Ready == true and .encodedLoudnessDiagnosticReplayReady == true
                and .codecSafeTruePeakShadowReady == true
+               and .codecSafeLraGuardShadowReady == true
                and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
               exit 0
             fi

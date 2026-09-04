@@ -181,3 +181,24 @@ Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_TRUE_PEAK_CONVERGENCE`
   diagnostic replay history không UPDATE/backfill.
 - Build/PR không chạy Production shadow replay. Không ordinal 4/attempt 4,
   provider, calibration, Finalize, release hoặc publish.
+
+## Codec-safe LRA convergence guard shadow
+
+Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD`
+
+- Exact parent là append-only codec-safe shadow evidence đã FAIL. Candidate pass 1
+  là true-peak-safe anchor (`TP≤-1`, `LRA<4`); pass 3 là rejected high bracket
+  (`LRA>8`). Guard không sửa hoặc backfill parent evidence.
+- Worker decode immutable ordinal 2 thành đúng canonical lossless reference và
+  tái render anchor trước mọi search. Lossless hash/frame-MD5 hoặc FFmpeg/libopus
+  provenance drift làm job fail-closed.
+- LRA bracket/bisection giữ nguyên anchor LUFS target và limiter ceiling. Macro
+  depth luôn nằm giữa safe low và rejected high; tối đa 8 candidates.
+- Khi LRA đã trong `4..8 LU`, LUFS được trim về interior boundary gần nhất, mỗi
+  step tối đa `0.25 LU`. True peak >-1 dBTP, codec overshoot tăng >0.25 dB hoặc
+  LRA trim regress đều bị reject, rollback về best-safe candidate.
+- Migration `0032` ghi append-only job/evidence với anchor/high refs, complete
+  candidate trace, selected pass và pinned source/render/runtime provenance.
+- Đây chỉ là shadow evidence. Threshold giữ nguyên `-14±1`, `≤-1`, `4..8`;
+  không output, Production activation, ordinal/attempt 4, provider, calibration,
+  Finalize, release hoặc publish.
