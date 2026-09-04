@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { STAGE12_LRA_FEASIBILITY_POLICY } from
   "../stage12-lra-feasibility-controller.mjs";
-import { validateStage12CodecSafeLraFeasibilityPayload } from "../stage12-runtime.mjs";
+import { stage12LraFeasibilityRequestSha256 } from
+  "../stage12-lra-feasibility-delivery.mjs";
+import { stage12LraFeasibilityFailureResult,
+  validateStage12CodecSafeLraFeasibilityPayload } from "../stage12-runtime.mjs";
 import { stage12LraFeasibilityFingerprints,
   terminalStage12LraFeasibilityFailure } from
   "../../../sites/control-plane/app/stage12-lra-feasibility-contract";
@@ -31,7 +34,7 @@ function payload() {
     callback: { url: "https://example.com/callback", token: hex("4") },
   };
   const fingerprints = stage12LraFeasibilityFingerprints(base);
-  return { ...base, codecSafeLraFeasibilitySearch: {
+  const result = { ...base, codecSafeLraFeasibilitySearch: {
     schemaVersion: 1,
     evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION",
     sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
@@ -44,16 +47,22 @@ function payload() {
       sha256: "163acb7a9d1b971afeb50b3ac935960cfe7197e9fcbe45416eebdaa8299506d2",
       byteLength: 1 },
     sourceCorrectionReceiptSha256: hex("5"),
-    safeRollbackCandidate: { candidatePass: 5, macroDepthDb: 10.70625,
-      integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 },
     parentLosslessReference: { sha256: hex("6"), byteLength: 2,
       audioFrameMd5Sha256: hex("7"), codec: "pcm_f32le", sampleRateHz: 48000 },
+    safeRollbackReference: { candidatePass: 5, macroDepthDb: 10.70625,
+      integratedTargetLufs: -14, limiterCeilingDbtp: -2.67,
+      losslessReferenceSha256: hex("6"), integratedLufs: -15.25,
+      integratedLufsExact: "-15.25", truePeakDbtp: -1.06,
+      truePeakDbtpExact: "-1.06", loudnessRangeLu: 3.2,
+      loudnessRangeLuExact: "3.20", audioFrameMd5Sha256: hex("7") },
     parentRuntimeProvenance, policy: STAGE12_LRA_FEASIBILITY_POLICY,
     expectedWorkerImageDigest: imageDigest, ...fingerprints,
     shadowOnly: true, historicalBackfill: false, uploadCorrectedOutput: false,
     providerDispatch: "OFF", providerCallCount: 0, calibration: false,
     finalize: false, release: false, productionActivation: false, autoPublish: "OFF",
-  } };
+  }, durability: { requestSha256: "", fencingToken: 1, leaseId: "lease-1" } };
+  result.durability.requestSha256 = stage12LraFeasibilityRequestSha256(result);
+  return result;
 }
 
 describe("Stage 12 LRA feasibility worker envelope", () => {
@@ -67,6 +76,42 @@ describe("Stage 12 LRA feasibility worker envelope", () => {
       .toThrow(/feasibility envelope/iu);
     expect(() => validateStage12CodecSafeLraFeasibilityPayload(payload(),
       `sha256:${hex("9")}`)).toThrow(/worker image/iu);
+    const requestDrift = structuredClone(payload());
+    requestDrift.durability.fencingToken = 2;
+    expect(() => validateStage12CodecSafeLraFeasibilityPayload(requestDrift, imageDigest))
+      .not.toThrow();
+    requestDrift.timeline.shots[0].headline = "Changed work";
+    expect(() => validateStage12CodecSafeLraFeasibilityPayload(requestDrift, imageDigest))
+      .toThrow(/request hash/iu);
+    const extraRollbackField = structuredClone(payload()) as ReturnType<typeof payload>
+      & { codecSafeLraFeasibilitySearch: { safeRollbackReference: Record<string, unknown> } };
+    extraRollbackField.codecSafeLraFeasibilitySearch.safeRollbackReference.unexpected = true;
+    extraRollbackField.durability.requestSha256 = stage12LraFeasibilityRequestSha256(
+      extraRollbackField,
+    );
+    expect(() => validateStage12CodecSafeLraFeasibilityPayload(extraRollbackField, imageDigest))
+      .toThrow(/feasibility envelope/iu);
+  });
+
+  it("preserves an attempted probe and consumed budget in a typed runtime failure", () => {
+    const value = payload();
+    const failedProbe = { phase: "LRA_MAP", phaseOrdinal: 0, seedProbeOrdinal: null,
+      macroDepthDb: 14, integratedTargetLufs: -14, limiterCeilingDbtp: -2.67,
+      targetStepLufs: 0 };
+    const error = Object.assign(new Error("measurement invalid"), {
+      code: "STAGE12_LRA_FEASIBILITY_MEASUREMENT_INVALID",
+      feasibilityState: { candidateTrace: [], phaseBudgetUsed: { LRA_MAP: 1,
+        TRUE_PEAK_CONTAINMENT: 0, LUFS_TRIM: 0, POST_TRIM_TRUE_PEAK: 0,
+        FINAL_VERIFICATION: 0, SAFE_ROLLBACK: 0 }, failedProbes: [failedProbe], failedProbe },
+    });
+    const result = stage12LraFeasibilityFailureResult({
+      search: value.codecSafeLraFeasibilitySearch, imageDigest, error,
+      losslessReference: value.codecSafeLraFeasibilitySearch.parentLosslessReference,
+      runtimeProvenance: parentRuntimeProvenance,
+    });
+    expect(result).toMatchObject({ outcome: "FAIL", terminalReason: "MEASUREMENT_FAILED",
+      failedProbes: [failedProbe], failedProbe, phaseBudgetUsed: { LRA_MAP: 1 }, candidateTrace: [],
+      correctedOutputUploaded: false, providerCallCount: 0, autoPublish: "OFF" });
   });
 
   it("keeps a worker failure terminal, typed and zero-side-effect", () => {
@@ -74,7 +119,9 @@ describe("Stage 12 LRA feasibility worker envelope", () => {
     const result = terminalStage12LraFeasibilityFailure({
       errorCode: "STAGE12_LRA_FEASIBILITY_MEASUREMENT_INVALID",
       terminalReason: "MEASUREMENT_FAILED", expectedWorkerImageDigest: imageDigest,
-      parentRuntimeProvenance, ...fingerprints,
+      parentRuntimeProvenance,
+      safeRollbackReference: payload().codecSafeLraFeasibilitySearch.safeRollbackReference,
+      ...fingerprints,
     });
     expect(result).toMatchObject({ outcome: "FAIL", terminalReason: "MEASUREMENT_FAILED",
       selectedCandidateSha256: null, correctedOutputUploaded: false,

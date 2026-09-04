@@ -3,6 +3,17 @@ import { createHash } from 'node:crypto'
 const LATTICE = Object.freeze([14, 12.45, 11.675, 13.225, 11.2875, 12.0625, 12.8375, 13.6125])
 const PHASE_BUDGET = Object.freeze({ LRA_MAP: 8, TRUE_PEAK_CONTAINMENT: 4,
   LUFS_TRIM: 3, POST_TRIM_TRUE_PEAK: 2, FINAL_VERIFICATION: 1, SAFE_ROLLBACK: 1 })
+const SAFE_ROLLBACK_CONTROLS = Object.freeze({ candidatePass: 5, macroDepthDb: 10.70625,
+  integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 })
+const SAFE_ROLLBACK_MEASUREMENT = Object.freeze({ integratedLufs: -15.25,
+  integratedLufsExact: '-15.25', truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
+  loudnessRangeLu: 3.2, loudnessRangeLuExact: '3.20' })
+const EXACT_DECIMAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u
+const HEX64 = /^[a-f0-9]{64}$/u
+const SAFE_ROLLBACK_KEYS = Object.freeze(['candidatePass', 'macroDepthDb',
+  'integratedTargetLufs', 'limiterCeilingDbtp', 'losslessReferenceSha256',
+  'integratedLufs', 'integratedLufsExact', 'truePeakDbtp', 'truePeakDbtpExact',
+  'loudnessRangeLu', 'loudnessRangeLuExact', 'audioFrameMd5Sha256'])
 
 function canonical(value) {
   if (value === null) return 'null'
@@ -38,8 +49,9 @@ export const STAGE12_LRA_FEASIBILITY_POLICY = Object.freeze({
 })
 
 export function stage12LraFeasibilityFingerprint(thresholds, policy = STAGE12_LRA_FEASIBILITY_POLICY) {
-  return hash({ algorithm: 'stage12-codec-safe-lra-feasibility-v1',
+  return hash({ algorithm: 'stage12-codec-safe-lra-feasibility-v2',
     candidateInput: 'IMMUTABLE_CORRECTION_ORDINAL_2', search: 'NON_MONOTONIC_LARGEST_GAP_LATTICE',
+    terminalPolicy: 'TWO_SEEDS_SINGLE_FINAL_THEN_ROLLBACK',
     phases: ['LRA_MAP', 'TRUE_PEAK_CONTAINMENT', 'LUFS_TRIM', 'POST_TRIM_TRUE_PEAK',
       'FINAL_VERIFICATION', 'SAFE_ROLLBACK'], thresholds, policy })
 }
@@ -156,26 +168,71 @@ function lufsInterior(candidate, policy) {
 }
 
 function requireProbeMeasurement(measurement) {
+  const exactPairs = [['integratedLufsExact', 'integratedLufs'],
+    ['truePeakDbtpExact', 'truePeakDbtp'],
+    ['loudnessRangeLuExact', 'loudnessRangeLu']]
   if (!measurement || !['integratedLufs', 'truePeakDbtp', 'loudnessRangeLu']
     .every((key) => Number.isFinite(measurement[key]))
-    || !['integratedLufsExact', 'truePeakDbtpExact', 'loudnessRangeLuExact']
-      .every((key) => typeof measurement[key] === 'string' && measurement[key].length > 0)
-    || !/^[a-f0-9]{64}$/u.test(measurement.candidateSha256 ?? '')
-    || !/^[a-f0-9]{64}$/u.test(measurement.audioFrameMd5Sha256 ?? '')) {
+    || !exactPairs.every(([exact, numeric]) => typeof measurement[exact] === 'string'
+      && EXACT_DECIMAL.test(measurement[exact])
+      && Number(measurement[exact]) === measurement[numeric])
+    || !HEX64.test(measurement.candidateSha256 ?? '')
+    || !HEX64.test(measurement.audioFrameMd5Sha256 ?? '')) {
     throw Object.assign(new Error('Invalid Stage 12 feasibility probe measurement.'),
       { code: 'STAGE12_LRA_FEASIBILITY_MEASUREMENT_INVALID' })
   }
-  return measurement
+  return {
+    integratedLufs: measurement.integratedLufs,
+    integratedLufsExact: measurement.integratedLufsExact,
+    truePeakDbtp: measurement.truePeakDbtp,
+    truePeakDbtpExact: measurement.truePeakDbtpExact,
+    loudnessRangeLu: measurement.loudnessRangeLu,
+    loudnessRangeLuExact: measurement.loudnessRangeLuExact,
+    candidateSha256: measurement.candidateSha256,
+    audioFrameMd5Sha256: measurement.audioFrameMd5Sha256,
+  }
 }
 
-function phaseDisposition(phase, measurement, thresholds) {
+function sameMeasurement(left, right) {
+  return ['integratedLufs', 'truePeakDbtp', 'loudnessRangeLu']
+    .every((key) => left[key] === right[key])
+    && ['integratedLufsExact', 'truePeakDbtpExact', 'loudnessRangeLuExact']
+      .every((key) => left[key] === right[key])
+}
+
+function requireSafeRollbackReference(value, thresholds) {
+  if (!value || canonical(Object.keys(value).sort()) !== canonical([...SAFE_ROLLBACK_KEYS].sort())
+    || value.candidatePass !== SAFE_ROLLBACK_CONTROLS.candidatePass
+    || value.macroDepthDb !== SAFE_ROLLBACK_CONTROLS.macroDepthDb
+    || value.integratedTargetLufs !== SAFE_ROLLBACK_CONTROLS.integratedTargetLufs
+    || value.limiterCeilingDbtp !== SAFE_ROLLBACK_CONTROLS.limiterCeilingDbtp
+    || !HEX64.test(value.losslessReferenceSha256 ?? '')
+    || !HEX64.test(value.audioFrameMd5Sha256 ?? '')
+    || !sameMeasurement(value, SAFE_ROLLBACK_MEASUREMENT)
+    || !['integratedLufsExact', 'truePeakDbtpExact', 'loudnessRangeLuExact']
+      .every((key) => EXACT_DECIMAL.test(value[key]) && Number(value[key]) === value[
+        key.replace('Exact', '')])
+    || value.truePeakDbtp > thresholds.truePeakMaxDbtp) {
+    throw Object.assign(new Error('Invalid immutable Stage 12 safe rollback reference.'),
+      { code: 'INVALID_STAGE12_LRA_FEASIBILITY_SAFE_ROLLBACK_REFERENCE' })
+  }
+  return Object.freeze({ ...value })
+}
+
+function phaseDisposition(phase, measurement, thresholds, policy) {
   if (phase === 'SAFE_ROLLBACK') return 'SAFE_ROLLBACK'
   if (!lraFeasible(measurement, thresholds)) return 'LRA_REGRESSION'
   if (phase === 'LRA_MAP') return measurement.truePeakDbtp > thresholds.truePeakMaxDbtp
     ? 'LRA_FEASIBLE_TP_UNCONTAINED' : 'LRA_PROBE'
-  if (phase === 'TRUE_PEAK_CONTAINMENT') return 'TP_CONTAINED'
+  if (phase === 'TRUE_PEAK_CONTAINMENT') {
+    return measurement.truePeakDbtp <= policy.truePeakInteriorDbtp
+      ? 'TP_CONTAINED' : 'TP_IMPROVING'
+  }
   if (phase === 'LUFS_TRIM') return 'LUFS_TRIMMED'
-  if (phase === 'POST_TRIM_TRUE_PEAK') return 'POST_TRIM_TP_CONTAINED'
+  if (phase === 'POST_TRIM_TRUE_PEAK') {
+    return measurement.truePeakDbtp <= policy.truePeakInteriorDbtp
+      ? 'POST_TRIM_TP_CONTAINED' : 'POST_TRIM_TP_IMPROVING'
+  }
   return 'FULL_PASS'
 }
 
@@ -187,14 +244,15 @@ export async function runStage12LraFeasibilityController(input) {
   const policy = input?.policy ?? STAGE12_LRA_FEASIBILITY_POLICY
   const thresholds = input?.thresholds
   const probe = input?.probe
-  const safeRollback = input?.safeRollbackCandidate
-  if (!thresholds || typeof probe !== 'function' || !safeRollback
+  if (!thresholds || typeof probe !== 'function'
     || policy.lattice.length !== policy.phaseBudget.LRA_MAP) {
     throw Object.assign(new Error('Invalid Stage 12 feasibility controller input.'),
       { code: 'INVALID_STAGE12_LRA_FEASIBILITY_CONTROLLER_INPUT' })
   }
+  const safeRollback = requireSafeRollbackReference(input?.safeRollbackReference, thresholds)
   const used = phaseBudgetUsed()
   const candidateTrace = []
+  const failedProbes = []
   const evaluate = async (phase, controller, seedProbeOrdinal = null, disposition = null) => {
     if (used[phase] >= policy.phaseBudget[phase]) {
       throw Object.assign(new Error(`Stage 12 feasibility ${phase} budget exhausted.`),
@@ -202,15 +260,62 @@ export async function runStage12LraFeasibilityController(input) {
     }
     const phaseOrdinal = used[phase]
     used[phase] += 1
+    const failedProbe = { phase, phaseOrdinal, seedProbeOrdinal,
+      macroDepthDb: controller.macroDepthDb,
+      integratedTargetLufs: controller.integratedTargetLufs,
+      limiterCeilingDbtp: controller.limiterCeilingDbtp,
+      targetStepLufs: controller.targetStepLufs ?? 0 }
     let measurement
     try {
       measurement = requireProbeMeasurement(await probe({ ...controller, phase,
         phaseOrdinal, seedProbeOrdinal }))
     } catch (error) {
+      failedProbes.push(failedProbe)
       if (typeof error === 'object' && error !== null) {
         error.feasibilityState = { candidateTrace: [...candidateTrace],
-          phaseBudgetUsed: { ...used } }
+          phaseBudgetUsed: { ...used }, failedProbes: [...failedProbes], failedProbe }
       }
+      throw error
+    }
+    if (phase === 'FINAL_VERIFICATION') {
+      const reference = controller.sameArtifactReference
+      if (!reference || measurement.candidateSha256 !== reference.candidateSha256
+        || measurement.audioFrameMd5Sha256 !== reference.audioFrameMd5Sha256
+        || !sameMeasurement(measurement, reference)) {
+        const error = Object.assign(new Error('Stage 12 final verification artifact drifted.'),
+          { code: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_DRIFT' })
+        const finalFailure = { ...failedProbe,
+          failureCode: error.code, observedMeasurement: { ...measurement } }
+        failedProbes.push(finalFailure)
+        error.feasibilityState = { candidateTrace: [...candidateTrace],
+          phaseBudgetUsed: { ...used }, failedProbes: [...failedProbes],
+          failedProbe: finalFailure }
+        throw error
+      }
+    }
+    const identityConflict = candidateTrace.find((candidate) =>
+      (candidate.candidateSha256 === measurement.candidateSha256
+        || candidate.audioFrameMd5Sha256 === measurement.audioFrameMd5Sha256)
+      && (candidate.candidateSha256 !== measurement.candidateSha256
+        || candidate.audioFrameMd5Sha256 !== measurement.audioFrameMd5Sha256
+        || !sameMeasurement(candidate, measurement)))
+    if (identityConflict) {
+      const error = Object.assign(new Error('Stage 12 feasibility artifact measurement drifted.'),
+        { code: 'STAGE12_LRA_FEASIBILITY_MEASUREMENT_IDENTITY_DRIFT' })
+      failedProbes.push(failedProbe)
+      error.feasibilityState = { candidateTrace: [...candidateTrace],
+        phaseBudgetUsed: { ...used }, failedProbes: [...failedProbes], failedProbe }
+      throw error
+    }
+    if (phase === 'SAFE_ROLLBACK'
+      && (measurement.audioFrameMd5Sha256 !== safeRollback.audioFrameMd5Sha256
+        || !sameMeasurement(measurement, safeRollback)
+        || measurement.truePeakDbtp > thresholds.truePeakMaxDbtp)) {
+      const error = Object.assign(new Error('Stage 12 safe rollback candidate drifted.'),
+        { code: 'STAGE12_LRA_FEASIBILITY_MEASUREMENT_SAFE_ROLLBACK_DRIFT' })
+      failedProbes.push(failedProbe)
+      error.feasibilityState = { candidateTrace: [...candidateTrace],
+        phaseBudgetUsed: { ...used }, failedProbes: [...failedProbes], failedProbe }
       throw error
     }
     const verification = verifyStage12LraFeasibilityCandidate(measurement, thresholds)
@@ -222,7 +327,7 @@ export async function runStage12LraFeasibilityController(input) {
       ...measurement, failedPredicates: verification.failedPredicates,
       lraFeasible: lraFeasible(measurement, thresholds),
       truePeakContained: measurement.truePeakDbtp <= thresholds.truePeakMaxDbtp,
-      disposition: disposition ?? phaseDisposition(phase, measurement, thresholds) }
+      disposition: disposition ?? phaseDisposition(phase, measurement, thresholds, policy) }
     candidateTrace.push(candidate)
     return candidate
   }
@@ -238,7 +343,8 @@ export async function runStage12LraFeasibilityController(input) {
   const seeds = selectStage12LraFeasibilitySeeds(mapCandidates.map((candidate) => ({
     ...candidate, probeOrdinal: candidate.phaseOrdinal,
   })), thresholds)
-  for (const seed of seeds) {
+  let terminalFailedProbe = null
+  seedLoop: for (const seed of seeds) {
     let current = seed
     let controller = { macroDepthDb: seed.macroDepthDb,
       integratedTargetLufs: seed.integratedTargetLufs,
@@ -298,17 +404,44 @@ export async function runStage12LraFeasibilityController(input) {
       }
       current = contained
     }
-    if (rejected || !verifyStage12LraFeasibilityCandidate(current, thresholds).pass) continue
+    if (rejected || current.truePeakDbtp > policy.truePeakInteriorDbtp
+      || !verifyStage12LraFeasibilityCandidate(current, thresholds).pass) continue
 
-    const verified = await evaluate('FINAL_VERIFICATION', { ...controller,
-      targetStepLufs: 0 }, seed.probeOrdinal)
-    if (verifyStage12LraFeasibilityCandidate(verified, thresholds).pass) {
+    if (used.FINAL_VERIFICATION >= policy.phaseBudget.FINAL_VERIFICATION) {
+      break seedLoop
+    }
+
+    let verified
+    try {
+      verified = await evaluate('FINAL_VERIFICATION', { ...controller,
+        targetStepLufs: 0, sameArtifactReference: {
+          candidateSha256: current.candidateSha256,
+          audioFrameMd5Sha256: current.audioFrameMd5Sha256,
+          integratedLufs: current.integratedLufs,
+          integratedLufsExact: current.integratedLufsExact,
+          truePeakDbtp: current.truePeakDbtp,
+          truePeakDbtpExact: current.truePeakDbtpExact,
+          loudnessRangeLu: current.loudnessRangeLu,
+          loudnessRangeLuExact: current.loudnessRangeLuExact,
+        } }, seed.probeOrdinal)
+    } catch (error) {
+      if (!['STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_DRIFT',
+        'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_UNAVAILABLE'].includes(error?.code)) throw error
+      terminalFailedProbe = { ...error.feasibilityState.failedProbe,
+        failureCode: error.code }
+      failedProbes[failedProbes.length - 1] = terminalFailedProbe
+      break seedLoop
+    }
+    if (verified.truePeakDbtp <= policy.truePeakInteriorDbtp
+      && verifyStage12LraFeasibilityCandidate(verified, thresholds).pass) {
       verified.disposition = 'FULL_PASS'
       return { outcome: 'PASS', terminalReason: 'PASS',
         selectedCandidateSha256: verified.candidateSha256,
-        phaseBudgetUsed: used, candidateTrace }
+        phaseBudgetUsed: used, candidateTrace, failedProbes, failedProbe: null,
+        safeRollbackReference: safeRollback }
     }
     verified.disposition = 'FINAL_VERIFICATION_FAILED'
+    break seedLoop
   }
 
   const rollback = await evaluate('SAFE_ROLLBACK', {
@@ -319,5 +452,7 @@ export async function runStage12LraFeasibilityController(input) {
   }, null, 'SAFE_ROLLBACK')
   return { outcome: 'FAIL', terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED',
     selectedCandidateSha256: rollback.candidateSha256,
-    phaseBudgetUsed: used, candidateTrace }
+    phaseBudgetUsed: used, candidateTrace, failedProbes,
+    failedProbe: terminalFailedProbe,
+    safeRollbackReference: safeRollback }
 }

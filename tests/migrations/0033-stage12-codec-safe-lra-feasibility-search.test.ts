@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -11,6 +12,11 @@ const insert = (db: DatabaseSync, id = 'job', status = 'PENDING') => db.prepare(
  '4ff67d50dbdd891b13014b476b9cb91eb0e7fcb610a98b87bc88a2524d94ccb9',status,new Date(0).toISOString())
 
 describe('migration 0033 Stage 12 LRA feasibility search', () => {
+  it('remains byte-identical to the deployed sealed migration', () => {
+    expect(createHash('sha256').update(sql).digest('hex'))
+      .toBe('c18d864c365b53dde261f67b0835990dc21c7365dfb3868f76b51e6561f0e14c')
+  })
+
   it('keeps every D1 statement in its own append-only migration chunk', () => {
     const statements = sql.split('--> statement-breakpoint').map((value) => value.trim()).filter(Boolean)
     expect(statements).toHaveLength(7)

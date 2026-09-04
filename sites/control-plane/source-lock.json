@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "459a19f2b62b3ae89fc5d1420d48f6274182f9f6bffe7e69206e06c09b396642",
+  "aggregate_sha256": "5ceccc0ec248c9cad770d5d43678a56e18946fb5c6a8dd2152d8d325c637c7e5",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -33,7 +33,7 @@
     },
     {
       "path": "SSOT-CONTRACT.md",
-      "sha256": "279561582cf881306396a1ee5db0e772893d71cc891fef9047696420951dccaa"
+      "sha256": "e058d8f70823ce0410d141def3ae420dafca0f33ff0990eace4d3bcd62682083"
     },
     {
       "path": "app/[...path]/route.ts",
@@ -53,7 +53,7 @@
     },
     {
       "path": "app/api/media-worker/stage12-codec-safe-lra-feasibility-search/route.ts",
-      "sha256": "98b4e9fd65a812162f2b99b239733aa79a1542234fbda5d4babfb216dcf78a58"
+      "sha256": "ace66a4baaf54ae51fe105a23a4bd2c558650332497f0b7c4b2c7778007d6455"
     },
     {
       "path": "app/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay/route.ts",
@@ -161,11 +161,15 @@
     },
     {
       "path": "app/stage12-lra-feasibility-contract.ts",
-      "sha256": "3b39249b93115264025b5c8dc0144227cedd9f51a757bb834de53dedbd68610b"
+      "sha256": "5bd7f27eb379cf0f969276ed1c910b13aaf5ab74b3064795b1dae72d6bfd2ff4"
+    },
+    {
+      "path": "app/stage12-lra-feasibility-dispatch.ts",
+      "sha256": "45fcf41c28b4646c0e49cc0792bed54082c1832f03b457e031dada52455c4411"
     },
     {
       "path": "app/stage12-media.ts",
-      "sha256": "cf180ea9df30655b4a9d1171c1640615e52dcf353c77e11591a88440b76d95e7"
+      "sha256": "b23532017b9c7849b62b51948fff19d5b67c367a038ba87e099860174ff7eced"
     },
     {
       "path": "app/stage12-pre-master.ts",
@@ -173,7 +177,7 @@
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "6711a34a56302d4d30a64f0b4875b00b0d4e68f5c634140626fe493002c8da28"
+      "sha256": "75231e6da835da3c21b4f5a859777ed5195be13a448d4ebbb97f498a9ee9dabd"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -189,7 +193,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "b6a5b0c9312cfda8623f1c4738d859e9c8e638717ba0d273bf226066f7aeb83f"
+      "sha256": "1f0886094478f9f6d9c280721ac5bcbb4de9605e81df305fb5b4b62944ede8ca"
     },
     {
       "path": "drizzle.config.ts",
@@ -333,7 +337,7 @@
     },
     {
       "path": "drizzle/0034_stage12_lra_feasibility_command_contract.sql",
-      "sha256": "363eacdd7c836816a482dbab45300fdd036aaa619235cdd21afbcb637a00763a"
+      "sha256": "a464a968299b2ab3168ad7ff552633e11676479ab224691abceb78e2b6a5d5fd"
     },
     {
       "path": "drizzle/meta/0000_snapshot.json",
@@ -409,7 +413,7 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "a59b4591f2f8d40d357cb0dbcd23b49dca34d0e0636a770741898018e54f9c82"
+      "sha256": "b527f998b9b6bbeab5577e9003577a3d9384ac0c6cbff1306db0e7e6182ebeea"
     },
     {
       "path": "packages/media-worker/fly.toml",
@@ -425,7 +429,11 @@
     },
     {
       "path": "packages/media-worker/stage12-lra-feasibility-controller.mjs",
-      "sha256": "f05b7849bc8ca79d753134d16cfc32947caafc75e2361fed5298ab03180b7ef1"
+      "sha256": "97b082037f7fdc7e8dc92876478d21dd08c90ef25a08f7574e5412edff70819b"
+    },
+    {
+      "path": "packages/media-worker/stage12-lra-feasibility-delivery.mjs",
+      "sha256": "07c3c6c4d9e4f427e684fedfea7d19ce022736d1a16e0863b6eb8ab58abe9600"
     },
     {
       "path": "packages/media-worker/stage12-remediation-smoke.mjs",
@@ -437,7 +445,7 @@
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
-      "sha256": "59caf96b77bf43342b7c3d22686e3ebefab0b6701eff7e4912f94ca81c75f9db"
+      "sha256": "4eafffc83a9f27de13a27c13c0663269e2557e70f1cf483057d192cf07f81681"
     },
     {
       "path": "postcss.config.mjs",
@@ -513,7 +521,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "ac2c338987d597a5c17ca22078e8b4534fa7a28863d51ea926fa8d082298c851"
+      "sha256": "f767ef7ab4cdfcee06ef5e1e70399285623c39819c40b6c8951b4205e8a2b56c"
     },
     {
       "path": "tests/rendered-html.test.mjs",

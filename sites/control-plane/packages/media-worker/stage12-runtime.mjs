@@ -8,6 +8,8 @@ import { runStage12LraFeasibilityController, STAGE12_LRA_FEASIBILITY_POLICY,
   stage12LraFeasibilityFingerprint, stage12LraFeasibilityThresholdSnapshot,
   validateStage12LraFeasibilityLineage,
 } from './stage12-lra-feasibility-controller.mjs'
+import { stage12LraFeasibilityRequestSha256 } from
+  './stage12-lra-feasibility-delivery.mjs'
 
 const HEX64 = /^[0-9a-f]{64}$/u
 const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
@@ -1608,6 +1610,69 @@ function validStage12LraFeasibilityRuntimeProvenance(value) {
     && HEX64.test(value.libopusEncoderFingerprint ?? '')
 }
 
+function stage12LraFeasibilityErrorCode(error) {
+  const candidate = typeof error?.code === 'string' ? error.code
+    : 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_FAILED'
+  return /^[A-Z0-9_:.-]{1,160}$/u.test(candidate)
+    ? candidate : 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_FAILED'
+}
+
+function stage12LraFeasibilityFailureReason(errorCode) {
+  if (/(?:ENCODE|DECODE)_FAILED/u.test(errorCode)) return 'ENCODE_FAILED'
+  if (/(?:ANALYSIS|LOUDNESS|MEASUREMENT|AUDIO_FRAME_HASH)_/u.test(errorCode)) {
+    return 'MEASUREMENT_FAILED'
+  }
+  return 'LINEAGE_DRIFT'
+}
+
+function emptyStage12LraFeasibilityBudget() {
+  return { LRA_MAP: 0, TRUE_PEAK_CONTAINMENT: 0, LUFS_TRIM: 0,
+    POST_TRIM_TRUE_PEAK: 0, FINAL_VERIFICATION: 0, SAFE_ROLLBACK: 0 }
+}
+
+export function stage12LraFeasibilityFailureResult(input) {
+  const search = input.search
+  const errorCode = stage12LraFeasibilityErrorCode(input.error)
+  const state = input.error?.feasibilityState
+  return {
+    accepted: true,
+    schemaVersion: 1,
+    evidenceSemantics: search.evidenceSemantics,
+    boundary: 'POST_OPUS_CODEC_SAFE_LRA_FEASIBILITY',
+    lineage: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+      historicalFailureCorrectionOrdinal: 3, sourceSha256: search.sourceSha256,
+      parentEvidenceId: search.parentEvidenceId,
+      lraGuardEvidenceId: search.lraGuardEvidenceId },
+    phaseBudget: search.policy.phaseBudget,
+    phaseBudgetUsed: state?.phaseBudgetUsed ?? emptyStage12LraFeasibilityBudget(),
+    candidateTrace: state?.candidateTrace ?? [],
+    failedProbes: state?.failedProbes ?? (state?.failedProbe ? [state.failedProbe] : []),
+    failedProbe: state?.failedProbe ?? null,
+    outcome: 'FAIL',
+    terminalReason: stage12LraFeasibilityFailureReason(errorCode),
+    errorCode,
+    selectedCandidateSha256: null,
+    safeRollbackReference: search.safeRollbackReference,
+    losslessReference: input.losslessReference ?? null,
+    parentRuntimeProvenance: search.parentRuntimeProvenance,
+    runtimeProvenance: input.runtimeProvenance ?? null,
+    expectedWorkerImageDigest: search.expectedWorkerImageDigest,
+    workerImageDigest: input.imageDigest ?? search.expectedWorkerImageDigest,
+    algorithmFingerprint: search.algorithmFingerprint,
+    thresholdSnapshotSha256: search.thresholdSnapshotSha256,
+    shadowOnly: true,
+    correctedOutputUploaded: false,
+    historicalBackfill: false,
+    providerDispatch: 'OFF',
+    providerCallCount: 0,
+    calibration: false,
+    finalize: false,
+    productionActivation: false,
+    releaseEligible: false,
+    autoPublish: 'OFF',
+  }
+}
+
 export function validateStage12CodecSafeLraFeasibilityPayload(payload, imageDigest) {
   const value = validateStage12Payload(payload)
   const search = value.codecSafeLraFeasibilitySearch
@@ -1630,20 +1695,41 @@ export function validateStage12CodecSafeLraFeasibilityPayload(payload, imageDige
     || !Number.isInteger(search.sourceCorrectedPreMaster?.byteLength)
     || search.sourceCorrectedPreMaster.byteLength < 1
     || !HEX64.test(search.sourceCorrectionReceiptSha256 ?? '')
-    || search.safeRollbackCandidate?.candidatePass !== 5
-    || !['macroDepthDb', 'integratedTargetLufs', 'limiterCeilingDbtp']
-      .every((key) => Number.isFinite(search.safeRollbackCandidate?.[key]))
+    || search.safeRollbackReference?.candidatePass !== 5
+    || canonicalize(Object.keys(search.safeRollbackReference).sort()) !== canonicalize([
+      'audioFrameMd5Sha256', 'candidatePass', 'integratedLufs', 'integratedLufsExact',
+      'integratedTargetLufs', 'limiterCeilingDbtp', 'losslessReferenceSha256',
+      'loudnessRangeLu', 'loudnessRangeLuExact', 'macroDepthDb', 'truePeakDbtp',
+      'truePeakDbtpExact',
+    ].sort())
+    || search.safeRollbackReference?.macroDepthDb !== 10.70625
+    || search.safeRollbackReference?.integratedTargetLufs !== -14
+    || search.safeRollbackReference?.limiterCeilingDbtp !== -2.67
+    || search.safeRollbackReference?.integratedLufs !== -15.25
+    || search.safeRollbackReference?.integratedLufsExact !== '-15.25'
+    || search.safeRollbackReference?.truePeakDbtp !== -1.06
+    || search.safeRollbackReference?.truePeakDbtpExact !== '-1.06'
+    || search.safeRollbackReference?.loudnessRangeLu !== 3.2
+    || search.safeRollbackReference?.loudnessRangeLuExact !== '3.20'
+    || !HEX64.test(search.safeRollbackReference?.losslessReferenceSha256 ?? '')
+    || !HEX64.test(search.safeRollbackReference?.audioFrameMd5Sha256 ?? '')
     || !HEX64.test(search.parentLosslessReference?.sha256 ?? '')
     || !Number.isInteger(search.parentLosslessReference?.byteLength)
     || search.parentLosslessReference.byteLength < 1
     || !HEX64.test(search.parentLosslessReference?.audioFrameMd5Sha256 ?? '')
     || search.parentLosslessReference?.codec !== 'pcm_f32le'
     || search.parentLosslessReference?.sampleRateHz !== 48000
+    || search.safeRollbackReference.losslessReferenceSha256
+      !== search.parentLosslessReference.sha256
     || !validStage12LraFeasibilityRuntimeProvenance(search.parentRuntimeProvenance)
     || canonicalize(search.policy) !== canonicalize(STAGE12_LRA_FEASIBILITY_POLICY)
     || search.algorithmFingerprint !== expectedAlgorithmFingerprint
     || search.thresholdSnapshotSha256 !== expectedThresholdSnapshotSha256
     || !/^sha256:[a-f0-9]{64}$/u.test(search.expectedWorkerImageDigest ?? '')
+    || !HEX64.test(value.durability?.requestSha256 ?? '')
+    || !Number.isSafeInteger(value.durability?.fencingToken)
+    || value.durability.fencingToken < 1
+    || !/^[A-Za-z0-9_-]{1,160}$/u.test(value.durability?.leaseId ?? '')
     || search.historicalBackfill !== false) {
     throw Object.assign(new Error('Invalid Stage 12 LRA feasibility envelope.'), {
       code: 'INVALID_STAGE12_LRA_FEASIBILITY_ENVELOPE',
@@ -1652,6 +1738,11 @@ export function validateStage12CodecSafeLraFeasibilityPayload(payload, imageDige
   if (imageDigest !== undefined && search.expectedWorkerImageDigest !== imageDigest) {
     throw Object.assign(new Error('LRA feasibility worker image does not match the pin.'), {
       code: 'STAGE12_LRA_FEASIBILITY_WORKER_IMAGE_MISMATCH',
+    })
+  }
+  if (stage12LraFeasibilityRequestSha256(value) !== value.durability.requestSha256) {
+    throw Object.assign(new Error('LRA feasibility request hash drifted.'), {
+      code: 'STAGE12_LRA_FEASIBILITY_REQUEST_HASH_MISMATCH',
     })
   }
   return value
@@ -1663,10 +1754,12 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
   const workRoot = await mkdtemp(join(tmpdir(), 'factory-stage12-lra-feasibility-'))
   const sourcePath = join(workRoot, 'immutable-ordinal-2-source.webm')
   const losslessReferencePath = join(workRoot, 'canonical-lossless-reference.wav')
+  let losslessReference = null
+  let runtimeProvenance = null
   try {
     const separator = payload.objectAccess.url.includes('?') ? '&' : '?'
     const response = await authenticatedFetch(
-      `${payload.objectAccess.url}${separator}kind=codec-safe-lra-feasibility-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${search.sourceSha256}`,
+      `${payload.objectAccess.url}${separator}kind=codec-safe-lra-feasibility-source-ordinal-2&idempotencyKey=${payload.idempotencyKey}&sha256=${search.sourceSha256}&fencingToken=${payload.durability.fencingToken}`,
       payload.objectAccess.token,
     )
     const sourceBytes = Buffer.from(await response.arrayBuffer())
@@ -1683,7 +1776,7 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
       '-ar', String(payload.render.sampleRateHz), losslessReferencePath], workRoot,
     'STAGE12_LRA_FEASIBILITY_LOSSLESS_DECODE_FAILED')
     const losslessBytes = await readFile(losslessReferencePath)
-    const losslessReference = {
+    losslessReference = {
       sha256: sha256(losslessBytes),
       byteLength: losslessBytes.byteLength,
       audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(losslessReferencePath, workRoot),
@@ -1695,27 +1788,43 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
         code: 'STAGE12_LRA_FEASIBILITY_LOSSLESS_REFERENCE_DRIFT',
       })
     }
-    const runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
+    runtimeProvenance = await collectStage12DiagnosticReplayRuntimeProvenance(workRoot)
     if (canonicalize(runtimeProvenance) !== canonicalize(search.parentRuntimeProvenance)) {
       throw Object.assign(new Error('LRA feasibility runtime provenance drifted.'), {
         code: 'STAGE12_LRA_FEASIBILITY_RUNTIME_DRIFT',
       })
     }
     const thresholds = stage12LraFeasibilityThresholds(payload)
+    const candidateArtifacts = new Map()
     const controller = await runStage12LraFeasibilityController({
       thresholds,
       policy: search.policy,
-      anchorLimiterCeilingDbtp: search.safeRollbackCandidate.limiterCeilingDbtp,
-      safeRollbackCandidate: search.safeRollbackCandidate,
+      anchorLimiterCeilingDbtp: search.safeRollbackReference.limiterCeilingDbtp,
+      safeRollbackReference: search.safeRollbackReference,
       probe: async (plan) => {
-        const candidatePath = join(workRoot,
-          `lra-feasibility-${plan.phase.toLowerCase()}-${plan.phaseOrdinal}.webm`)
-        await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
-          workRoot, plan)
+        let candidatePath
+        if (plan.phase === 'FINAL_VERIFICATION') {
+          const sameArtifact = candidateArtifacts.get(
+            plan.sameArtifactReference?.candidateSha256,
+          )
+          if (!sameArtifact
+            || sameArtifact.audioFrameMd5Sha256
+              !== plan.sameArtifactReference?.audioFrameMd5Sha256) {
+            throw Object.assign(new Error('Final verification artifact is unavailable.'), {
+              code: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_UNAVAILABLE',
+            })
+          }
+          candidatePath = sameArtifact.path
+        } else {
+          candidatePath = join(workRoot,
+            `lra-feasibility-${plan.phase.toLowerCase()}-${plan.phaseOrdinal}.webm`)
+          await renderStage12CodecSafeCandidate(payload, losslessReferencePath, candidatePath,
+            workRoot, plan)
+        }
         const measured = await measureStage12EncodedLoudness(payload, candidatePath, workRoot,
           (payload.qa.loudness.lraMin + payload.qa.loudness.lraMax) / 2)
         const candidateBytes = await readFile(candidatePath)
-        return {
+        const measurement = {
           integratedLufs: measured.integratedLufs,
           integratedLufsExact: measured.integratedLufsExact,
           truePeakDbtp: measured.truePeakDbtp,
@@ -1725,6 +1834,13 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
           candidateSha256: sha256(candidateBytes),
           audioFrameMd5Sha256: await stage12AudioFrameMd5Sha256(candidatePath, workRoot),
         }
+        if (plan.phase !== 'FINAL_VERIFICATION') {
+          candidateArtifacts.set(measurement.candidateSha256, {
+            path: candidatePath,
+            audioFrameMd5Sha256: measurement.audioFrameMd5Sha256,
+          })
+        }
+        return measurement
       },
     })
     return {
@@ -1739,10 +1855,13 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
       phaseBudget: search.policy.phaseBudget,
       phaseBudgetUsed: controller.phaseBudgetUsed,
       candidateTrace: controller.candidateTrace,
+      failedProbes: controller.failedProbes ?? [],
+      failedProbe: controller.failedProbe ?? null,
       outcome: controller.outcome,
       terminalReason: controller.terminalReason,
       errorCode: null,
       selectedCandidateSha256: controller.selectedCandidateSha256,
+      safeRollbackReference: controller.safeRollbackReference,
       losslessReference,
       parentRuntimeProvenance: search.parentRuntimeProvenance,
       runtimeProvenance,
@@ -1761,6 +1880,17 @@ export async function executeStage12CodecSafeLraFeasibilitySearch(payloadInput, 
       releaseEligible: false,
       autoPublish: 'OFF',
     }
+  } catch (error) {
+    const failureResult = stage12LraFeasibilityFailureResult({ search, imageDigest, error,
+      losslessReference, runtimeProvenance })
+    if (typeof error === 'object' && error !== null) {
+      error.feasibilityResult = failureResult
+      throw error
+    }
+    throw Object.assign(new Error('Stage 12 LRA feasibility execution failed.'), {
+      code: failureResult.errorCode,
+      feasibilityResult: failureResult,
+    })
   } finally {
     await rm(workRoot, { recursive: true, force: true })
   }

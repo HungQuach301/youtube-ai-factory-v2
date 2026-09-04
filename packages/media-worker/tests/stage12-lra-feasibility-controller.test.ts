@@ -9,6 +9,13 @@ const thresholds = { integratedLufs: -14, toleranceLufs: 1, truePeakMaxDbtp: -1,
   lraMin: 4, lraMax: 8 }
 const base = { integratedLufs: -15.2, truePeakDbtp: -0.9, loudnessRangeLu: 4.2,
   limiterCeilingDbtp: -2.67 }
+const safeRollbackReference = { candidatePass: 5 as const, macroDepthDb: 10.70625,
+  integratedTargetLufs: -14, limiterCeilingDbtp: -2.67,
+  losslessReferenceSha256: 'a'.repeat(64),
+  integratedLufs: -15.25, integratedLufsExact: '-15.25',
+  truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
+  loudnessRangeLu: 3.2, loudnessRangeLuExact: '3.20',
+  audioFrameMd5Sha256: 'b'.repeat(64) }
 
 describe('Stage 12 codec-safe LRA feasibility controller', () => {
   it('uses the exact non-monotonic lattice without allowing TP to narrow LRA search', () => {
@@ -81,21 +88,22 @@ describe('Stage 12 codec-safe LRA feasibility controller', () => {
   })
 
   it('runs containment, bounded LUFS trim and same-artifact verification from one seed', async () => {
-    const plans: Array<Record<string, number | string | null>> = []
+    const plans: Array<Record<string, unknown>> = []
     const result = await runStage12LraFeasibilityController({ thresholds,
       anchorLimiterCeilingDbtp: -2.67,
-      safeRollbackCandidate: { candidatePass: 5, macroDepthDb: 10.70625,
-        integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 },
-      probe: async (plan: Record<string, number | string | null>) => {
+      safeRollbackReference,
+      probe: async (plan: Record<string, unknown>) => {
         plans.push(plan)
         const phase = String(plan.phase)
         const phaseOrdinal = Number(plan.phaseOrdinal)
+        if (phase === 'FINAL_VERIFICATION') {
+          return { ...(plan.sameArtifactReference as Record<string, number | string>) }
+        }
         const feasible = phase !== 'LRA_MAP' || phaseOrdinal === 2
         const integratedLufs = phase === 'LUFS_TRIM'
-          ? (phaseOrdinal === 0 ? -15 : -14.9) : phase === 'FINAL_VERIFICATION'
-            ? -14.9 : -15.25
+          ? (phaseOrdinal === 0 ? -15 : -14.9) : -15.25
         const truePeakDbtp = phase === 'TRUE_PEAK_CONTAINMENT'
-          || phase === 'LUFS_TRIM' || phase === 'FINAL_VERIFICATION' ? -1.1 : -0.8
+          || phase === 'LUFS_TRIM' ? -1.1 : -0.8
         const ordinal = plans.length.toString(16).padStart(64, '0')
         return { integratedLufs, integratedLufsExact: integratedLufs.toFixed(2),
           truePeakDbtp, truePeakDbtpExact: truePeakDbtp.toFixed(2),
@@ -114,14 +122,14 @@ describe('Stage 12 codec-safe LRA feasibility controller', () => {
       candidate.phase === 'LUFS_TRIM').every(
         (candidate: { targetStepLufs: number }) => Math.abs(candidate.targetStepLufs) <= 0.25,
       )).toBe(true)
+    expect(result.safeRollbackReference).toEqual(safeRollbackReference)
   })
 
   it('spends only the rollback reserve after a complete map proves no LRA seed', async () => {
     let ordinal = 0
     const result = await runStage12LraFeasibilityController({ thresholds,
       anchorLimiterCeilingDbtp: -2.67,
-      safeRollbackCandidate: { candidatePass: 5, macroDepthDb: 10.70625,
-        integratedTargetLufs: -14, limiterCeilingDbtp: -2.67 },
+      safeRollbackReference,
       probe: async (plan: { phase: string }) => {
         ordinal += 1
         const hash = ordinal.toString(16).padStart(64, '0')
@@ -129,7 +137,8 @@ describe('Stage 12 codec-safe LRA feasibility controller', () => {
           truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
           loudnessRangeLu: plan.phase === 'SAFE_ROLLBACK' ? 3.2 : 3.5,
           loudnessRangeLuExact: plan.phase === 'SAFE_ROLLBACK' ? '3.20' : '3.50',
-          candidateSha256: hash, audioFrameMd5Sha256: hash }
+          candidateSha256: hash, audioFrameMd5Sha256: plan.phase === 'SAFE_ROLLBACK'
+            ? safeRollbackReference.audioFrameMd5Sha256 : hash }
       } })
     expect(result).toMatchObject({ outcome: 'FAIL',
       terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED' })
@@ -137,5 +146,261 @@ describe('Stage 12 codec-safe LRA feasibility controller', () => {
       LUFS_TRIM: 0, POST_TRIM_TRUE_PEAK: 0, FINAL_VERIFICATION: 0, SAFE_ROLLBACK: 1 })
     expect(result.candidateTrace.at(-1)?.disposition).toBe('SAFE_ROLLBACK')
     expect(result.selectedCandidateSha256).toBe(result.candidateTrace.at(-1)?.candidateSha256)
+  })
+
+  it('preserves the failed probe plan and truthful attempted budget on partial failure', async () => {
+    let ordinal = 0
+    let caught: unknown
+    try {
+      await runStage12LraFeasibilityController({ thresholds,
+        anchorLimiterCeilingDbtp: -2.67,
+        safeRollbackReference,
+        probe: async (plan: { phase: string; phaseOrdinal: number }) => {
+          if (plan.phase === 'LRA_MAP' && plan.phaseOrdinal === 3) {
+            throw Object.assign(new Error('probe failed'), {
+              code: 'STAGE12_LRA_FEASIBILITY_MEASUREMENT_INVALID',
+            })
+          }
+          ordinal += 1
+          const digest = ordinal.toString(16).padStart(64, '0')
+          return { integratedLufs: -15.25, integratedLufsExact: '-15.25',
+            truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
+            loudnessRangeLu: 3.5, loudnessRangeLuExact: '3.50',
+            candidateSha256: digest, audioFrameMd5Sha256: digest }
+        } })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error & { feasibilityState?: unknown }).feasibilityState).toEqual({
+      candidateTrace: expect.arrayContaining([
+        expect.objectContaining({ candidateOrdinal: 0, phase: 'LRA_MAP', phaseOrdinal: 0 }),
+        expect.objectContaining({ candidateOrdinal: 1, phase: 'LRA_MAP', phaseOrdinal: 1 }),
+        expect.objectContaining({ candidateOrdinal: 2, phase: 'LRA_MAP', phaseOrdinal: 2 }),
+      ]),
+      phaseBudgetUsed: { LRA_MAP: 4, TRUE_PEAK_CONTAINMENT: 0, LUFS_TRIM: 0,
+        POST_TRIM_TRUE_PEAK: 0, FINAL_VERIFICATION: 0, SAFE_ROLLBACK: 0 },
+      failedProbes: [{ phase: 'LRA_MAP', phaseOrdinal: 3, seedProbeOrdinal: null,
+        macroDepthDb: 13.225, integratedTargetLufs: -14,
+        limiterCeilingDbtp: -2.67, targetStepLufs: 0 }],
+      failedProbe: { phase: 'LRA_MAP', phaseOrdinal: 3, seedProbeOrdinal: null,
+        macroDepthDb: 13.225, integratedTargetLufs: -14,
+        limiterCeilingDbtp: -2.67, targetStepLufs: 0 },
+    })
+  })
+
+  it('uses the single global final slot then rolls back on final artifact drift', async () => {
+    let ordinal = 0
+    const phases: string[] = []
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67,
+      safeRollbackReference,
+      probe: async (plan: { phase: string; phaseOrdinal: number;
+        sameArtifactReference?: Record<string, number | string> }) => {
+        phases.push(plan.phase)
+        ordinal += 1
+        const digest = ordinal.toString(16).padStart(64, '0')
+        const isMapSeed = plan.phase === 'LRA_MAP' && plan.phaseOrdinal < 2
+        if (plan.phase === 'FINAL_VERIFICATION') return {
+          ...plan.sameArtifactReference!, truePeakDbtp: -0.9, truePeakDbtpExact: '-0.90' }
+        if (plan.phase === 'SAFE_ROLLBACK') return {
+          ...safeRollbackReference, candidateSha256: digest }
+        return { integratedLufs: -14, integratedLufsExact: '-14.00',
+          truePeakDbtp: -1.1, truePeakDbtpExact: '-1.10',
+          loudnessRangeLu: isMapSeed || plan.phase !== 'LRA_MAP' ? 4.5 : 3.5,
+          loudnessRangeLuExact: isMapSeed || plan.phase !== 'LRA_MAP' ? '4.50' : '3.50',
+          candidateSha256: digest, audioFrameMd5Sha256: digest }
+      } })
+    expect(result).toMatchObject({ outcome: 'FAIL',
+      terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED' })
+    expect(result.phaseBudgetUsed.FINAL_VERIFICATION).toBe(1)
+    expect(result.phaseBudgetUsed.SAFE_ROLLBACK).toBe(1)
+    expect(result.failedProbe).toMatchObject({ phase: 'FINAL_VERIFICATION', phaseOrdinal: 0,
+      failureCode: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_DRIFT',
+      observedMeasurement: { truePeakDbtp: -0.9, truePeakDbtpExact: '-0.90' } })
+    expect(phases.filter((phase) => phase === 'FINAL_VERIFICATION')).toHaveLength(1)
+    expect(phases.at(-1)).toBe('SAFE_ROLLBACK')
+  })
+
+  it('rejects seed one, final-fails seed two once, then reproduces exact pass-5 rollback',
+    async () => {
+      let ordinal = 0
+      const plans: Array<{ phase: string; phaseOrdinal: number;
+        seedProbeOrdinal?: number | null;
+        sameArtifactReference?: Record<string, number | string> }> = []
+      const result = await runStage12LraFeasibilityController({ thresholds,
+        anchorLimiterCeilingDbtp: -2.67,
+        safeRollbackReference,
+        probe: async (plan: { phase: string; phaseOrdinal: number;
+          seedProbeOrdinal?: number | null;
+          sameArtifactReference?: Record<string, number | string> }) => {
+          plans.push(plan)
+          ordinal += 1
+          const digest = ordinal.toString(16).padStart(64, '0')
+          if (plan.phase === 'SAFE_ROLLBACK') return {
+            ...safeRollbackReference, candidateSha256: digest }
+          if (plan.phase === 'FINAL_VERIFICATION') return {
+            ...plan.sameArtifactReference!, truePeakDbtp: -0.9,
+            truePeakDbtpExact: '-0.90' }
+          if (plan.phase === 'TRUE_PEAK_CONTAINMENT') return {
+            integratedLufs: -14, integratedLufsExact: '-14.00',
+            truePeakDbtp: -1.1, truePeakDbtpExact: '-1.10',
+            loudnessRangeLu: 3.9, loudnessRangeLuExact: '3.90',
+            candidateSha256: digest, audioFrameMd5Sha256: digest }
+          const firstSeed = plan.phaseOrdinal === 0
+          const secondSeed = plan.phaseOrdinal === 1
+          const loudnessRangeLu = firstSeed ? 6 : secondSeed ? 5 : 3.5
+          const truePeakDbtp = firstSeed ? -0.8 : -1.1
+          return { integratedLufs: -14, integratedLufsExact: '-14.00',
+            truePeakDbtp, truePeakDbtpExact: truePeakDbtp.toFixed(2),
+            loudnessRangeLu, loudnessRangeLuExact: loudnessRangeLu.toFixed(2),
+            candidateSha256: digest, audioFrameMd5Sha256: digest }
+        } })
+      const containment = result.candidateTrace.find(
+        (candidate: { phase: string }) => candidate.phase === 'TRUE_PEAK_CONTAINMENT')
+      const finalPlans = plans.filter((plan) => plan.phase === 'FINAL_VERIFICATION')
+      const rollback = result.candidateTrace.at(-1)
+      expect(containment).toMatchObject({ seedProbeOrdinal: 0,
+        disposition: 'LRA_REGRESSION' })
+      expect(finalPlans).toHaveLength(1)
+      expect(finalPlans[0]?.seedProbeOrdinal).toBe(1)
+      expect(result).toMatchObject({ outcome: 'FAIL',
+        terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED',
+        phaseBudgetUsed: { TRUE_PEAK_CONTAINMENT: 1,
+          FINAL_VERIFICATION: 1, SAFE_ROLLBACK: 1 },
+        failedProbe: { phase: 'FINAL_VERIFICATION', seedProbeOrdinal: 1,
+          failureCode: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_DRIFT' } })
+      expect(rollback).toMatchObject({ phase: 'SAFE_ROLLBACK',
+        disposition: 'SAFE_ROLLBACK', macroDepthDb: safeRollbackReference.macroDepthDb,
+        integratedTargetLufs: safeRollbackReference.integratedTargetLufs,
+        limiterCeilingDbtp: safeRollbackReference.limiterCeilingDbtp,
+        integratedLufs: safeRollbackReference.integratedLufs,
+        truePeakDbtp: safeRollbackReference.truePeakDbtp,
+        loudnessRangeLu: safeRollbackReference.loudnessRangeLu,
+        audioFrameMd5Sha256: safeRollbackReference.audioFrameMd5Sha256 })
+      expect(result.selectedCandidateSha256).toBe(rollback?.candidateSha256)
+    })
+
+  it('does not final-verify a public-pass candidate that misses the internal TP target', async () => {
+    let ordinal = 0
+    const phases: string[] = []
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67,
+      safeRollbackReference,
+      probe: async (plan: { phase: string; phaseOrdinal: number }) => {
+        phases.push(plan.phase)
+        ordinal += 1
+        const digest = ordinal.toString(16).padStart(64, '0')
+        const isSeed = plan.phase === 'LRA_MAP' && plan.phaseOrdinal === 0
+        const isTrimOrPost = ['LUFS_TRIM', 'POST_TRIM_TRUE_PEAK'].includes(plan.phase)
+        const postTrimTruePeak = plan.phase === 'POST_TRIM_TRUE_PEAK'
+          ? (plan.phaseOrdinal === 0 ? -1.02 : -1.03) : -1.03
+        if (plan.phase === 'SAFE_ROLLBACK') return {
+          ...safeRollbackReference, candidateSha256: digest }
+        return { integratedLufs: isTrimOrPost ? -14.9 : -15.2,
+          integratedLufsExact: isTrimOrPost ? '-14.90' : '-15.20',
+          truePeakDbtp: isTrimOrPost ? postTrimTruePeak : -1.1,
+          truePeakDbtpExact: isTrimOrPost ? postTrimTruePeak.toFixed(2) : '-1.10',
+          loudnessRangeLu: isSeed || plan.phase !== 'LRA_MAP' ? 4.5 : 3.5,
+          loudnessRangeLuExact: isSeed || plan.phase !== 'LRA_MAP' ? '4.50' : '3.50',
+          candidateSha256: digest, audioFrameMd5Sha256: digest }
+      } })
+    expect(result.outcome).toBe('FAIL')
+    expect(phases).not.toContain('FINAL_VERIFICATION')
+    expect(phases.at(-1)).toBe('SAFE_ROLLBACK')
+  })
+
+  it('labels improving TP probes truthfully until the internal target is contained', async () => {
+    let ordinal = 0
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67, safeRollbackReference,
+      probe: async (plan: { phase: string; phaseOrdinal: number;
+        sameArtifactReference?: Record<string, number | string> }) => {
+        ordinal += 1
+        const digest = ordinal.toString(16).padStart(64, '0')
+        if (plan.phase === 'FINAL_VERIFICATION') return plan.sameArtifactReference!
+        if (plan.phase === 'SAFE_ROLLBACK') return {
+          ...safeRollbackReference, candidateSha256: digest }
+        const isSeed = plan.phase === 'LRA_MAP' && plan.phaseOrdinal === 0
+        const truePeakDbtp = plan.phase === 'TRUE_PEAK_CONTAINMENT'
+          ? (plan.phaseOrdinal === 0 ? -1.02 : -1.06) : isSeed ? -0.8 : -1.1
+        return { integratedLufs: -14, integratedLufsExact: '-14.00',
+          truePeakDbtp, truePeakDbtpExact: truePeakDbtp.toFixed(2),
+          loudnessRangeLu: isSeed || plan.phase !== 'LRA_MAP' ? 4.5 : 3.5,
+          loudnessRangeLuExact: isSeed || plan.phase !== 'LRA_MAP' ? '4.50' : '3.50',
+          candidateSha256: digest, audioFrameMd5Sha256: digest }
+      } })
+    expect(result.outcome).toBe('PASS')
+    expect(result.candidateTrace.filter((candidate: { phase: string }) =>
+      candidate.phase === 'TRUE_PEAK_CONTAINMENT').map(
+        (candidate: { disposition: string }) => candidate.disposition,
+      )).toEqual(['TP_IMPROVING', 'TP_CONTAINED'])
+  })
+
+  it('fails closed instead of selecting a rollback artifact with reference drift', async () => {
+    let ordinal = 0
+    let caught: unknown
+    try {
+      await runStage12LraFeasibilityController({ thresholds,
+        anchorLimiterCeilingDbtp: -2.67, safeRollbackReference,
+        probe: async (plan: { phase: string }) => {
+          ordinal += 1
+          const digest = ordinal.toString(16).padStart(64, '0')
+          if (plan.phase === 'SAFE_ROLLBACK') return {
+            ...safeRollbackReference, candidateSha256: digest,
+            audioFrameMd5Sha256: 'c'.repeat(64) }
+          return { integratedLufs: -15.25, integratedLufsExact: '-15.25',
+            truePeakDbtp: -1.06, truePeakDbtpExact: '-1.06',
+            loudnessRangeLu: 3.5, loudnessRangeLuExact: '3.50',
+            candidateSha256: digest, audioFrameMd5Sha256: digest }
+        } })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toMatchObject({
+      code: 'STAGE12_LRA_FEASIBILITY_MEASUREMENT_SAFE_ROLLBACK_DRIFT',
+      feasibilityState: {
+        phaseBudgetUsed: expect.objectContaining({ SAFE_ROLLBACK: 1 }),
+        failedProbe: expect.objectContaining({ phase: 'SAFE_ROLLBACK', phaseOrdinal: 0 }),
+      },
+    })
+  })
+
+  it('rolls back after the final-ready artifact becomes unavailable', async () => {
+    let ordinal = 0
+    const result = await runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67, safeRollbackReference,
+      probe: async (plan: { phase: string; phaseOrdinal: number }) => {
+        ordinal += 1
+        const digest = ordinal.toString(16).padStart(64, '0')
+        if (plan.phase === 'FINAL_VERIFICATION') {
+          throw Object.assign(new Error('missing cached artifact'), {
+            code: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_UNAVAILABLE',
+          })
+        }
+        if (plan.phase === 'SAFE_ROLLBACK') return {
+          ...safeRollbackReference, candidateSha256: digest }
+        const feasible = plan.phase === 'LRA_MAP' && plan.phaseOrdinal === 0
+        return { integratedLufs: -14, integratedLufsExact: '-14.00',
+          truePeakDbtp: -1.1, truePeakDbtpExact: '-1.10',
+          loudnessRangeLu: feasible ? 4.5 : 3.5,
+          loudnessRangeLuExact: feasible ? '4.50' : '3.50',
+          candidateSha256: digest, audioFrameMd5Sha256: digest }
+      } })
+    expect(result).toMatchObject({ outcome: 'FAIL',
+      terminalReason: 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED',
+      failedProbe: { phase: 'FINAL_VERIFICATION',
+        failureCode: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_UNAVAILABLE' },
+      phaseBudgetUsed: { FINAL_VERIFICATION: 1, SAFE_ROLLBACK: 1 },
+    })
+  })
+
+  it('rejects a forged immutable pass-5 rollback reference before probing', async () => {
+    await expect(runStage12LraFeasibilityController({ thresholds,
+      anchorLimiterCeilingDbtp: -2.67,
+      safeRollbackReference: { ...safeRollbackReference, truePeakDbtp: -0.99,
+        truePeakDbtpExact: '-0.99' },
+      probe: async () => { throw new Error('must not probe') },
+    })).rejects.toMatchObject({ code: 'INVALID_STAGE12_LRA_FEASIBILITY_SAFE_ROLLBACK_REFERENCE' })
   })
 })

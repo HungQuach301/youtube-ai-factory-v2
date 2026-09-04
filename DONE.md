@@ -1672,3 +1672,42 @@ MODE: `EVOLVE`. Exact base `11cde9b22e63191133fe3f0791b3093e8d888e49` / tree
 
 Boundary: implementation, tests and PR only. No Production job/evidence, merge,
 deploy, replay, upload, provider, calibration, Finalize, activation, release or publish.
+
+---
+
+## REPAIR_PR188_STAGE12_FEASIBILITY_EXACTLY_ONCE_DURABILITY_AND_RECEIPT_INTEGRITY
+
+MODE: `EVOLVE`. Repair trên cùng PR #188 từ exact base
+`72a3c61b49fa962c51024d00803810b86a555e35` / tree
+`72650e72bbefedc6ab285d8d5ea6bdbeca6d0291`; pre-repair head
+`aeca21ec2f4707fc0e2ac3be322d9c0517385c86` / tree
+`dc5d9ce2c2cbeb0968a85fb842b550e327ef94c6`.
+
+| Acceptance | Evidence |
+|---|---|
+| Atomic durable claim/outbox makes every accepted intent recoverable | migration `0034` lifecycle tests plus crash-after-claim recovery on idempotent command replay/status reconciliation |
+| Lease/fencing serializes logical claims and stale workers cannot commit a terminal DB effect | process-local duplicate, lease-expiry, higher-fence and stale-callback behavioral vectors |
+| Accepted-response-lost and ambiguous dispatch converge without duplicate terminal effects | worker-status reconciliation and durable dispatch recovery integration |
+| A live worker generation freezes and retries one terminal callback byte-identically; restart recovery is fenced and revalidated | callback 503/redrive tests plus deterministic restart and one-terminal-effect reconciliation tests |
+| Partial probe failure persists truthful trace, used budget, runtime and lossless reference | partial-failure controller/runtime/receipt tests |
+| Semantic validator rejects forged or structurally impossible PASS receipts | lattice/order/control-lineage/exact-decimal mutation vectors |
+| Two deterministic seeds share one final-verification budget and end in one safe rollback | two-seed final-verification failure controller regression |
+| Terminal callbacks are idempotent; duplicates converge and conflicts fail closed | duplicate/conflicting callback and terminal-receipt hash tests |
+| Migration `0033` remains byte-identical; only reserved `0034` gains forward-only persistence | sealed SHA-256 regression for `0033` and append-only `0034` migration tests |
+| Root/Sites/worker mirrors remain exact and image health exposes feasibility readiness | mirror guardrail, Sites source lock and media-worker image health gate |
+| Acceptance thresholds remain exactly `-14±1 LUFS-I`, `≤-1 dBTP`, `4..8 LU` | root/Sites threshold mirror plus G11 sealed-base diff with zero changes |
+| No output, provider, attempt/ordinal 4 or downstream activation | static guardrails and real-FFmpeg zero-upload smoke |
+
+Boundary: implementation, tests and PR #188 only. No merge, deploy, Production
+migration, Production run/replay, job/evidence, provider/spend, artifact/output upload,
+ordinal/attempt 4, calibration, Finalize, activation, release or publish.
+
+Durability semantics are intentionally precise: migration `0034` guarantees one
+logical command/outbox and at most one validated terminal database effect. It does
+not claim physical compute exactly-once across a stateless Fly process restart;
+after an expired lease, deterministic re-execution may occur under a higher fence.
+Recovery is driven by an idempotent stable-command replay/status reconciliation,
+not by an autonomous Production scheduler in this work package.
+Because migration `0034` can only enforce new writes, its later deployment must
+fail closed unless the migration preflight confirms the `0033` feasibility
+job/evidence tables and all `0034` lifecycle tables are still empty.

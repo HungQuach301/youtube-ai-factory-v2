@@ -329,3 +329,26 @@ bước tối đa 0.25 LU; overshoot regression >0.25 dB bị reject và rollbac
 migration, guardrail, real FFmpeg zero-write smoke, root/Sites CI PASS. Threshold
 không đổi; không Production replay, ordinal/attempt 4, output, provider,
 calibration, Finalize, release, activation hoặc publish.
+
+### 🟢 WP-38 · EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+**Phạm vi.** Deterministic non-monotonic lattice map trong `10.9..14 dB`, tách
+LRA expansion, post-Opus true-peak containment, LUFS trim/final verify và exact
+safe rollback. Typed shadow result và migration 0033 append-only.
+
+**DoD.** Candidate luôn từ immutable ordinal 2; hai seed deterministic dùng chung
+một FINAL slot; truthful partial trace/budget/runtime/reference được giữ khi probe
+fail; forged PASS bị parser từ chối; threshold diff bằng 0; unit/migration/
+guardrail/real-FFmpeg zero-upload và root/Sites CI PASS. Không tự chạy Production.
+
+### 🟡 WP-39 · ENABLE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SHADOW_COMMAND
+
+**Phạm vi.** Stable MCP gateway, media-worker execution, durable outbox, renewable
+lease/fencing, idempotent terminal callback và migration 0034 forward-only.
+
+**DoD.** 0034 abort nếu 0033 đã có state; concurrent claims hội tụ; heartbeat
+append-only gia hạn trước deadline; expired/stale fence không thể ghi source hay
+terminal; callback 503/restart và accepted-response-lost phục hồi; duplicate/
+conflicting callback fail-closed; terminal four-row D1 batch atomic. Migration
+0033 byte-identical, root/Sites/worker mirrors exact, full CI và real-FFmpeg
+zero-upload PASS, threshold diff bằng 0. PR không merge/deploy/chạy Production.

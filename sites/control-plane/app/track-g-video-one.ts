@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getD1, getDb } from "../db";
 import {
   channelIdentityContracts,
@@ -28,7 +28,10 @@ import {
   stage12CodecSafeLraGuardShadowEvidence,
   stage12CodecSafeLraGuardShadowJobs,
   stage12CodecSafeLraFeasibilityEvidence,
+  stage12CodecSafeLraFeasibilityDispatchEvents,
+  stage12CodecSafeLraFeasibilityDispatchOutbox,
   stage12CodecSafeLraFeasibilityJobs,
+  stage12CodecSafeLraFeasibilityTerminalReceipts,
   stage12CodecSafeTruePeakShadowEvidence,
   stage12CodecSafeTruePeakShadowJobs,
   stage12CorrectedPreMasterJobs,
@@ -75,8 +78,18 @@ import {
   dispatchStage12MediaRecovery,
   dispatchStage12MediaStart,
   parseStage12MediaReceipt,
+  readStage12CodecSafeLraFeasibilityWorkerStatus,
   readStage12MediaWorkerHealth,
+  Stage12MediaDispatchError,
+  stage12LraFeasibilityRequestSha256,
+  type Stage12MediaCodecSafeLraFeasibilitySearchRequest,
 } from "./stage12-media";
+import {
+  planStage12LraFeasibilityRecovery,
+  stage12LraFeasibilityEffectiveLeaseExpiresAt,
+  type Stage12LraFeasibilityDispatchEvent,
+  type Stage12LraFeasibilityWorkerStatus,
+} from "./stage12-lra-feasibility-dispatch";
 import {
   parseStage12LraFeasibilityResult,
   stage12LraFeasibilityFingerprints,
@@ -85,6 +98,7 @@ import {
   STAGE12_LRA_FEASIBILITY_POLICY,
   terminalStage12LraFeasibilityFailure,
   type Stage12CodecSafeLraFeasibilityResult,
+  type Stage12CodecSafeLraFeasibilitySafeRollbackReference,
 } from "./stage12-lra-feasibility-contract";
 import {
   buildTrackGVideoOneStage12Request,
@@ -104,7 +118,7 @@ import {
   type Stage12EncodedLoudnessDiagnosticReplayResult,
   type Stage12MediaReceipt,
 } from "./stage12-pre-master";
-import { ASSURANCE, AUDIO, RETRY } from "../packages/contracts/src/thresholds";
+import { ASSURANCE, AUDIO, LEASE, RETRY } from "../packages/contracts/src/thresholds";
 
 const HEX64 = /^[0-9a-f]{64}$/u;
 const OWNER_APPROVAL_TEXT = "START VIDEO 1 QUALIFICATION";
@@ -7491,12 +7505,24 @@ type Stage12LraFeasibilityCommandPayload = {
   expectedWorkerImageDigest: string;
   algorithmFingerprint: string;
   thresholdSnapshotSha256: string;
-  safeRollbackCandidate: { candidatePass: 5; macroDepthDb: number;
-    integratedTargetLufs: number; limiterCeilingDbtp: number };
+  safeRollbackReference: Stage12CodecSafeLraFeasibilitySafeRollbackReference;
   parentLosslessReference: { sha256: string; byteLength: number;
     audioFrameMd5Sha256: string; codec: "pcm_f32le"; sampleRateHz: 48000 };
   parentRuntimeProvenance: Stage12CodecSafeLraFeasibilityResult["parentRuntimeProvenance"];
 };
+
+type Stage12LraFeasibilityOutboxRequest = Omit<
+  Stage12MediaCodecSafeLraFeasibilitySearchRequest,
+  "objectAccess" | "callback" | "durability"
+> & {
+  objectAccess: { url: string };
+  callback: { url: string };
+};
+
+type Stage12LraFeasibilityDispatchOutbox =
+  typeof stage12CodecSafeLraFeasibilityDispatchOutbox.$inferSelect;
+type Stage12LraFeasibilityDispatchEventRow =
+  typeof stage12CodecSafeLraFeasibilityDispatchEvents.$inferSelect;
 
 function stage12LraFeasibilityIdempotencyKey(input: {
   sourceSha256: string;
@@ -7517,12 +7543,30 @@ function stage12LraFeasibilityIdempotencyKey(input: {
   ].join("\0")).digest("hex");
 }
 
-function stage12LraFeasibilityCallbackToken(idempotencyKey: string) {
+function stage12LraFeasibilityBearerToken(input: {
+  purpose: "SOURCE" | "CALLBACK";
+  idempotencyKey: string;
+  requestSha256: string;
+  fencingToken: number;
+  leaseId: string;
+}) {
   const signingKey = getFactoryEnv().MEDIA_REQUEST_SIGNING_KEY;
   if (!signingKey) throw new Error("MEDIA_REQUEST_SIGNING_KEY_UNAVAILABLE");
   return createHash("sha256").update(
-    `STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_CALLBACK\0${idempotencyKey}\0${signingKey}`,
+    ["STAGE_12_CODEC_SAFE_LRA_FEASIBILITY", input.purpose,
+      input.idempotencyKey, input.requestSha256, String(input.fencingToken),
+      input.leaseId, signingKey].join("\0"),
   ).digest("hex");
+}
+
+function sanitizeStage12LraFeasibilityEndpoint(raw: string) {
+  const endpoint = new URL(raw);
+  if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password
+    || endpoint.hash || [...endpoint.searchParams.keys()].some((key) =>
+      /token|secret|signature|authorization|credential/iu.test(key))) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_ENDPOINT_INVALID");
+  }
+  return endpoint.toString();
 }
 
 async function latestStage12LraFeasibilityCommand() {
@@ -7542,6 +7586,346 @@ async function readStage12LraFeasibilityEvidence(jobId: string) {
   const [evidence] = await getDb().select().from(stage12CodecSafeLraFeasibilityEvidence)
     .where(eq(stage12CodecSafeLraFeasibilityEvidence.jobId, jobId)).limit(1);
   return evidence ?? null;
+}
+
+async function readStage12LraFeasibilityTerminalReceipt(idempotencyKey: string) {
+  const [receipt] = await getDb().select()
+    .from(stage12CodecSafeLraFeasibilityTerminalReceipts)
+    .where(eq(stage12CodecSafeLraFeasibilityTerminalReceipts.idempotencyKey,
+      idempotencyKey)).limit(1);
+  return receipt ?? null;
+}
+
+async function latestStage12LraFeasibilityOutbox() {
+  const [outbox] = await getDb().select()
+    .from(stage12CodecSafeLraFeasibilityDispatchOutbox)
+    .orderBy(desc(stage12CodecSafeLraFeasibilityDispatchOutbox.createdAt)).limit(1);
+  return outbox ?? null;
+}
+
+async function readStage12LraFeasibilityOutbox(idempotencyKey: string) {
+  const [outbox] = await getDb().select()
+    .from(stage12CodecSafeLraFeasibilityDispatchOutbox)
+    .where(eq(stage12CodecSafeLraFeasibilityDispatchOutbox.idempotencyKey,
+      idempotencyKey)).limit(1);
+  return outbox ?? null;
+}
+
+export type Stage12LraFeasibilityDispatchIntegrityRow = {
+  id: string;
+  idempotencyKey: string;
+  eventOrdinal: number;
+  eventType: string;
+  fencingToken: number;
+  leaseHolder: string;
+  leaseExpiresAt: string | null;
+  payloadJson: string;
+  payloadSha256: string;
+  createdAt: string;
+};
+
+export function stage12LraFeasibilityDispatchEventId(input: {
+  idempotencyKey: string;
+  eventOrdinal: number;
+  eventType: string;
+  fencingToken: number;
+  leaseId: string;
+  leaseExpiresAt: string | null;
+  createdAt: string;
+  payloadSha256: string;
+}) {
+  return canonicalHash({ idempotencyKey: input.idempotencyKey,
+    eventOrdinal: input.eventOrdinal, eventType: input.eventType,
+    fencingToken: input.fencingToken, leaseId: input.leaseId,
+    leaseExpiresAt: input.leaseExpiresAt, createdAt: input.createdAt,
+    payloadSha256: input.payloadSha256 });
+}
+
+function canonicalIsoTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+}
+
+export function assertStage12LraFeasibilityDispatchEventIntegrity(
+  idempotencyKey: string,
+  events: readonly Stage12LraFeasibilityDispatchIntegrityRow[],
+) {
+  let previousCreatedAt: string | null = null;
+  const claimByFence = new Map<number, Stage12LraFeasibilityDispatchIntegrityRow>();
+  const leaseExpiryByFence = new Map<number, string>();
+  const heartbeatSequenceByFence = new Map<number, number>();
+  for (const [index, event] of events.entries()) {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(event.payloadJson);
+    } catch {
+      throw new Error("STAGE12_LRA_FEASIBILITY_DISPATCH_EVENT_INTEGRITY_FAILED");
+    }
+    const expectedId = stage12LraFeasibilityDispatchEventId({ idempotencyKey,
+      eventOrdinal: index + 1, eventType: event.eventType,
+      fencingToken: event.fencingToken, leaseId: event.leaseHolder,
+      leaseExpiresAt: event.leaseExpiresAt, createdAt: event.createdAt,
+      payloadSha256: event.payloadSha256 });
+    const leaseShapeValid = ["CLAIMED", "LEASE_RENEWED"].includes(event.eventType)
+      ? event.leaseExpiresAt !== null && canonicalIsoTimestamp(event.leaseExpiresAt)
+        && Date.parse(event.leaseExpiresAt) - Date.parse(event.createdAt)
+          === LEASE.TTL_SEC * 1000
+      : event.leaseExpiresAt === null;
+    const record = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown> : null;
+    const claim = claimByFence.get(event.fencingToken);
+    const previousLeaseExpiry = leaseExpiryByFence.get(event.fencingToken);
+    const previousHeartbeatSequence = heartbeatSequenceByFence.get(event.fencingToken) ?? 0;
+    const renewalValid = event.eventType !== "LEASE_RENEWED" || Boolean(record
+      && claim && claim.leaseHolder === event.leaseHolder
+      && Object.keys(record).sort().join(",")
+        === ["heartbeatId", "heartbeatSequence", "requestSha256"].join(",")
+      && Number.isSafeInteger(record.heartbeatSequence)
+      && record.heartbeatSequence === previousHeartbeatSequence + 1
+      && typeof record.requestSha256 === "string" && HEX64.test(record.requestSha256)
+      && record.heartbeatId === canonicalHash({
+        idempotencyKey, requestSha256: record.requestSha256,
+        fencingToken: event.fencingToken, leaseId: event.leaseHolder,
+        heartbeatSequence: record.heartbeatSequence,
+      })
+      && previousLeaseExpiry && event.createdAt < previousLeaseExpiry
+      && event.leaseExpiresAt && event.leaseExpiresAt > previousLeaseExpiry);
+    if (!record
+      || event.idempotencyKey !== idempotencyKey
+      || event.eventOrdinal !== index + 1
+      || !canonicalIsoTimestamp(event.createdAt)
+      || !leaseShapeValid
+      || (previousCreatedAt !== null && event.createdAt < previousCreatedAt)
+      || canonicalize(payload) !== event.payloadJson
+      || canonicalHash(payload) !== event.payloadSha256
+      || event.id !== expectedId || !renewalValid) {
+      throw new Error("STAGE12_LRA_FEASIBILITY_DISPATCH_EVENT_INTEGRITY_FAILED");
+    }
+    if (event.eventType === "CLAIMED") {
+      claimByFence.set(event.fencingToken, event);
+      leaseExpiryByFence.set(event.fencingToken, event.leaseExpiresAt!);
+    } else if (event.eventType === "LEASE_RENEWED") {
+      heartbeatSequenceByFence.set(event.fencingToken,
+        record.heartbeatSequence as number);
+      leaseExpiryByFence.set(event.fencingToken, event.leaseExpiresAt!);
+    }
+    previousCreatedAt = event.createdAt;
+  }
+}
+
+export function stage12LraFeasibilityHeartbeatId(input: {
+  idempotencyKey: string;
+  requestSha256: string;
+  fencingToken: number;
+  leaseId: string;
+  heartbeatSequence: number;
+}) {
+  return canonicalHash(input);
+}
+
+export function assertStage12LraFeasibilityCallbackFenceOpen(
+  events: readonly Pick<Stage12LraFeasibilityDispatchIntegrityRow,
+    "eventType" | "fencingToken" | "leaseExpiresAt">[],
+  fencingToken: number,
+  now: string,
+) {
+  if (events.some((event) => event.fencingToken === fencingToken
+    && ["RECONCILED_EXPIRED", "DISPATCH_REJECTED"].includes(event.eventType))) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_STALE_FENCE");
+  }
+  const leaseExpiresAt = stage12LraFeasibilityEffectiveLeaseExpiresAt(
+    events, fencingToken,
+  );
+  if (!canonicalIsoTimestamp(now) || !leaseExpiresAt || now >= leaseExpiresAt) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_LEASE_EXPIRED");
+  }
+}
+
+async function readStage12LraFeasibilityDispatchEvents(idempotencyKey: string) {
+  const events = await getDb().select().from(stage12CodecSafeLraFeasibilityDispatchEvents)
+    .where(eq(stage12CodecSafeLraFeasibilityDispatchEvents.idempotencyKey,
+      idempotencyKey))
+    .orderBy(asc(stage12CodecSafeLraFeasibilityDispatchEvents.eventOrdinal));
+  assertStage12LraFeasibilityDispatchEventIntegrity(idempotencyKey, events);
+  return events;
+}
+
+function parseStage12LraFeasibilityOutboxRequest(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+) {
+  const request = JSON.parse(outbox.requestPayloadJson) as
+    Stage12LraFeasibilityOutboxRequest;
+  const safeRollbackReference = request?.codecSafeLraFeasibilitySearch
+    ?.safeRollbackReference;
+  if (!request || typeof request !== "object"
+    || canonicalize(request) !== outbox.requestPayloadJson
+    || request.idempotencyKey !== outbox.idempotencyKey
+    || typeof request.objectAccess?.url !== "string"
+    || typeof request.callback?.url !== "string"
+    || Object.keys(request.objectAccess).length !== 1
+    || Object.keys(request.callback).length !== 1
+    || "durability" in request
+    || !request.codecSafeLraFeasibilitySearch
+    || typeof request.codecSafeLraFeasibilitySearch !== "object"
+    || sanitizeStage12LraFeasibilityEndpoint(request.objectAccess.url)
+      !== request.objectAccess.url
+    || sanitizeStage12LraFeasibilityEndpoint(request.callback.url)
+      !== request.callback.url
+    || stage12LraFeasibilityRequestSha256(request) !== outbox.requestSha256
+    || outbox.sourceAttemptOrdinal !== 3 || outbox.sourceCorrectionOrdinal !== 2
+    || outbox.sourceSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+    || outbox.parentEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+    || outbox.lraGuardEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId
+    || request.codecSafeLraFeasibilitySearch.sourceSha256 !== outbox.sourceSha256
+    || request.codecSafeLraFeasibilitySearch.expectedWorkerImageDigest
+      !== outbox.expectedWorkerImageDigest
+    || request.codecSafeLraFeasibilitySearch.algorithmFingerprint
+      !== outbox.algorithmFingerprint
+    || request.codecSafeLraFeasibilitySearch.thresholdSnapshotSha256
+      !== outbox.thresholdSnapshotSha256
+    || request.codecSafeLraFeasibilitySearch.sourceAttemptOrdinal !== 3
+    || request.codecSafeLraFeasibilitySearch.sourceCorrectionOrdinal !== 2
+    || request.codecSafeLraFeasibilitySearch.historicalFailureCorrectionOrdinal !== 3
+    || request.codecSafeLraFeasibilitySearch.parentEvidenceId
+      !== outbox.parentEvidenceId
+    || request.codecSafeLraFeasibilitySearch.lraGuardEvidenceId
+      !== outbox.lraGuardEvidenceId
+    || canonicalize(request.codecSafeLraFeasibilitySearch.policy)
+      !== canonicalize(STAGE12_LRA_FEASIBILITY_POLICY)
+    || safeRollbackReference?.candidatePass !== 5
+    || Object.keys(safeRollbackReference).sort().join(",")
+      !== ["audioFrameMd5Sha256", "candidatePass", "integratedLufs",
+        "integratedLufsExact", "integratedTargetLufs", "limiterCeilingDbtp",
+        "losslessReferenceSha256", "loudnessRangeLu", "loudnessRangeLuExact",
+        "macroDepthDb", "truePeakDbtp", "truePeakDbtpExact"].join(",")
+    || safeRollbackReference.macroDepthDb !== 10.70625
+    || safeRollbackReference.integratedTargetLufs !== -14
+    || safeRollbackReference.limiterCeilingDbtp !== -2.67
+    || safeRollbackReference.integratedLufs !== -15.25
+    || safeRollbackReference.integratedLufsExact !== "-15.25"
+    || safeRollbackReference.truePeakDbtp !== -1.06
+    || safeRollbackReference.truePeakDbtpExact !== "-1.06"
+    || safeRollbackReference.loudnessRangeLu !== 3.2
+    || safeRollbackReference.loudnessRangeLuExact !== "3.20"
+    || safeRollbackReference.losslessReferenceSha256
+      !== request.codecSafeLraFeasibilitySearch.parentLosslessReference?.sha256
+    || !HEX64.test(safeRollbackReference.audioFrameMd5Sha256)
+    || request.codecSafeLraFeasibilitySearch.shadowOnly !== true
+    || request.codecSafeLraFeasibilitySearch.uploadCorrectedOutput !== false
+    || request.codecSafeLraFeasibilitySearch.providerDispatch !== "OFF"
+    || request.codecSafeLraFeasibilitySearch.providerCallCount !== 0
+    || request.codecSafeLraFeasibilitySearch.calibration !== false
+    || request.codecSafeLraFeasibilitySearch.finalize !== false
+    || request.codecSafeLraFeasibilitySearch.release !== false
+    || request.codecSafeLraFeasibilitySearch.productionActivation !== false
+    || request.codecSafeLraFeasibilitySearch.autoPublish !== "OFF") {
+    throw new Error("STAGE12_LRA_FEASIBILITY_OUTBOX_INTEGRITY_FAILED");
+  }
+  return request;
+}
+
+function stage12LraFeasibilityCurrentClaim(
+  events: readonly Stage12LraFeasibilityDispatchEventRow[],
+) {
+  return events.filter((event) => event.eventType === "CLAIMED")
+    .sort((left, right) => left.fencingToken - right.fencingToken).at(-1) ?? null;
+}
+
+function stage12LraFeasibilityEventProjection(
+  events: readonly Stage12LraFeasibilityDispatchEventRow[],
+): Stage12LraFeasibilityDispatchEvent[] {
+  return events.map((event) => ({ eventType: event.eventType,
+    fencingToken: event.fencingToken, leaseId: event.leaseHolder,
+    leaseExpiresAt: event.leaseExpiresAt }));
+}
+
+async function appendStage12LraFeasibilityDispatchEvent(input: {
+  outbox: Stage12LraFeasibilityDispatchOutbox;
+  eventType: Stage12LraFeasibilityDispatchEventRow["eventType"];
+  fencingToken: number;
+  leaseId: string;
+  leaseExpiresAt?: string | null;
+  payload: Record<string, unknown>;
+  createdAt?: string;
+}) {
+  const events = await readStage12LraFeasibilityDispatchEvents(
+    input.outbox.idempotencyKey,
+  );
+  const same = input.eventType === "LEASE_RENEWED" ? undefined
+    : events.find((event) => event.eventType === input.eventType
+      && event.fencingToken === input.fencingToken);
+  const payloadJson = canonicalize(input.payload);
+  const payloadSha256 = canonicalHash(input.payload);
+  if (same) {
+    if (same.leaseHolder !== input.leaseId || same.payloadSha256 !== payloadSha256
+      || same.payloadJson !== payloadJson
+      || same.leaseExpiresAt !== (input.leaseExpiresAt ?? null)) {
+      throw new Error("STAGE12_LRA_FEASIBILITY_DISPATCH_EVENT_CONFLICT");
+    }
+    return same;
+  }
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  const eventOrdinal = events.length + 1;
+  const eventId = stage12LraFeasibilityDispatchEventId({
+    idempotencyKey: input.outbox.idempotencyKey, eventOrdinal,
+    eventType: input.eventType, fencingToken: input.fencingToken,
+    leaseId: input.leaseId, leaseExpiresAt: input.leaseExpiresAt ?? null,
+    createdAt, payloadSha256,
+  });
+  try {
+    await getD1().prepare(`INSERT INTO
+      stage12_codec_safe_lra_feasibility_dispatch_event
+      (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+       lease_expires_at,payload_json,payload_sha256,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(eventId, input.outbox.idempotencyKey,
+      eventOrdinal, input.eventType, input.fencingToken, input.leaseId,
+      input.leaseExpiresAt ?? null, payloadJson, payloadSha256, createdAt).run();
+  } catch (error) {
+    const converged = (await readStage12LraFeasibilityDispatchEvents(
+      input.outbox.idempotencyKey,
+    )).find((event) => input.eventType === "LEASE_RENEWED"
+      ? event.id === eventId
+      : event.eventType === input.eventType
+        && event.fencingToken === input.fencingToken);
+    if (!converged || converged.leaseHolder !== input.leaseId
+      || converged.payloadSha256 !== payloadSha256
+      || converged.payloadJson !== payloadJson
+      || converged.leaseExpiresAt !== (input.leaseExpiresAt ?? null)
+      || converged.id !== stage12LraFeasibilityDispatchEventId({
+        idempotencyKey: converged.idempotencyKey,
+        eventOrdinal: converged.eventOrdinal, eventType: converged.eventType,
+        fencingToken: converged.fencingToken, leaseId: converged.leaseHolder,
+        leaseExpiresAt: converged.leaseExpiresAt, createdAt: converged.createdAt,
+        payloadSha256: converged.payloadSha256,
+      })) throw error;
+    return converged;
+  }
+  return (await readStage12LraFeasibilityDispatchEvents(
+    input.outbox.idempotencyKey,
+  )).find((event) => event.id === eventId)!;
+}
+
+async function claimStage12LraFeasibilityDispatch(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+  fencingToken: number,
+) {
+  const createdAt = new Date().toISOString();
+  const leaseId = crypto.randomUUID();
+  const leaseExpiresAt = new Date(Date.parse(createdAt) + LEASE.TTL_SEC * 1000)
+    .toISOString();
+  try {
+    const claim = await appendStage12LraFeasibilityDispatchEvent({ outbox,
+      eventType: "CLAIMED", fencingToken, leaseId, leaseExpiresAt, createdAt,
+      payload: { requestSha256: outbox.requestSha256,
+        expectedWorkerImageDigest: outbox.expectedWorkerImageDigest } });
+    return { claim, owned: claim.leaseHolder === leaseId };
+  } catch (error) {
+    const current = stage12LraFeasibilityCurrentClaim(
+      await readStage12LraFeasibilityDispatchEvents(outbox.idempotencyKey),
+    );
+    if (!current || current.fencingToken !== fencingToken) throw error;
+    return { claim: current, owned: false };
+  }
 }
 
 async function stage12LraFeasibilitySource() {
@@ -7571,6 +7955,19 @@ async function stage12LraFeasibilitySource() {
     && lraGuardResult.shadowOutcome === "FAIL"
     && lraGuardResult.terminalReason === "BUDGET_EXHAUSTED"
     && lraGuardResult.selectedCandidatePass === 5
+    && safeRollbackCandidate.candidatePass === 5
+    && safeRollbackCandidate.macroDepthDb === 10.70625
+    && safeRollbackCandidate.integratedTargetLufs === -14
+    && safeRollbackCandidate.limiterCeilingDbtp === -2.67
+    && safeRollbackCandidate.integratedLufs === -15.25
+    && safeRollbackCandidate.integratedLufsExact === "-15.25"
+    && safeRollbackCandidate.truePeakDbtp === -1.06
+    && safeRollbackCandidate.truePeakDbtpExact === "-1.06"
+    && safeRollbackCandidate.loudnessRangeLu === 3.2
+    && safeRollbackCandidate.loudnessRangeLuExact === "3.20"
+    && safeRollbackCandidate.losslessReferenceSha256
+      === lraGuardResult.losslessReference.sha256
+    && HEX64.test(safeRollbackCandidate.audioFrameMd5Sha256)
     && lraGuardResult.source.sha256 === STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
     && lraGuardResult.source.correctionOrdinal === 2
     && lraGuardResult.historicalFailure.correctionOrdinal === 3
@@ -7605,14 +8002,24 @@ Stage12LraFeasibilityCommandPayload {
     || !/^sha256:[a-f0-9]{64}$/u.test(String(parsed.expectedWorkerImageDigest ?? ""))
     || !HEX64.test(String(parsed.algorithmFingerprint ?? ""))
     || !HEX64.test(String(parsed.thresholdSnapshotSha256 ?? ""))
-    || parsed.safeRollbackCandidate?.candidatePass !== 5
-    || !["macroDepthDb", "integratedTargetLufs", "limiterCeilingDbtp"].every(
-      (key) => Number.isFinite((parsed.safeRollbackCandidate as Record<string, unknown>)[key]),
-    )
+    || parsed.safeRollbackReference?.candidatePass !== 5
+    || parsed.safeRollbackReference.macroDepthDb !== 10.70625
+    || parsed.safeRollbackReference.integratedTargetLufs !== -14
+    || parsed.safeRollbackReference.limiterCeilingDbtp !== -2.67
+    || parsed.safeRollbackReference.integratedLufs !== -15.25
+    || parsed.safeRollbackReference.integratedLufsExact !== "-15.25"
+    || parsed.safeRollbackReference.truePeakDbtp !== -1.06
+    || parsed.safeRollbackReference.truePeakDbtpExact !== "-1.06"
+    || parsed.safeRollbackReference.loudnessRangeLu !== 3.2
+    || parsed.safeRollbackReference.loudnessRangeLuExact !== "3.20"
+    || !HEX64.test(String(parsed.safeRollbackReference.losslessReferenceSha256 ?? ""))
+    || !HEX64.test(String(parsed.safeRollbackReference.audioFrameMd5Sha256 ?? ""))
     || parsed.parentLosslessReference?.codec !== "pcm_f32le"
     || parsed.parentLosslessReference?.sampleRateHz !== 48000
     || !HEX64.test(String(parsed.parentLosslessReference?.sha256 ?? ""))
     || !HEX64.test(String(parsed.parentLosslessReference?.audioFrameMd5Sha256 ?? ""))
+    || parsed.safeRollbackReference.losslessReferenceSha256
+      !== parsed.parentLosslessReference.sha256
     || typeof parsed.parentRuntimeProvenance?.ffmpegVersion !== "string"
     || !HEX64.test(String(parsed.parentRuntimeProvenance?.ffmpegBuildFingerprint ?? ""))
     || !HEX64.test(String(parsed.parentRuntimeProvenance?.libopusEncoderFingerprint ?? ""))) {
@@ -7621,16 +8028,29 @@ Stage12LraFeasibilityCommandPayload {
   return parsed as Stage12LraFeasibilityCommandPayload;
 }
 
-async function requireStage12LraFeasibilityCommandToken(
-  idempotencyKey: string,
-  token: string,
-) {
+async function requireStage12LraFeasibilityCommandToken(input: {
+  idempotencyKey: string;
+  token: string;
+  fencingToken: number;
+  purpose: "SOURCE" | "CALLBACK";
+  allowHistoricalFence?: boolean;
+}) {
   const [command] = await getDb().select().from(commandLog).where(and(
     eq(commandLog.commandType, STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE),
-    eq(commandLog.idempotencyKey, idempotencyKey),
+    eq(commandLog.idempotencyKey, input.idempotencyKey),
   )).limit(1);
-  if (!command || !HEX64.test(token)
-    || token !== stage12LraFeasibilityCallbackToken(idempotencyKey)) {
+  const outbox = await readStage12LraFeasibilityOutbox(input.idempotencyKey);
+  const events = outbox
+    ? await readStage12LraFeasibilityDispatchEvents(input.idempotencyKey) : [];
+  const currentClaim = stage12LraFeasibilityCurrentClaim(events);
+  const claim = input.allowHistoricalFence
+    ? events.find((event) => event.eventType === "CLAIMED"
+      && event.fencingToken === input.fencingToken) ?? null
+    : currentClaim?.fencingToken === input.fencingToken ? currentClaim : null;
+  if (!command || !outbox || !claim || !HEX64.test(input.token)
+    || input.token !== stage12LraFeasibilityBearerToken({ purpose: input.purpose,
+      idempotencyKey: input.idempotencyKey, requestSha256: outbox.requestSha256,
+      fencingToken: claim.fencingToken, leaseId: claim.leaseHolder })) {
     throw new Error("STAGE_12_LRA_FEASIBILITY_UNAUTHORIZED");
   }
   const payload = parseStage12LraFeasibilityCommandPayload(command.payloadJson);
@@ -7642,10 +8062,17 @@ async function requireStage12LraFeasibilityCommandToken(
     expectedWorkerImageDigest: payload.expectedWorkerImageDigest,
     algorithmFingerprint: payload.algorithmFingerprint,
   });
-  if (expectedKey !== idempotencyKey) {
+  const request = parseStage12LraFeasibilityOutboxRequest(outbox);
+  if (expectedKey !== input.idempotencyKey || outbox.commandId !== command.id
+    || canonicalize(request.codecSafeLraFeasibilitySearch.safeRollbackReference)
+      !== canonicalize(payload.safeRollbackReference)
+    || canonicalize(request.codecSafeLraFeasibilitySearch.parentLosslessReference)
+      !== canonicalize(payload.parentLosslessReference)
+    || canonicalize(request.codecSafeLraFeasibilitySearch.parentRuntimeProvenance)
+      !== canonicalize(payload.parentRuntimeProvenance)) {
     throw new Error("STAGE_12_LRA_FEASIBILITY_UNAUTHORIZED");
   }
-  return { command, payload };
+  return { command, payload, outbox, events, claim, currentClaim };
 }
 
 function stage12LraFeasibilityEvidenceResult(
@@ -7653,7 +8080,7 @@ function stage12LraFeasibilityEvidenceResult(
   evidence: NonNullable<Awaited<ReturnType<typeof readStage12LraFeasibilityEvidence>>>,
 ) {
   const stored = JSON.parse(evidence.candidateTraceJson) as Record<string, unknown>;
-  return parseStage12LraFeasibilityResult({
+  const result = parseStage12LraFeasibilityResult({
     accepted: true, schemaVersion: 1,
     evidenceSemantics: evidence.evidenceSemantics,
     boundary: "POST_OPUS_CODEC_SAFE_LRA_FEASIBILITY",
@@ -7664,10 +8091,13 @@ function stage12LraFeasibilityEvidenceResult(
     phaseBudget: JSON.parse(evidence.phaseBudgetJson) as unknown,
     phaseBudgetUsed: stored.phaseBudgetUsed,
     candidateTrace: stored.candidateTrace,
+    failedProbes: stored.failedProbes,
+    failedProbe: stored.failedProbe,
     outcome: stored.outcome,
     terminalReason: evidence.terminalReason,
     errorCode: stored.errorCode,
     selectedCandidateSha256: evidence.selectedCandidateSha256,
+    safeRollbackReference: stored.safeRollbackReference,
     losslessReference: stored.losslessReference,
     parentRuntimeProvenance: stored.parentRuntimeProvenance,
     runtimeProvenance: stored.runtimeProvenance,
@@ -7679,17 +8109,66 @@ function stage12LraFeasibilityEvidenceResult(
     providerDispatch: "OFF", providerCallCount: 0, calibration: false, finalize: false,
     productionActivation: false, releaseEligible: false, autoPublish: "OFF",
   });
+  if (!HEX64.test(String(stored.terminalReceiptSha256 ?? ""))
+    || stored.resultSha256 !== canonicalHash(result)
+    || stored.parentRuntimeProvenanceSha256
+      !== canonicalHash(result.parentRuntimeProvenance)
+    || stored.runtimeProvenanceSha256 !== canonicalHash(result.runtimeProvenance)) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_EVIDENCE_INTEGRITY_FAILED");
+  }
+  return result;
 }
 
 export async function diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility() {
   const source = await stage12LraFeasibilitySource();
   const command = await latestStage12LraFeasibilityCommand();
+  const outbox = await latestStage12LraFeasibilityOutbox();
+  if ((command === null) !== (outbox === null)
+    || (command && outbox && (command.id !== outbox.commandId
+      || command.idempotencyKey !== outbox.idempotencyKey))) {
+    throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_OUTBOX_READ_BACK_FAILED");
+  }
+  if (outbox && command) {
+    const request = parseStage12LraFeasibilityOutboxRequest(outbox);
+    const payload = parseStage12LraFeasibilityCommandPayload(command.payloadJson);
+    if (canonicalize(request.codecSafeLraFeasibilitySearch.safeRollbackReference)
+        !== canonicalize(payload.safeRollbackReference)
+      || canonicalize(request.codecSafeLraFeasibilitySearch.parentLosslessReference)
+        !== canonicalize(payload.parentLosslessReference)
+      || canonicalize(request.codecSafeLraFeasibilitySearch.parentRuntimeProvenance)
+        !== canonicalize(payload.parentRuntimeProvenance)) {
+      throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_OUTBOX_READ_BACK_FAILED");
+    }
+  }
+  const dispatchEvents = outbox
+    ? await readStage12LraFeasibilityDispatchEvents(outbox.idempotencyKey) : [];
+  const currentClaim = stage12LraFeasibilityCurrentClaim(dispatchEvents);
+  const effectiveLeaseExpiresAt = currentClaim
+    ? stage12LraFeasibilityEffectiveLeaseExpiresAt(
+      stage12LraFeasibilityEventProjection(dispatchEvents), currentClaim.fencingToken,
+    ) : null;
+  const lastDispatchEvent = dispatchEvents.at(-1) ?? null;
   const job = await latestStage12LraFeasibilityJob();
   const evidence = job ? await readStage12LraFeasibilityEvidence(job.id) : null;
-  if ((job === null) !== (evidence === null)) {
+  const terminalBinding = outbox
+    ? await readStage12LraFeasibilityTerminalReceipt(outbox.idempotencyKey) : null;
+  if ((job === null) !== (evidence === null)
+    || (job === null) !== (terminalBinding === null)) {
     throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_TERMINAL_READ_BACK_FAILED");
   }
   const result = job && evidence ? stage12LraFeasibilityEvidenceResult(job, evidence) : null;
+  const terminalEvent = dispatchEvents.find((event) =>
+    ["CALLBACK_TERMINAL", "DISPATCH_REJECTED"].includes(event.eventType)) ?? null;
+  const storedTrace = evidence
+    ? JSON.parse(evidence.candidateTraceJson) as Record<string, unknown> : null;
+  const terminalPayload = terminalEvent
+    ? JSON.parse(terminalEvent.payloadJson) as Record<string, unknown> : null;
+  const terminalReceiptHashValid = result && terminalBinding
+    ? terminalBinding.terminalReceiptSha256 === canonicalHash(result)
+      || (result.errorCode !== null
+        && terminalBinding.terminalReceiptSha256
+          === canonicalHash({ errorCode: result.errorCode }))
+    : false;
   if (job && (job.sourceCorrectionOrdinal !== 2
     || job.historicalFailureCorrectionOrdinal !== 3
     || job.sourceSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
@@ -7698,8 +8177,47 @@ export async function diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility() {
     || job.shadowOnly !== 1 || job.uploadCorrectedOutput !== 0
     || job.providerCallCount !== 0 || job.calibration !== 0 || job.finalize !== 0
     || job.productionActivation !== 0 || job.release !== 0 || job.autoPublish !== 0
+    || !outbox || !terminalBinding || terminalBinding.jobId !== job.id
+    || terminalBinding.evidenceId !== evidence?.id
+    || terminalBinding.requestSha256 !== outbox.requestSha256
+    || terminalBinding.jobStatus !== job.status
     || !result || (job.status === "READY") !== (["PASS",
-      "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED"].includes(result.terminalReason)))) {
+      "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED"].includes(result.terminalReason))
+    || terminalBinding.resultSha256 !== canonicalHash(result)
+    || terminalBinding.terminalReason !== result.terminalReason
+    || terminalBinding.outcome !== result.outcome
+    || terminalBinding.selectedCandidateSha256 !== result.selectedCandidateSha256
+    || terminalBinding.algorithmFingerprint !== result.algorithmFingerprint
+    || terminalBinding.thresholdSnapshotSha256 !== result.thresholdSnapshotSha256
+    || terminalBinding.workerImageDigest !== result.workerImageDigest
+    || terminalBinding.parentRuntimeProvenanceSha256
+      !== canonicalHash(result.parentRuntimeProvenance)
+    || terminalBinding.runtimeProvenanceSha256
+      !== canonicalHash(result.runtimeProvenance)
+    || storedTrace?.terminalReceiptSha256 !== terminalBinding.terminalReceiptSha256
+    || storedTrace?.resultSha256 !== terminalBinding.resultSha256
+    || !terminalReceiptHashValid
+    || !currentClaim || terminalBinding.fencingToken !== currentClaim.fencingToken
+    || terminalBinding.leaseHolder !== currentClaim.leaseHolder
+    || !terminalPayload
+    || terminalPayload.requestSha256 !== terminalBinding.requestSha256
+    || terminalPayload.terminalReceiptSha256 !== terminalBinding.terminalReceiptSha256
+    || terminalPayload.resultSha256 !== terminalBinding.resultSha256
+    || terminalPayload.jobId !== terminalBinding.jobId
+    || terminalPayload.evidenceId !== terminalBinding.evidenceId
+    || terminalPayload.jobStatus !== terminalBinding.jobStatus
+    || terminalPayload.outcome !== terminalBinding.outcome
+    || terminalPayload.terminalReason !== terminalBinding.terminalReason
+    || terminalPayload.selectedCandidateSha256
+      !== terminalBinding.selectedCandidateSha256
+    || terminalPayload.algorithmFingerprint !== terminalBinding.algorithmFingerprint
+    || terminalPayload.thresholdSnapshotSha256
+      !== terminalBinding.thresholdSnapshotSha256
+    || terminalPayload.workerImageDigest !== terminalBinding.workerImageDigest
+    || terminalPayload.parentRuntimeProvenanceSha256
+      !== terminalBinding.parentRuntimeProvenanceSha256
+    || terminalPayload.runtimeProvenanceSha256
+      !== terminalBinding.runtimeProvenanceSha256)) {
     throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_TERMINAL_READ_BACK_FAILED");
   }
   const feasibilityState = job?.status ?? (command ? "PENDING"
@@ -7713,7 +8231,15 @@ export async function diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility() {
     sourceCorrectionJobId: source.source?.id ?? null,
     lraGuardJobId: source.lraGuardJob?.id ?? null,
     commandAccepted: command !== null,
+    durableOutboxPresent: outbox !== null,
+    requestSha256: outbox?.requestSha256 ?? null,
+    dispatchState: lastDispatchEvent?.eventType ?? (outbox ? "OUTBOX_PENDING" : null),
+    fencingToken: currentClaim?.fencingToken ?? null,
+    leaseId: currentClaim?.leaseHolder ?? null,
+    leaseExpiresAt: effectiveLeaseExpiresAt,
+    dispatchEventCount: dispatchEvents.length,
     terminalReceipt: result,
+    terminalReceiptSha256: terminalBinding?.terminalReceiptSha256 ?? null,
     outcome: result?.outcome ?? null,
     terminalReason: result?.terminalReason ?? null,
     selectedCandidateSha256: result?.selectedCandidateSha256 ?? null,
@@ -7735,8 +8261,14 @@ export async function readTrackGVideoOneStage12CodecSafeLraFeasibilitySource(
   idempotencyKey: string,
   token: string,
   expectedSha256: string,
+  fencingToken: number,
 ) {
-  const { payload } = await requireStage12LraFeasibilityCommandToken(idempotencyKey, token);
+  const { payload, events } = await requireStage12LraFeasibilityCommandToken({
+    idempotencyKey, token, fencingToken, purpose: "SOURCE",
+  });
+  assertStage12LraFeasibilityCallbackFenceOpen(
+    events, fencingToken, new Date().toISOString(),
+  );
   if (await latestStage12LraFeasibilityJob()
     || expectedSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
     || expectedSha256 !== payload.sourcePreMasterSha256) {
@@ -7753,40 +8285,248 @@ export async function readTrackGVideoOneStage12CodecSafeLraFeasibilitySource(
     payload.sourcePreMasterSha256);
 }
 
+type Stage12LraFeasibilityLeaseRenewalInput = {
+  idempotencyKey: string;
+  token: string;
+  requestSha256: string;
+  fencingToken: number;
+  leaseId: string;
+  heartbeatId: string;
+  heartbeatSequence: number;
+};
+
+export async function renewTrackGVideoOneStage12CodecSafeLraFeasibilityLease(
+  input: Stage12LraFeasibilityLeaseRenewalInput,
+) {
+  return renewTrackGVideoOneStage12CodecSafeLraFeasibilityLeaseAttempt(input, 0);
+}
+
+async function renewTrackGVideoOneStage12CodecSafeLraFeasibilityLeaseAttempt(
+  input: Stage12LraFeasibilityLeaseRenewalInput,
+  ordinalCasAttempt: number,
+) {
+  const authenticated = await requireStage12LraFeasibilityCommandToken({
+    idempotencyKey: input.idempotencyKey, token: input.token,
+    fencingToken: input.fencingToken, purpose: "CALLBACK",
+  });
+  const { outbox, events, claim, currentClaim } = authenticated;
+  if (outbox.requestSha256 !== input.requestSha256
+    || claim.leaseHolder !== input.leaseId || currentClaim?.id !== claim.id
+    || !HEX64.test(input.heartbeatId)
+    || !Number.isSafeInteger(input.heartbeatSequence)
+    || input.heartbeatSequence < 1
+    || input.heartbeatId !== stage12LraFeasibilityHeartbeatId({
+      idempotencyKey: input.idempotencyKey, requestSha256: input.requestSha256,
+      fencingToken: input.fencingToken, leaseId: input.leaseId,
+      heartbeatSequence: input.heartbeatSequence,
+    })) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_HEARTBEAT_CONFLICT");
+  }
+  const createdAt = new Date().toISOString();
+  const existingRenewal = events.find((event) => {
+    if (event.eventType !== "LEASE_RENEWED"
+      || event.fencingToken !== input.fencingToken) return false;
+    const payload = JSON.parse(event.payloadJson) as Record<string, unknown>;
+    return payload.heartbeatId === input.heartbeatId;
+  });
+  if (existingRenewal) {
+    return { accepted: true, replayed: true,
+      idempotencyKey: input.idempotencyKey, requestSha256: input.requestSha256,
+      fencingToken: input.fencingToken, leaseId: input.leaseId,
+      heartbeatId: input.heartbeatId, heartbeatSequence: input.heartbeatSequence,
+      leaseExpiresAt: existingRenewal.leaseExpiresAt! };
+  }
+  assertStage12LraFeasibilityCallbackFenceOpen(
+    events, input.fencingToken, createdAt,
+  );
+  const renewalSequence = events.filter((event) => event.eventType === "LEASE_RENEWED"
+    && event.fencingToken === input.fencingToken).length + 1;
+  if (renewalSequence !== input.heartbeatSequence) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_HEARTBEAT_SEQUENCE_CONFLICT");
+  }
+  const previousLeaseExpiresAt = stage12LraFeasibilityEffectiveLeaseExpiresAt(
+    stage12LraFeasibilityEventProjection(events), input.fencingToken,
+  );
+  const leaseExpiresAt = new Date(Date.parse(createdAt) + LEASE.TTL_SEC * 1000)
+    .toISOString();
+  const payload = { heartbeatId: input.heartbeatId,
+    heartbeatSequence: input.heartbeatSequence, requestSha256: input.requestSha256 };
+  try {
+    const renewal = await appendStage12LraFeasibilityDispatchEvent({ outbox,
+      eventType: "LEASE_RENEWED", fencingToken: input.fencingToken,
+      leaseId: input.leaseId, leaseExpiresAt, createdAt, payload });
+    return { accepted: true, replayed: false,
+      idempotencyKey: input.idempotencyKey, requestSha256: input.requestSha256,
+      fencingToken: input.fencingToken, leaseId: input.leaseId,
+      heartbeatId: input.heartbeatId, heartbeatSequence: input.heartbeatSequence,
+      leaseExpiresAt: renewal.leaseExpiresAt! };
+  } catch (error) {
+    const convergedEvents = await readStage12LraFeasibilityDispatchEvents(
+      input.idempotencyKey,
+    );
+    const converged = convergedEvents.find((event) => {
+      if (event.eventType !== "LEASE_RENEWED"
+        || event.fencingToken !== input.fencingToken) return false;
+      const eventPayload = JSON.parse(event.payloadJson) as Record<string, unknown>;
+      return eventPayload.heartbeatId === input.heartbeatId;
+    });
+    const effective = stage12LraFeasibilityEffectiveLeaseExpiresAt(
+      stage12LraFeasibilityEventProjection(convergedEvents), input.fencingToken,
+    );
+    if (converged && previousLeaseExpiresAt && effective
+      && effective > previousLeaseExpiresAt) {
+      return { accepted: true, replayed: true,
+        idempotencyKey: input.idempotencyKey, requestSha256: input.requestSha256,
+        fencingToken: input.fencingToken, leaseId: input.leaseId,
+        heartbeatId: input.heartbeatId, heartbeatSequence: input.heartbeatSequence,
+        leaseExpiresAt: converged.leaseExpiresAt! };
+    }
+    if (ordinalCasAttempt < 3
+      && isStage12LraFeasibilityEventCasConflict(error)) {
+      return renewTrackGVideoOneStage12CodecSafeLraFeasibilityLeaseAttempt(
+        input, ordinalCasAttempt + 1,
+      );
+    }
+    throw error;
+  }
+}
+
 function stage12LraFeasibilityTerminalReason(errorCode: string) {
   if (/ENCODE|DECODE|FFMPEG/u.test(errorCode)) return "ENCODE_FAILED" as const;
   if (/LOUDNESS|MEASUREMENT/u.test(errorCode)) return "MEASUREMENT_FAILED" as const;
   return "LINEAGE_DRIFT" as const;
 }
 
+export async function settleStage12LraFeasibilityDispatchMutation(input: {
+  persistDispatchMutation: () => Promise<void>;
+  readValidatedTerminal: () => Promise<boolean>;
+  readValidatedProgress?: () => Promise<boolean>;
+}) {
+  try {
+    await input.persistDispatchMutation();
+    return "PERSISTED" as const;
+  } catch (dispatchWriteError) {
+    if (await input.readValidatedTerminal()) return "CONVERGED" as const;
+    if (input.readValidatedProgress && await input.readValidatedProgress()) {
+      return "CONVERGED" as const;
+    }
+    throw dispatchWriteError;
+  }
+}
+
+export function isStage12LraFeasibilityEventCasConflict(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /STAGE12_LRA_FEASIBILITY_EVENT_ORDINAL_INVALID/u.test(message)
+    || /STAGE12_LRA_FEASIBILITY_EVENT_TIME_REGRESSION/u.test(message)
+    || /UNIQUE constraint failed:\s*stage12_codec_safe_lra_feasibility_dispatch_event\.idempotency_key,\s*stage12_codec_safe_lra_feasibility_dispatch_event\.event_ordinal/iu
+      .test(message);
+}
+
+async function readValidatedStage12LraFeasibilityTerminal() {
+  if (!await latestStage12LraFeasibilityJob()) return false;
+  const diagnosis = await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  return ["READY", "FAILED"].includes(diagnosis.feasibilityState)
+    && diagnosis.terminalReceipt !== null
+    && HEX64.test(diagnosis.terminalReceiptSha256 ?? "");
+}
+
+async function readValidatedStage12LraFeasibilityProgress(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+  fencingToken: number,
+) {
+  const events = await readStage12LraFeasibilityDispatchEvents(outbox.idempotencyKey);
+  return events.some((event) => event.fencingToken === fencingToken
+    && ["DISPATCH_ACCEPTED", "DISPATCH_AMBIGUOUS", "RECONCILED_PRESENT",
+      "RECONCILED_EXPIRED", "LEASE_RENEWED"].includes(event.eventType));
+}
+
 async function persistStage12LraFeasibilityTerminal(
   result: Stage12CodecSafeLraFeasibilityResult,
+  delivery: {
+    outbox: Stage12LraFeasibilityDispatchOutbox;
+    claim: Stage12LraFeasibilityDispatchEventRow;
+    terminalReceiptSha256: string;
+    terminalEventType?: "CALLBACK_TERMINAL" | "DISPATCH_REJECTED";
+  },
+  ordinalCasAttempt = 0,
 ) {
+  const terminalEventType = delivery.terminalEventType ?? "CALLBACK_TERMINAL";
   const existingJob = await latestStage12LraFeasibilityJob();
   if (existingJob) {
     const existingEvidence = await readStage12LraFeasibilityEvidence(existingJob.id);
-    if (!existingEvidence) {
+    const existingBinding = await readStage12LraFeasibilityTerminalReceipt(
+      delivery.outbox.idempotencyKey,
+    );
+    if (!existingEvidence || !existingBinding) {
       throw new Error("STAGE_12_LRA_FEASIBILITY_TERMINAL_STATE_CONFLICT");
     }
     const existingResult = stage12LraFeasibilityEvidenceResult(existingJob, existingEvidence);
-    if (canonicalize(existingResult) !== canonicalize(result)) {
+    if (canonicalize(existingResult) !== canonicalize(result)
+      || existingBinding.jobId !== existingJob.id
+      || existingBinding.evidenceId !== existingEvidence.id
+      || existingBinding.requestSha256 !== delivery.outbox.requestSha256
+      || existingBinding.fencingToken !== delivery.claim.fencingToken
+      || existingBinding.leaseHolder !== delivery.claim.leaseHolder
+      || existingBinding.terminalReceiptSha256 !== delivery.terminalReceiptSha256
+      || existingBinding.resultSha256 !== canonicalHash(result)) {
       throw new Error("STAGE_12_LRA_FEASIBILITY_TERMINAL_STATE_CONFLICT");
     }
     return { accepted: true, replayed: true,
-      jobStatus: existingJob.status as "READY" | "FAILED" };
+      jobStatus: existingJob.status as "READY" | "FAILED",
+      idempotencyKey: delivery.outbox.idempotencyKey,
+      requestSha256: delivery.outbox.requestSha256,
+      terminalReceiptSha256: delivery.terminalReceiptSha256,
+      fencingToken: delivery.claim.fencingToken,
+      leaseId: delivery.claim.leaseHolder };
   }
   const jobId = `stage12_lra_feasibility_${STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId}`;
   const evidenceId = sha256(new TextEncoder().encode(canonicalize({ jobId, result })));
   const status = ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED"]
     .includes(result.terminalReason) ? "READY" as const : "FAILED" as const;
   const now = new Date().toISOString();
+  const resultSha256 = canonicalHash(result);
+  const parentRuntimeProvenanceSha256 = canonicalHash(result.parentRuntimeProvenance);
+  const runtimeProvenanceSha256 = canonicalHash(result.runtimeProvenance);
   const storedTrace = canonicalize({ phaseBudgetUsed: result.phaseBudgetUsed,
-    candidateTrace: result.candidateTrace, outcome: result.outcome,
-    errorCode: result.errorCode, losslessReference: result.losslessReference,
+    candidateTrace: result.candidateTrace, failedProbes: result.failedProbes,
+    failedProbe: result.failedProbe,
+    outcome: result.outcome,
+    errorCode: result.errorCode, safeRollbackReference: result.safeRollbackReference,
+    losslessReference: result.losslessReference,
     parentRuntimeProvenance: result.parentRuntimeProvenance,
     runtimeProvenance: result.runtimeProvenance,
     expectedWorkerImageDigest: result.expectedWorkerImageDigest,
-    workerImageDigest: result.workerImageDigest });
+    workerImageDigest: result.workerImageDigest,
+    terminalReceiptSha256: delivery.terminalReceiptSha256,
+    resultSha256, parentRuntimeProvenanceSha256, runtimeProvenanceSha256 });
+  const dispatchEvents = await readStage12LraFeasibilityDispatchEvents(
+    delivery.outbox.idempotencyKey,
+  );
+  const currentClaim = stage12LraFeasibilityCurrentClaim(dispatchEvents);
+  if (!currentClaim || currentClaim.id !== delivery.claim.id) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_STALE_FENCE");
+  }
+  assertStage12LraFeasibilityCallbackFenceOpen(
+    dispatchEvents, delivery.claim.fencingToken, now,
+  );
+  const eventOrdinal = dispatchEvents.length + 1;
+  const terminalPayload = { requestSha256: delivery.outbox.requestSha256,
+    terminalReceiptSha256: delivery.terminalReceiptSha256,
+    resultSha256, jobId, evidenceId, jobStatus: status,
+    outcome: result.outcome, terminalReason: result.terminalReason,
+    selectedCandidateSha256: result.selectedCandidateSha256,
+    algorithmFingerprint: result.algorithmFingerprint,
+    thresholdSnapshotSha256: result.thresholdSnapshotSha256,
+    workerImageDigest: result.workerImageDigest,
+    parentRuntimeProvenanceSha256, runtimeProvenanceSha256 };
+  const terminalPayloadJson = canonicalize(terminalPayload);
+  const terminalPayloadSha256 = canonicalHash(terminalPayload);
+  const terminalEventId = stage12LraFeasibilityDispatchEventId({
+    idempotencyKey: delivery.outbox.idempotencyKey, eventOrdinal,
+    eventType: terminalEventType, fencingToken: delivery.claim.fencingToken,
+    leaseId: delivery.claim.leaseHolder, leaseExpiresAt: null, createdAt: now,
+    payloadSha256: terminalPayloadSha256,
+  });
   try {
     await getD1().batch([
       getD1().prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_job
@@ -7805,55 +8545,176 @@ async function persistStage12LraFeasibilityTerminal(
         evidenceId, jobId, result.algorithmFingerprint, result.thresholdSnapshotSha256,
         canonicalize(result.phaseBudget), storedTrace, result.selectedCandidateSha256,
         result.terminalReason, result.evidenceSemantics, now),
+      getD1().prepare(`INSERT INTO
+        stage12_codec_safe_lra_feasibility_terminal_receipt
+        (idempotency_key,request_sha256,fencing_token,lease_holder,
+         terminal_receipt_sha256,result_sha256,job_id,evidence_id,job_status,outcome,
+         terminal_reason,selected_candidate_sha256,algorithm_fingerprint,
+         threshold_snapshot_sha256,worker_image_digest,parent_runtime_provenance_sha256,
+         runtime_provenance_sha256,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        delivery.outbox.idempotencyKey, delivery.outbox.requestSha256,
+        delivery.claim.fencingToken, delivery.claim.leaseHolder,
+        delivery.terminalReceiptSha256, resultSha256, jobId, evidenceId, status,
+        result.outcome, result.terminalReason, result.selectedCandidateSha256,
+        result.algorithmFingerprint, result.thresholdSnapshotSha256,
+        result.workerImageDigest, parentRuntimeProvenanceSha256,
+        runtimeProvenanceSha256, now),
+      getD1().prepare(`INSERT INTO
+        stage12_codec_safe_lra_feasibility_dispatch_event
+        (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+         lease_expires_at,payload_json,payload_sha256,created_at)
+        VALUES (?,?,?,?,?,?,NULL,?,?,?)`).bind(
+        terminalEventId, delivery.outbox.idempotencyKey, eventOrdinal,
+        terminalEventType, delivery.claim.fencingToken, delivery.claim.leaseHolder,
+        terminalPayloadJson, terminalPayloadSha256, now),
     ]);
   } catch (error) {
     const replayJob = await latestStage12LraFeasibilityJob();
     const replayEvidence = replayJob
       ? await readStage12LraFeasibilityEvidence(replayJob.id) : null;
-    if (!replayJob || !replayEvidence) throw error;
+    const replayBinding = await readStage12LraFeasibilityTerminalReceipt(
+      delivery.outbox.idempotencyKey,
+    );
+    if (!replayJob && !replayEvidence && !replayBinding
+      && ordinalCasAttempt < 3
+      && isStage12LraFeasibilityEventCasConflict(error)) {
+      return persistStage12LraFeasibilityTerminal(
+        result, delivery, ordinalCasAttempt + 1,
+      );
+    }
+    if (!replayJob || !replayEvidence || !replayBinding) throw error;
     const replayResult = stage12LraFeasibilityEvidenceResult(replayJob, replayEvidence);
-    if (canonicalize(replayResult) !== canonicalize(result)) throw error;
+    const replayTerminal = (await readStage12LraFeasibilityDispatchEvents(
+      delivery.outbox.idempotencyKey,
+    )).find((event) => event.eventType === terminalEventType);
+    if (canonicalize(replayResult) !== canonicalize(result)
+      || !replayTerminal || replayTerminal.payloadSha256 !== terminalPayloadSha256
+      || replayTerminal.id !== stage12LraFeasibilityDispatchEventId({
+        idempotencyKey: replayTerminal.idempotencyKey,
+        eventOrdinal: replayTerminal.eventOrdinal,
+        eventType: replayTerminal.eventType,
+        fencingToken: replayTerminal.fencingToken,
+        leaseId: replayTerminal.leaseHolder,
+        leaseExpiresAt: replayTerminal.leaseExpiresAt,
+        createdAt: replayTerminal.createdAt,
+        payloadSha256: replayTerminal.payloadSha256,
+      })
+      || replayBinding.terminalReceiptSha256 !== delivery.terminalReceiptSha256
+      || replayBinding.resultSha256 !== resultSha256
+      || replayBinding.fencingToken !== delivery.claim.fencingToken
+      || replayBinding.leaseHolder !== delivery.claim.leaseHolder) {
+      throw error;
+    }
     return { accepted: true, replayed: true,
-      jobStatus: replayJob.status as "READY" | "FAILED" };
+      jobStatus: replayJob.status as "READY" | "FAILED",
+      idempotencyKey: delivery.outbox.idempotencyKey,
+      requestSha256: delivery.outbox.requestSha256,
+      terminalReceiptSha256: delivery.terminalReceiptSha256,
+      fencingToken: delivery.claim.fencingToken,
+      leaseId: delivery.claim.leaseHolder };
   }
-  return { accepted: true, replayed: false, jobStatus: status };
+  return { accepted: true, replayed: false, jobStatus: status,
+    idempotencyKey: delivery.outbox.idempotencyKey,
+    requestSha256: delivery.outbox.requestSha256,
+    terminalReceiptSha256: delivery.terminalReceiptSha256,
+    fencingToken: delivery.claim.fencingToken,
+    leaseId: delivery.claim.leaseHolder };
 }
 
 export async function recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback(input: {
   idempotencyKey: string;
   token: string;
-  result?: Stage12CodecSafeLraFeasibilityResult;
-  errorCode?: string;
-}) {
-  const { payload } = await requireStage12LraFeasibilityCommandToken(
-    input.idempotencyKey, input.token,
-  );
+  requestSha256: string;
+  fencingToken: number;
+  leaseId: string;
+  terminalReceiptSha256: string;
+} & ({
+  result: Stage12CodecSafeLraFeasibilityResult;
+  errorCode?: never;
+} | {
+  result?: never;
+  errorCode: string;
+})) {
+  if (!HEX64.test(input.requestSha256)
+    || !HEX64.test(input.terminalReceiptSha256)
+    || !Number.isInteger(input.fencingToken) || input.fencingToken < 1
+    || !/^[A-Za-z0-9_-]{1,160}$/u.test(input.leaseId)
+    || (input.result === undefined) === (input.errorCode === undefined)
+    || (input.errorCode !== undefined && (typeof input.errorCode !== "string"
+      || !/^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)))) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_INVALID");
+  }
+  const authenticated = await requireStage12LraFeasibilityCommandToken({
+    idempotencyKey: input.idempotencyKey, token: input.token,
+    fencingToken: input.fencingToken, purpose: "CALLBACK", allowHistoricalFence: true,
+  });
+  const { payload, outbox, events, claim, currentClaim } = authenticated;
+  if (outbox.requestSha256 !== input.requestSha256
+    || claim.leaseHolder !== input.leaseId) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+  }
+  const suppliedTerminal = input.result ?? { errorCode: input.errorCode };
+  if (canonicalHash(suppliedTerminal) !== input.terminalReceiptSha256) {
+    throw new Error("STAGE_12_LRA_FEASIBILITY_TERMINAL_RECEIPT_HASH_INVALID");
+  }
   const existing = await latestStage12LraFeasibilityJob();
   if (existing) {
     const evidence = await readStage12LraFeasibilityEvidence(existing.id);
-    if (!evidence) throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+    const binding = await readStage12LraFeasibilityTerminalReceipt(input.idempotencyKey);
+    if (!evidence || !binding) {
+      throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+    }
     const stored = stage12LraFeasibilityEvidenceResult(existing, evidence);
     const sameResult = input.result
-      ? canonicalize(parseStage12LraFeasibilityResult(input.result)) === canonicalize(stored)
+      ? canonicalize(parseStage12LraFeasibilityResult(input.result,
+        payload.safeRollbackReference)) === canonicalize(stored)
       : input.errorCode === stored.errorCode;
     if (!sameResult) {
       throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
     }
+    const terminalEvent = (await readStage12LraFeasibilityDispatchEvents(
+      input.idempotencyKey,
+    )).find((event) => event.eventType === "CALLBACK_TERMINAL");
+    const terminalPayload = terminalEvent
+      ? JSON.parse(terminalEvent.payloadJson) as Record<string, unknown> : null;
+    if (!terminalPayload
+      || terminalPayload.terminalReceiptSha256 !== input.terminalReceiptSha256
+      || binding.terminalReceiptSha256 !== input.terminalReceiptSha256
+      || binding.resultSha256 !== canonicalHash(stored)
+      || binding.fencingToken !== input.fencingToken
+      || binding.leaseHolder !== input.leaseId) {
+      throw new Error("STAGE_12_LRA_FEASIBILITY_CALLBACK_STATE_CONFLICT");
+    }
     return { accepted: true, replayed: true,
-      jobStatus: existing.status as "READY" | "FAILED" };
+      jobStatus: existing.status as "READY" | "FAILED",
+      idempotencyKey: input.idempotencyKey,
+      requestSha256: input.requestSha256,
+      terminalReceiptSha256: input.terminalReceiptSha256,
+      fencingToken: input.fencingToken,
+      leaseId: input.leaseId };
   }
+  if (!currentClaim || currentClaim.id !== claim.id) {
+    throw new Error("STAGE12_LRA_FEASIBILITY_STALE_FENCE");
+  }
+  assertStage12LraFeasibilityCallbackFenceOpen(
+    events, input.fencingToken, new Date().toISOString(),
+  );
   let result: Stage12CodecSafeLraFeasibilityResult;
   if (input.result) {
-    result = parseStage12LraFeasibilityResult(input.result);
+    result = parseStage12LraFeasibilityResult(input.result,
+      payload.safeRollbackReference);
   } else {
-    const errorCode = input.errorCode && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
+    const errorCode = typeof input.errorCode === "string"
+      && /^[A-Z0-9_:.-]{1,160}$/u.test(input.errorCode)
       ? input.errorCode : "STAGE12_CODEC_SAFE_LRA_FEASIBILITY_FAILED";
     result = terminalStage12LraFeasibilityFailure({ errorCode,
       terminalReason: stage12LraFeasibilityTerminalReason(errorCode),
       expectedWorkerImageDigest: payload.expectedWorkerImageDigest,
       algorithmFingerprint: payload.algorithmFingerprint,
       thresholdSnapshotSha256: payload.thresholdSnapshotSha256,
-      parentRuntimeProvenance: payload.parentRuntimeProvenance });
+      parentRuntimeProvenance: payload.parentRuntimeProvenance,
+      safeRollbackReference: payload.safeRollbackReference });
   }
   if (result.lineage.sourceSha256 !== payload.sourcePreMasterSha256
     || result.lineage.parentEvidenceId !== payload.parentEvidenceId
@@ -7862,13 +8723,221 @@ export async function recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback
     || result.workerImageDigest !== payload.expectedWorkerImageDigest
     || result.algorithmFingerprint !== payload.algorithmFingerprint
     || result.thresholdSnapshotSha256 !== payload.thresholdSnapshotSha256
+    || canonicalize(result.safeRollbackReference)
+      !== canonicalize(payload.safeRollbackReference)
     || canonicalize(result.parentRuntimeProvenance)
       !== canonicalize(payload.parentRuntimeProvenance)
     || (result.losslessReference && canonicalize(result.losslessReference)
       !== canonicalize(payload.parentLosslessReference))) {
     throw new Error("STAGE12_LRA_FEASIBILITY_RESULT_LINEAGE_INVALID");
   }
-  return persistStage12LraFeasibilityTerminal(result);
+  return persistStage12LraFeasibilityTerminal(result, { outbox, claim,
+    terminalReceiptSha256: input.terminalReceiptSha256 });
+}
+
+function stage12LraFeasibilityWorkerRequest(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+  claim: Stage12LraFeasibilityDispatchEventRow,
+): Stage12MediaCodecSafeLraFeasibilitySearchRequest {
+  const request = parseStage12LraFeasibilityOutboxRequest(outbox);
+  const tokenInput = { idempotencyKey: outbox.idempotencyKey,
+    requestSha256: outbox.requestSha256, fencingToken: claim.fencingToken,
+    leaseId: claim.leaseHolder };
+  return { ...request,
+    objectAccess: { url: request.objectAccess.url,
+      token: stage12LraFeasibilityBearerToken({ ...tokenInput, purpose: "SOURCE" }) },
+    callback: { url: request.callback.url,
+      token: stage12LraFeasibilityBearerToken({ ...tokenInput, purpose: "CALLBACK" }) },
+    durability: { requestSha256: outbox.requestSha256,
+      fencingToken: claim.fencingToken, leaseId: claim.leaseHolder } };
+}
+
+async function dispatchClaimedStage12LraFeasibility(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+  claim: Stage12LraFeasibilityDispatchEventRow,
+) {
+  const request = stage12LraFeasibilityWorkerRequest(outbox, claim);
+  let receipt: Awaited<ReturnType<typeof dispatchStage12CodecSafeLraFeasibilitySearch>>;
+  try {
+    receipt = await dispatchStage12CodecSafeLraFeasibilitySearch(request);
+  } catch (error) {
+    if (await latestStage12LraFeasibilityJob()) return;
+    if (error instanceof Stage12MediaDispatchError && !error.dispatchAmbiguous) {
+      const search = request.codecSafeLraFeasibilitySearch;
+      const result = terminalStage12LraFeasibilityFailure({
+        errorCode: "STAGE12_LRA_FEASIBILITY_DISPATCH_REJECTED",
+        terminalReason: "LINEAGE_DRIFT",
+        expectedWorkerImageDigest: search.expectedWorkerImageDigest,
+        algorithmFingerprint: search.algorithmFingerprint,
+        thresholdSnapshotSha256: search.thresholdSnapshotSha256,
+        parentRuntimeProvenance: search.parentRuntimeProvenance,
+        safeRollbackReference: search.safeRollbackReference,
+      });
+      await settleStage12LraFeasibilityDispatchMutation({
+        persistDispatchMutation: async () => {
+          await persistStage12LraFeasibilityTerminal(result, { outbox, claim,
+            terminalReceiptSha256: canonicalHash(result),
+            terminalEventType: "DISPATCH_REJECTED" });
+        },
+        readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+      });
+      return;
+    }
+    const errorCode = error instanceof Error
+      ? error.message.slice(0, 160) : "STAGE12_LRA_FEASIBILITY_DISPATCH_AMBIGUOUS";
+    await settleStage12LraFeasibilityDispatchMutation({
+      persistDispatchMutation: async () => {
+        await appendStage12LraFeasibilityDispatchEvent({ outbox,
+          eventType: "DISPATCH_AMBIGUOUS",
+          fencingToken: claim.fencingToken,
+          leaseId: claim.leaseHolder, payload: { requestSha256: outbox.requestSha256,
+            errorCode } });
+      },
+      readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+      readValidatedProgress: () => readValidatedStage12LraFeasibilityProgress(
+        outbox, claim.fencingToken,
+      ),
+    });
+    return;
+  }
+  if (await latestStage12LraFeasibilityJob()) return;
+  await settleStage12LraFeasibilityDispatchMutation({
+    persistDispatchMutation: async () => {
+      await appendStage12LraFeasibilityDispatchEvent({ outbox,
+        eventType: "DISPATCH_ACCEPTED", fencingToken: claim.fencingToken,
+        leaseId: claim.leaseHolder, payload: { requestSha256: outbox.requestSha256,
+          jobStatus: receipt.jobStatus, leaseId: receipt.leaseId,
+          terminalReceiptSha256: receipt.terminalReceiptSha256 } });
+    },
+    readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+    readValidatedProgress: () => readValidatedStage12LraFeasibilityProgress(
+      outbox, claim.fencingToken,
+    ),
+  });
+}
+
+async function reconcileStage12LraFeasibilityDispatch(
+  outbox: Stage12LraFeasibilityDispatchOutbox,
+) {
+  const terminalJob = await latestStage12LraFeasibilityJob();
+  if (terminalJob) return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  let events = await readStage12LraFeasibilityDispatchEvents(outbox.idempotencyKey);
+  if (events.some((event) => event.eventType === "DISPATCH_REJECTED")) {
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+  let currentClaim = stage12LraFeasibilityCurrentClaim(events);
+  if (!currentClaim) {
+    const claimed = await claimStage12LraFeasibilityDispatch(outbox, 1);
+    if (claimed.owned) {
+      await dispatchClaimedStage12LraFeasibility(outbox, claimed.claim);
+    }
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+  const activeClaim = currentClaim;
+
+  let workerStatus: Stage12LraFeasibilityWorkerStatus | null = null;
+  try {
+    workerStatus = await readStage12CodecSafeLraFeasibilityWorkerStatus({
+      idempotencyKey: outbox.idempotencyKey,
+      requestSha256: outbox.requestSha256,
+      fencingToken: activeClaim.fencingToken,
+      leaseId: activeClaim.leaseHolder,
+      expectedWorkerImageDigest: outbox.expectedWorkerImageDigest,
+    });
+  } catch (error) {
+    const hasDispatchDisposition = events.some((event) =>
+      event.fencingToken === activeClaim.fencingToken
+      && ["DISPATCH_ACCEPTED", "DISPATCH_AMBIGUOUS"].includes(event.eventType));
+    if (!hasDispatchDisposition) {
+      const errorCode = error instanceof Error
+        ? error.message.slice(0, 160) : "STAGE12_LRA_FEASIBILITY_STATUS_AMBIGUOUS";
+      await settleStage12LraFeasibilityDispatchMutation({
+        persistDispatchMutation: async () => {
+          await appendStage12LraFeasibilityDispatchEvent({ outbox,
+            eventType: "DISPATCH_AMBIGUOUS", fencingToken: activeClaim.fencingToken,
+            leaseId: activeClaim.leaseHolder,
+            payload: { requestSha256: outbox.requestSha256, errorCode } });
+        },
+        readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+        readValidatedProgress: () => readValidatedStage12LraFeasibilityProgress(
+          outbox, activeClaim.fencingToken,
+        ),
+      });
+    }
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+
+  const now = new Date().toISOString();
+  const plan = planStage12LraFeasibilityRecovery({
+    events: stage12LraFeasibilityEventProjection(events), terminalExists: false,
+    now, requestSha256: outbox.requestSha256, workerStatus,
+  });
+  if (plan.action === "CLAIM") {
+    const claimed = await claimStage12LraFeasibilityDispatch(
+      outbox, plan.fencingToken,
+    );
+    if (claimed.owned) {
+      await dispatchClaimedStage12LraFeasibility(outbox, claimed.claim);
+    }
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+  if (plan.action === "PERSIST_WORKER_TERMINAL") {
+    const callbackToken = stage12LraFeasibilityBearerToken({ purpose: "CALLBACK",
+      idempotencyKey: outbox.idempotencyKey, requestSha256: outbox.requestSha256,
+      fencingToken: activeClaim.fencingToken, leaseId: activeClaim.leaseHolder });
+    await recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback({
+      idempotencyKey: outbox.idempotencyKey, token: callbackToken,
+      requestSha256: outbox.requestSha256,
+      fencingToken: activeClaim.fencingToken, leaseId: activeClaim.leaseHolder,
+      terminalReceiptSha256: plan.terminalReceiptSha256,
+      ...(plan.result !== undefined
+        ? { result: plan.result as Stage12CodecSafeLraFeasibilityResult }
+        : { errorCode: plan.errorCode }),
+    });
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+  if (plan.action === "RECONCILE_PRESENT") {
+    await settleStage12LraFeasibilityDispatchMutation({
+      persistDispatchMutation: async () => {
+        await appendStage12LraFeasibilityDispatchEvent({ outbox,
+          eventType: "RECONCILED_PRESENT", fencingToken: activeClaim.fencingToken,
+          leaseId: activeClaim.leaseHolder,
+          payload: { requestSha256: outbox.requestSha256, state: workerStatus.state } });
+      },
+      readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+      readValidatedProgress: () => readValidatedStage12LraFeasibilityProgress(
+        outbox, activeClaim.fencingToken,
+      ),
+    });
+    return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+  }
+  if (plan.action === "RECONCILE_EXPIRED") {
+    const expiredSettlement = await settleStage12LraFeasibilityDispatchMutation({
+      persistDispatchMutation: async () => {
+        await appendStage12LraFeasibilityDispatchEvent({ outbox,
+          eventType: "RECONCILED_EXPIRED", fencingToken: activeClaim.fencingToken,
+          leaseId: activeClaim.leaseHolder, createdAt: now,
+          payload: { requestSha256: outbox.requestSha256,
+            observedAt: now, observedState: workerStatus.state,
+            workerStatusSha256: canonicalHash(workerStatus) } });
+      },
+      readValidatedTerminal: readValidatedStage12LraFeasibilityTerminal,
+      readValidatedProgress: () => readValidatedStage12LraFeasibilityProgress(
+        outbox, activeClaim.fencingToken,
+      ),
+    });
+    if (expiredSettlement === "CONVERGED") {
+      return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
+    }
+    events = await readStage12LraFeasibilityDispatchEvents(outbox.idempotencyKey);
+    currentClaim = stage12LraFeasibilityCurrentClaim(events);
+    const nextFence = (currentClaim?.fencingToken ?? 0) + 1;
+    const claimed = await claimStage12LraFeasibilityDispatch(outbox, nextFence);
+    if (claimed.owned) {
+      await dispatchClaimedStage12LraFeasibility(outbox, claimed.claim);
+    }
+  }
+  return diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility();
 }
 
 export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
@@ -7884,9 +8953,15 @@ export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
     || !input.objectAccessUrl.startsWith("https://")) {
     throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_INPUT_INVALID");
   }
+  const callbackUrl = sanitizeStage12LraFeasibilityEndpoint(input.callbackUrl);
+  const objectAccessUrl = sanitizeStage12LraFeasibilityEndpoint(input.objectAccessUrl);
   const existing = await latestStage12LraFeasibilityCommand();
   if (existing) {
-    return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility()),
+    const existingOutbox = await readStage12LraFeasibilityOutbox(existing.idempotencyKey);
+    if (!existingOutbox || existingOutbox.commandId !== existing.id) {
+      throw new Error("STAGE12_LRA_FEASIBILITY_OUTBOX_MISSING");
+    }
+    return { ...(await reconcileStage12LraFeasibilityDispatch(existingOutbox)),
       replayed: true };
   }
   const source = await stage12LraFeasibilitySource();
@@ -7903,10 +8978,20 @@ export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
     !== source.lraGuardResult.thresholdSnapshotSha256) {
     throw new Error("TRACK_G_STAGE_12_LRA_FEASIBILITY_THRESHOLD_DRIFT");
   }
-  const safeRollbackCandidate = { candidatePass: 5 as const,
+  const safeRollbackReference: Stage12CodecSafeLraFeasibilitySafeRollbackReference = {
+    candidatePass: 5,
     macroDepthDb: source.safeRollbackCandidate.macroDepthDb,
     integratedTargetLufs: source.safeRollbackCandidate.integratedTargetLufs,
-    limiterCeilingDbtp: source.safeRollbackCandidate.limiterCeilingDbtp };
+    limiterCeilingDbtp: source.safeRollbackCandidate.limiterCeilingDbtp,
+    losslessReferenceSha256: source.safeRollbackCandidate.losslessReferenceSha256,
+    integratedLufs: source.safeRollbackCandidate.integratedLufs,
+    integratedLufsExact: source.safeRollbackCandidate.integratedLufsExact,
+    truePeakDbtp: source.safeRollbackCandidate.truePeakDbtp,
+    truePeakDbtpExact: source.safeRollbackCandidate.truePeakDbtpExact,
+    loudnessRangeLu: source.safeRollbackCandidate.loudnessRangeLu,
+    loudnessRangeLuExact: source.safeRollbackCandidate.loudnessRangeLuExact,
+    audioFrameMd5Sha256: source.safeRollbackCandidate.audioFrameMd5Sha256,
+  };
   const parentLosslessReference = { ...source.lraGuardResult.losslessReference,
     sampleRateHz: 48000 as const };
   const key = stage12LraFeasibilityIdempotencyKey({
@@ -7917,7 +9002,6 @@ export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
     expectedWorkerImageDigest: health.imageDigest,
     algorithmFingerprint: fingerprints.algorithmFingerprint,
   });
-  const token = stage12LraFeasibilityCallbackToken(key);
   const commandPayload: Stage12LraFeasibilityCommandPayload = {
     sourceCorrectionJobId: source.source.id,
     lraGuardJobId: source.lraGuardJob.id,
@@ -7928,58 +9012,80 @@ export async function runTrackGVideoOneStage12CodecSafeLraFeasibility(
     parentEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId,
     lraGuardEvidenceId: STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId,
     expectedWorkerImageDigest: health.imageDigest,
-    ...fingerprints, safeRollbackCandidate, parentLosslessReference,
+    ...fingerprints, safeRollbackReference, parentLosslessReference,
     parentRuntimeProvenance: source.lraGuardResult.runtimeProvenance,
   };
+  const outboxRequest: Stage12LraFeasibilityOutboxRequest = {
+    ...prepared.payload,
+    idempotencyKey: key,
+    objectAccess: { url: objectAccessUrl },
+    callback: { url: callbackUrl },
+    codecSafeLraFeasibilitySearch: {
+      schemaVersion: 1,
+      evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION",
+      ...STAGE12_LRA_FEASIBILITY_LINEAGE,
+      sourceCorrectionJobId: source.source.id,
+      lraGuardJobId: source.lraGuardJob.id,
+      sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
+        sha256: STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+        byteLength: source.source.correctedPreMasterByteLength },
+      sourceCorrectionReceiptSha256: source.source.receiptSha256,
+      safeRollbackReference,
+      parentLosslessReference,
+      parentRuntimeProvenance: source.lraGuardResult.runtimeProvenance,
+      policy: STAGE12_LRA_FEASIBILITY_POLICY,
+      expectedWorkerImageDigest: health.imageDigest,
+      ...fingerprints,
+      shadowOnly: true,
+      historicalBackfill: false,
+      uploadCorrectedOutput: false,
+      providerDispatch: "OFF", providerCallCount: 0,
+      calibration: false, finalize: false, release: false,
+      productionActivation: false, autoPublish: "OFF",
+    },
+  };
+  const requestSha256 = stage12LraFeasibilityRequestSha256(outboxRequest);
+  const commandId = crypto.randomUUID();
   const now = new Date().toISOString();
-  await getD1().prepare(`INSERT INTO command_log
-    (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
-     trace_id,created_at) VALUES (?,?,?,?,?,
-     'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL',
-     'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_PENDING',?,?)`).bind(
-    crypto.randomUUID(), STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE,
-    canonicalize({ objective: input.objective.trim(), ...commandPayload,
-      ...STAGE12_LRA_FEASIBILITY_COMMAND }), key, user.email.toLowerCase(),
-    crypto.randomUUID(), now,
-  ).run();
   try {
-    await dispatchStage12CodecSafeLraFeasibilitySearch({
-      ...prepared.payload,
-      idempotencyKey: key,
-      objectAccess: { url: input.objectAccessUrl, token },
-      callback: { url: input.callbackUrl, token },
-      codecSafeLraFeasibilitySearch: {
-        schemaVersion: 1,
-        evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION",
-        ...STAGE12_LRA_FEASIBILITY_LINEAGE,
-        sourceCorrectionJobId: source.source.id,
-        lraGuardJobId: source.lraGuardJob.id,
-        sourceCorrectedPreMaster: { r2Key: source.source.correctedPreMasterR2Key,
-          sha256: STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
-          byteLength: source.source.correctedPreMasterByteLength },
-        sourceCorrectionReceiptSha256: source.source.receiptSha256,
-        safeRollbackCandidate,
-        parentLosslessReference,
-        parentRuntimeProvenance: source.lraGuardResult.runtimeProvenance,
-        policy: STAGE12_LRA_FEASIBILITY_POLICY,
-        expectedWorkerImageDigest: health.imageDigest,
-        ...fingerprints,
-        shadowOnly: true,
-        historicalBackfill: false,
-        uploadCorrectedOutput: false,
-        providerDispatch: "OFF", providerCallCount: 0,
-        calibration: false, finalize: false, release: false,
-        productionActivation: false, autoPublish: "OFF",
-      },
-    });
+    await getD1().batch([
+      getD1().prepare(`INSERT INTO command_log
+        (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+         trace_id,created_at) VALUES (?,?,?,?,?,
+         'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL',
+         'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_PENDING',?,?)`).bind(
+        commandId, STAGE_12_LRA_FEASIBILITY_COMMAND_TYPE,
+        canonicalize({ objective: input.objective.trim(), ...commandPayload,
+          requestSha256, ...STAGE12_LRA_FEASIBILITY_COMMAND }), key,
+        user.email.toLowerCase(), crypto.randomUUID(), now),
+      getD1().prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_outbox
+        (idempotency_key,command_id,request_payload_json,request_sha256,
+         source_attempt_ordinal,source_correction_ordinal,source_sha256,parent_evidence_id,
+         lra_guard_evidence_id,expected_worker_image_digest,algorithm_fingerprint,
+         threshold_snapshot_sha256,created_at)
+        VALUES (?,?,?, ?,3,2,?,?,?,?,?,?,?)`).bind(key, commandId,
+        canonicalize(outboxRequest), requestSha256,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId,
+        STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId,
+        health.imageDigest, fingerprints.algorithmFingerprint,
+        fingerprints.thresholdSnapshotSha256, now),
+    ]);
   } catch (error) {
-    const errorCode = error instanceof Error
-      ? error.message.slice(0, 160) : "STAGE12_CODEC_SAFE_LRA_FEASIBILITY_START_FAILED";
-    await recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback({
-      idempotencyKey: key, token, errorCode,
-    });
-    throw error;
+    const converged = await latestStage12LraFeasibilityOutbox();
+    if (!converged
+      || converged.sourceSha256 !== STAGE12_LRA_FEASIBILITY_LINEAGE.sourceSha256
+      || converged.parentEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.parentEvidenceId
+      || converged.lraGuardEvidenceId !== STAGE12_LRA_FEASIBILITY_LINEAGE.lraGuardEvidenceId) {
+      throw error;
+    }
+    parseStage12LraFeasibilityOutboxRequest(converged);
+    return { ...(await reconcileStage12LraFeasibilityDispatch(converged)),
+      replayed: true };
   }
+  const outbox = await readStage12LraFeasibilityOutbox(key);
+  if (!outbox) throw new Error("STAGE12_LRA_FEASIBILITY_OUTBOX_MISSING");
+  await reconcileStage12LraFeasibilityDispatch(outbox);
   return { ...(await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility()),
     replayed: false };
 }

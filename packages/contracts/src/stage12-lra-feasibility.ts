@@ -39,6 +39,16 @@ export type Stage12CodecSafeLraFeasibilityMeasurement = {
   loudnessRangeLuExact: string
 }
 
+export type Stage12CodecSafeLraFeasibilitySafeRollbackReference =
+  Stage12CodecSafeLraFeasibilityMeasurement & {
+    candidatePass: 5
+    macroDepthDb: number
+    integratedTargetLufs: number
+    limiterCeilingDbtp: number
+    losslessReferenceSha256: string
+    audioFrameMd5Sha256: string
+  }
+
 export type Stage12CodecSafeLraFeasibilityCandidate =
   Stage12CodecSafeLraFeasibilityMeasurement & {
     candidateOrdinal: number
@@ -55,10 +65,27 @@ export type Stage12CodecSafeLraFeasibilityCandidate =
     lraFeasible: boolean
     truePeakContained: boolean
     disposition: 'LRA_PROBE' | 'LRA_FEASIBLE_TP_UNCONTAINED' | 'LRA_INFEASIBLE'
-      | 'TP_CONTAINED' | 'TP_NON_IMPROVING' | 'LRA_REGRESSION' | 'LUFS_TRIMMED'
-      | 'POST_TRIM_TP_CONTAINED' | 'FULL_PASS' | 'FINAL_VERIFICATION_FAILED'
+      | 'TP_IMPROVING' | 'TP_CONTAINED' | 'TP_NON_IMPROVING' | 'LRA_REGRESSION'
+      | 'LUFS_TRIMMED' | 'POST_TRIM_TP_IMPROVING' | 'POST_TRIM_TP_CONTAINED'
+      | 'FULL_PASS' | 'FINAL_VERIFICATION_FAILED'
       | 'SAFE_ROLLBACK'
   }
+
+export type Stage12CodecSafeLraFeasibilityFailedProbe = {
+  phase: Stage12CodecSafeLraFeasibilityPhase
+  phaseOrdinal: number
+  seedProbeOrdinal: number | null
+  macroDepthDb: number
+  integratedTargetLufs: number
+  limiterCeilingDbtp: number
+  targetStepLufs: number
+  failureCode?: 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_DRIFT'
+    | 'STAGE12_LRA_FEASIBILITY_FINAL_ARTIFACT_UNAVAILABLE'
+  observedMeasurement?: Stage12CodecSafeLraFeasibilityMeasurement & {
+    candidateSha256: string
+    audioFrameMd5Sha256: string
+  }
+}
 
 export type Stage12CodecSafeLraFeasibilityRuntimeProvenance = {
   ffmpegVersion: string
@@ -82,6 +109,9 @@ export type Stage12CodecSafeLraFeasibilityResult = {
   phaseBudget: Stage12CodecSafeLraFeasibilityPhaseBudget
   phaseBudgetUsed: Record<Stage12CodecSafeLraFeasibilityPhase, number>
   candidateTrace: Stage12CodecSafeLraFeasibilityCandidate[]
+  failedProbes: Stage12CodecSafeLraFeasibilityFailedProbe[]
+  failedProbe: Stage12CodecSafeLraFeasibilityFailedProbe | null
+  safeRollbackReference: Stage12CodecSafeLraFeasibilitySafeRollbackReference
   outcome: 'PASS' | 'FAIL'
   terminalReason: 'PASS' | 'FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED' | 'ENCODE_FAILED'
     | 'MEASUREMENT_FAILED' | 'LINEAGE_DRIFT'

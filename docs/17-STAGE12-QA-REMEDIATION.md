@@ -202,3 +202,25 @@ Evolution ID: `EVOLVE_STAGE12_CODEC_SAFE_LRA_CONVERGENCE_GUARD`
 - Đây chỉ là shadow evidence. Threshold giữ nguyên `-14±1`, `≤-1`, `4..8`;
   không output, Production activation, ordinal/attempt 4, provider, calibration,
   Finalize, release hoặc publish.
+
+## Codec-safe LRA feasibility search and durable delivery
+
+Evolution IDs:
+`EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH` và
+`ENABLE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SHADOW_COMMAND`.
+
+- Feasibility controller không dùng bracket đơn điệu của guard. Nó khảo sát lattice
+  `10.9..14 dB`, chọn tối đa hai LRA-feasible seeds, containment true peak riêng,
+  LUFS trim riêng, đúng một final verification và exact safe rollback.
+- Candidate không chain codec: tất cả dựng từ immutable ordinal 2 và một canonical
+  lossless reference. PASS cần cùng decoded-Opus artifact đạt cả ba threshold cũ.
+- Migration `0033` giữ terminal shadow job/evidence. Migration `0034` giữ durable
+  outbox/event/receipt; nếu apply thấy row 0033 cũ thì abort, không backfill.
+- Lease 90 giây được renew bằng heartbeat 30 giây với sequence/identity append-only.
+  Deadline là DB writer boundary: source/callback mới ở stale fence bị reject;
+  exact persisted replay chỉ ACK lại, không tạo effect mới.
+- Compute có thể lặp deterministic sau stateless worker restart; fencing và atomic
+  terminal batch đảm bảo chỉ một terminal effect. Đây là semantics được công bố,
+  không phải lời hứa physical exactly-once không thể chứng minh.
+- Toàn evolution shadow-only và zero-upload. Không ordinal/attempt 4, provider,
+  calibration, Finalize, activation, release hoặc publish.

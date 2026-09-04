@@ -35,8 +35,20 @@ actually executed. Chat text or a dashboard-only projection satisfies neither.
 
 Stage 12 diagnostic and codec-safe shadow evidence is append-only runtime truth,
 but it is not a correction output and does not authorize algorithm activation.
-Migration 0032 preserves ordinal 2/3 and prior replay evidence, pins exact
-source/parent/render/runtime lineage, and records only shadow job/evidence state.
+Migrations 0032–0033 preserve ordinal 2/3 and prior replay evidence, pin exact
+source/parent/render/runtime lineage, and record only shadow job/evidence state.
+Migration 0034 adds the durable command outbox, renewable lease/fencing ledger and
+terminal receipt. It must fail closed if any pre-command 0033 state exists; it
+never infers, rewrites or backfills a legacy terminal lifecycle.
+
+For the feasibility command, physical compute is at-least-once across stateless
+worker restart. A 30-second heartbeat renews the 90-second writer lease; database
+deadline checks, fencing and one atomic terminal batch guarantee a single logical
+terminal effect. Exact replay may be acknowledged but cannot create a second job,
+evidence, receipt or terminal event.
+Worker starts are serialized per idempotency key. Only exact ordinal/time CAS races
+are retried after a durable re-read; unexpected persistence failures are returned
+as retryable 503 responses without changing the frozen callback or heartbeat identity.
 
 ## Change protocol
 
