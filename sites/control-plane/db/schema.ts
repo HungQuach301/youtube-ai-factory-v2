@@ -963,6 +963,164 @@ export const stage12CodecSafeLraGuardShadowEvidence = sqliteTable(
   ],
 );
 
+export const stage12CodecSafeLraFeasibilitySearchJobs = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_search_job",
+  {
+    id: text("id").primaryKey(),
+    stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+    sourceCorrectionJobId: text("source_correction_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionJobs.id),
+    historicalFailureJobId: text("historical_failure_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionRetryJobs.id),
+    diagnosticReplayJobId: text("diagnostic_replay_job_id").notNull()
+      .references(() => stage12EncodedLoudnessDiagnosticReplayJobs.id),
+    diagnosticReplayEvidenceId: text("diagnostic_replay_evidence_id").notNull()
+      .references(() => stage12EncodedLoudnessDiagnosticReplayEvidence.id),
+    parentTruePeakShadowJobId: text("parent_true_peak_shadow_job_id").notNull()
+      .references(() => stage12CodecSafeTruePeakShadowJobs.id),
+    parentTruePeakShadowEvidenceId: text("parent_true_peak_shadow_evidence_id").notNull()
+      .references(() => stage12CodecSafeTruePeakShadowEvidence.id),
+    parentLraGuardShadowJobId: text("parent_lra_guard_shadow_job_id").notNull()
+      .references(() => stage12CodecSafeLraGuardShadowJobs.id),
+    parentLraGuardShadowEvidenceId: text("parent_lra_guard_shadow_evidence_id").notNull()
+      .references(() => stage12CodecSafeLraGuardShadowEvidence.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    callbackTokenHash: text("callback_token_hash").notNull(),
+    actorIdentity: text("actor_identity").notNull(),
+    ownerApprovalText: text("owner_approval_text").notNull(),
+    state: text("state", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION"],
+    }).notNull(),
+    sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+    sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+    sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+    sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+    expectedWorkerImageDigest: text("expected_worker_image_digest").notNull(),
+    parentWorkerImageDigest: text("parent_worker_image_digest").notNull(),
+    workerImageDigest: text("worker_image_digest"),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    controllerPolicySha256: text("controller_policy_sha256").notNull(),
+    renderKernelFingerprint: text("render_kernel_fingerprint").notNull(),
+    parentRenderKernelFingerprint: text("parent_render_kernel_fingerprint").notNull(),
+    parentRenderRuntimeFingerprint: text("parent_render_runtime_fingerprint").notNull(),
+    renderRuntimeFingerprint: text("render_runtime_fingerprint"),
+    shadowOutcome: text("shadow_outcome", { enum: ["PASS", "FAIL"] }),
+    terminalReason: text("terminal_reason", {
+      enum: ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED",
+        "FINAL_SAME_ARTIFACT_VERIFICATION_FAILED", "SAFE_ROLLBACK_REPRODUCTION_DRIFT"],
+    }),
+    lastCandidateOrdinal: integer("last_candidate_ordinal"),
+    selectedSeedOrdinal: integer("selected_seed_ordinal"),
+    selectedCandidateOrdinal: integer("selected_candidate_ordinal"),
+    verifiedCandidateOrdinal: integer("verified_candidate_ordinal"),
+    correctedOutputUploaded: integer("corrected_output_uploaded").notNull().default(0),
+    historicalBackfill: integer("historical_backfill").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+    calibrationExecuted: integer("calibration_executed").notNull().default(0),
+    finalizeExecuted: integer("finalize_executed").notNull().default(0),
+    releaseEligible: integer("release_eligible").notNull().default(0),
+    productionActivationExecuted: integer("production_activation_executed").notNull().default(0),
+    autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+    errorCode: text("error_code"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("stage12_codec_safe_lra_feasibility_search_key_unique")
+      .on(table.idempotencyKey),
+    uniqueIndex("stage12_codec_safe_lra_feasibility_search_parent_evidence_unique")
+      .on(table.parentLraGuardShadowEvidenceId),
+  ],
+);
+
+export const stage12CodecSafeLraFeasibilitySearchEvidence = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_search_evidence",
+  {
+    id: text("id").primaryKey(),
+    searchJobId: text("search_job_id").notNull()
+      .references(() => stage12CodecSafeLraFeasibilitySearchJobs.id),
+    stage12JobId: text("stage12_job_id").notNull().references(() => stage12MediaJobs.id),
+    sourceCorrectionJobId: text("source_correction_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionJobs.id),
+    historicalFailureJobId: text("historical_failure_job_id").notNull()
+      .references(() => stage12AudioP0CorrectionRetryJobs.id),
+    diagnosticReplayJobId: text("diagnostic_replay_job_id").notNull()
+      .references(() => stage12EncodedLoudnessDiagnosticReplayJobs.id),
+    diagnosticReplayEvidenceId: text("diagnostic_replay_evidence_id").notNull()
+      .references(() => stage12EncodedLoudnessDiagnosticReplayEvidence.id),
+    parentTruePeakShadowJobId: text("parent_true_peak_shadow_job_id").notNull()
+      .references(() => stage12CodecSafeTruePeakShadowJobs.id),
+    parentTruePeakShadowEvidenceId: text("parent_true_peak_shadow_evidence_id").notNull()
+      .references(() => stage12CodecSafeTruePeakShadowEvidence.id),
+    parentLraGuardShadowJobId: text("parent_lra_guard_shadow_job_id").notNull()
+      .references(() => stage12CodecSafeLraGuardShadowJobs.id),
+    parentLraGuardShadowEvidenceId: text("parent_lra_guard_shadow_evidence_id").notNull()
+      .references(() => stage12CodecSafeLraGuardShadowEvidence.id),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION"],
+    }).notNull(),
+    losslessReferenceSha256: text("lossless_reference_sha256").notNull(),
+    losslessReferenceByteLength: integer("lossless_reference_byte_length").notNull(),
+    losslessReferenceFrameMd5Sha256: text("lossless_reference_frame_md5_sha256").notNull(),
+    losslessReferenceCodec: text("lossless_reference_codec", { enum: ["pcm_f32le"] }).notNull(),
+    losslessReferenceSampleRateHz: integer("lossless_reference_sample_rate_hz").notNull(),
+    parentGuardTraceJson: text("parent_guard_trace_json").notNull(),
+    controllerPolicyJson: text("controller_policy_json").notNull(),
+    candidatesJson: text("candidates_json").notNull(),
+    budgetLedgerJson: text("budget_ledger_json").notNull(),
+    lastCandidateOrdinal: integer("last_candidate_ordinal").notNull(),
+    selectedSeedOrdinal: integer("selected_seed_ordinal"),
+    selectedCandidateOrdinal: integer("selected_candidate_ordinal").notNull(),
+    verifiedCandidateOrdinal: integer("verified_candidate_ordinal"),
+    safeRollbackJson: text("safe_rollback_json").notNull(),
+    terminalReason: text("terminal_reason", {
+      enum: ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED",
+        "FINAL_SAME_ARTIFACT_VERIFICATION_FAILED", "SAFE_ROLLBACK_REPRODUCTION_DRIFT"],
+    }).notNull(),
+    finalIntegratedLufs: real("final_integrated_lufs").notNull(),
+    finalIntegratedLufsExact: text("final_integrated_lufs_exact").notNull(),
+    finalTruePeakDbtp: real("final_true_peak_dbtp").notNull(),
+    finalTruePeakDbtpExact: text("final_true_peak_dbtp_exact").notNull(),
+    finalLoudnessRangeLu: real("final_loudness_range_lu").notNull(),
+    finalLoudnessRangeLuExact: text("final_loudness_range_lu_exact").notNull(),
+    failedPredicatesJson: text("failed_predicates_json").notNull(),
+    shadowOutcome: text("shadow_outcome", { enum: ["PASS", "FAIL"] }).notNull(),
+    expectedWorkerImageDigest: text("expected_worker_image_digest").notNull(),
+    parentWorkerImageDigest: text("parent_worker_image_digest").notNull(),
+    workerImageDigest: text("worker_image_digest").notNull(),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    controllerPolicySha256: text("controller_policy_sha256").notNull(),
+    renderKernelFingerprint: text("render_kernel_fingerprint").notNull(),
+    parentRenderKernelFingerprint: text("parent_render_kernel_fingerprint").notNull(),
+    parentRenderRuntimeFingerprint: text("parent_render_runtime_fingerprint").notNull(),
+    renderRuntimeFingerprint: text("render_runtime_fingerprint").notNull(),
+    parentRuntimeProvenanceJson: text("parent_runtime_provenance_json").notNull(),
+    runtimeProvenanceJson: text("runtime_provenance_json").notNull(),
+    sourcePreMasterR2Key: text("source_pre_master_r2_key").notNull(),
+    sourcePreMasterSha256: text("source_pre_master_sha256").notNull(),
+    sourcePreMasterByteLength: integer("source_pre_master_byte_length").notNull(),
+    sourceReceiptSha256: text("source_receipt_sha256").notNull(),
+    correctedOutputUploaded: integer("corrected_output_uploaded").notNull().default(0),
+    historicalBackfill: integer("historical_backfill").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    providerDispatch: text("provider_dispatch", { enum: ["OFF"] }).notNull().default("OFF"),
+    calibrationExecuted: integer("calibration_executed").notNull().default(0),
+    finalizeExecuted: integer("finalize_executed").notNull().default(0),
+    releaseEligible: integer("release_eligible").notNull().default(0),
+    productionActivationExecuted: integer("production_activation_executed").notNull().default(0),
+    autoPublish: text("auto_publish", { enum: ["OFF"] }).notNull().default("OFF"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("stage12_codec_safe_lra_feasibility_search_evidence_job_unique")
+      .on(table.searchJobId),
+  ],
+);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

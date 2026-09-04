@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm": "sha256",
-  "aggregate_sha256": "0c82152ab95589dbbdb302794cee882d1e94d6aaa2511ccf6183cb75e912a013",
+  "aggregate_sha256": "d72c6aeaabfdf91db284c7aae07414d83fc745295cdc561f1f628b6fa991e0c4",
   "files": [
     {
       "path": ".codex/config.toml",
@@ -50,6 +50,10 @@
     {
       "path": "app/api/media-worker/stage12-audio-p0-correction/route.ts",
       "sha256": "448e001c5c2a580608e5dbee45cd9902f0ffed86a9a9e198f98ad04c2e85e96f"
+    },
+    {
+      "path": "app/api/media-worker/stage12-codec-safe-lra-feasibility-search/route.ts",
+      "sha256": "293ff9add916763873506fc4c3a307e3a4b0e4635de2169e19a528c2bdb1be92"
     },
     {
       "path": "app/api/media-worker/stage12-codec-safe-lra-guard-shadow-replay/route.ts",
@@ -105,7 +109,7 @@
     },
     {
       "path": "app/mcp/route.ts",
-      "sha256": "429b43c8186d5df11e6eed1feb0112f204171ff8e132dcd0c8834f4e72f5203f"
+      "sha256": "597969a0bd7a74250cdd8a3d0ebebf351efbbd9b0f4370586b9c09f1722ce35a"
     },
     {
       "path": "app/oauth-server.ts",
@@ -157,15 +161,15 @@
     },
     {
       "path": "app/stage12-media.ts",
-      "sha256": "547226fb9d9f61052e3991a0ff21a9406051cb4dc75583c9048e85f4606431da"
+      "sha256": "98dcbf43e39a9b7bf937fb72d0e799b85b20b5acedb49c4c694d394fdd42cd23"
     },
     {
       "path": "app/stage12-pre-master.ts",
-      "sha256": "a6ff75dbd7a8dcd0e293862a181de6b26ba85f8273197acf89153fc9be312e5c"
+      "sha256": "c5adb98be3f7ab418859d5254a8370eef75ba80f4f9e4a4ab3b61684cffcd138"
     },
     {
       "path": "app/track-g-video-one.ts",
-      "sha256": "3f343ca475f9d20b2c3774e9ac045f629facc1c328a348bfa5dfcc996be75fe4"
+      "sha256": "bb6a4b290c78515a6fc5460cdce8912e8f3ea5daef6f82beeae05f1a37dc2a62"
     },
     {
       "path": "app/voice-qualification.ts",
@@ -181,7 +185,7 @@
     },
     {
       "path": "db/schema.ts",
-      "sha256": "e8ea462037ec53960bac813536f4ba3a49029751fe3aee7d35d861c37ce25cb1"
+      "sha256": "14a9b31d1c7a819ca1d3256d090102993b66c12f280950744b94fba5ee78cda4"
     },
     {
       "path": "drizzle.config.ts",
@@ -320,6 +324,10 @@
       "sha256": "007c663760f0c59c8d0813be1b2b217fc6f7fcb17b7b8362cd794df2fba67c18"
     },
     {
+      "path": "drizzle/0033_stage12_codec_safe_lra_feasibility_search.sql",
+      "sha256": "3bce1a18b59c38247f54f75bdc6e1a583a57fd590b52bf050cbbe02ffbd928e2"
+    },
+    {
       "path": "drizzle/meta/0000_snapshot.json",
       "sha256": "6ea50be44a643c6c9c724350afbfd7b0203a1d0f96e70260b14ab66ec837753b"
     },
@@ -384,6 +392,14 @@
       "sha256": "291fdd696aec98227fafee5b5448b64fa09624a5e628ba943097b766f56a00f6"
     },
     {
+      "path": "packages/contracts/src/stage12-codec-safe-lra-feasibility-policy.mjs",
+      "sha256": "ca28ddbb7d8999c234b06686e6af8f7e2c5aefe85c8f48920788e312fd18bc24"
+    },
+    {
+      "path": "packages/contracts/src/stage12-codec-safe-lra-feasibility.ts",
+      "sha256": "90594bed9ba5ff07be385947af5931198415d129126c4a0b76e76cd798d660c5"
+    },
+    {
       "path": "packages/contracts/src/thresholds.ts",
       "sha256": "ac91efcbba037881eac637e1c58a2c70c6133608b32549a3b713d19a5d1962c8"
     },
@@ -393,7 +409,7 @@
     },
     {
       "path": "packages/media-worker/container-entry.mjs",
-      "sha256": "6ff5832f1fba140c40799677028f5d28386feac335771da52e7aff1819881f1a"
+      "sha256": "373844092c1c89a84b3909be3b38c3a8e1fca8ef1159a7698fb462c836bbaf2b"
     },
     {
       "path": "packages/media-worker/fly.toml",
@@ -408,6 +424,14 @@
       "sha256": "9c8cd35851921caa5eff461d5b25bc7603991f9a5734af84f0a0a1a9e4d79963"
     },
     {
+      "path": "packages/media-worker/stage12-codec-safe-lra-feasibility-controller.mjs",
+      "sha256": "44106979c59de65482f326a8dc640975f6e443bfa7307dd115056e135b456f0b"
+    },
+    {
+      "path": "packages/media-worker/stage12-codec-safe-lra-feasibility-smoke.mjs",
+      "sha256": "4387562b676fe3ea594a3bcf803f2af0ba609c1cc7e7040d2a8c5a23d2702990"
+    },
+    {
       "path": "packages/media-worker/stage12-remediation-smoke.mjs",
       "sha256": "e7a95031cc87ebe1d3989607f82a6548eddbc51e235fe26d0e1df7d20d945e9d"
     },
@@ -417,7 +441,7 @@
     },
     {
       "path": "packages/media-worker/stage12-runtime.mjs",
-      "sha256": "b3a29e69b09357c9af7cb4405d5c7cf8a7079d62385921ae73299570bc66cb26"
+      "sha256": "0cc42267530bed462568bce522b006905ca7ad9744456de90f36ce5b415233d9"
     },
     {
       "path": "postcss.config.mjs",
@@ -493,7 +517,7 @@
     },
     {
       "path": "tests/operator-d1.test.mjs",
-      "sha256": "06a3d38ba79b99461482b90b1c96101b96e97d707d466ffb8f4a43dc76455e1a"
+      "sha256": "a0362fdec07b967c41ae96ae0b857890feab5934c4a876951674c2954a843cb1"
     },
     {
       "path": "tests/rendered-html.test.mjs",

@@ -54,7 +54,9 @@ jobs:
           for attempt in $(seq 1 30); do
             health="$(curl --fail --silent --connect-timeout 1 --max-time 3 http://127.0.0.1:18080/health || true)"
             if echo "${health}" | jq --exit-status \
-              '.ok == true and .stage12Ready == true and .stage12FontVerified == true and .pythonRuntimeVerified == true' >/dev/null; then
+              '.ok == true and .stage12Ready == true and .stage12FontVerified == true
+               and .pythonRuntimeVerified == true
+               and .codecSafeLraFeasibilitySearchReady == true' >/dev/null; then
               exit 0
             fi
             sleep 2
@@ -73,6 +75,9 @@ jobs:
 
       - name: Verify Stage 12 codec-safe LRA guard shadow smoke in candidate
         run: docker exec factory-media-worker-candidate node stage12-codec-safe-lra-guard-shadow-smoke.mjs
+
+      - name: Verify Stage 12 codec-safe LRA feasibility search smoke in candidate
+        run: docker exec factory-media-worker-candidate node stage12-codec-safe-lra-feasibility-smoke.mjs
 
       - name: Clean up candidate
         if: always()
@@ -125,8 +130,13 @@ jobs:
           for attempt in $(seq 1 36); do
             health="$(curl --fail --silent --connect-timeout 3 --max-time 8 https://youtube-ai-factory-v2-media-worker-prod.fly.dev/health || true)"
             if echo "${health}" | jq --exit-status \
-              '.ok == true and .stage12Ready == true and .stage12FontVerified == true and .pythonRuntimeVerified == true and .jobDispatchEnabled == false' >/dev/null; then
-              echo "${health}" | jq '{ok, stage12Ready, stage12FontVerified, pythonRuntimeVerified, jobDispatchEnabled, imageDigest}'
+              '.ok == true and .stage12Ready == true and .stage12FontVerified == true
+               and .pythonRuntimeVerified == true
+               and .codecSafeLraFeasibilitySearchReady == true
+               and .jobDispatchEnabled == false' >/dev/null; then
+              echo "${health}" | jq '{ok, stage12Ready, stage12FontVerified,
+                pythonRuntimeVerified, codecSafeLraFeasibilitySearchReady,
+                jobDispatchEnabled, imageDigest}'
               exit 0
             fi
             sleep 10

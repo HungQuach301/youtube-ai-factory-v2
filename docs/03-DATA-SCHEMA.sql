@@ -1478,3 +1478,28 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- Migration không backfill hay sửa ordinal 2/3, diagnostic replay hoặc parent
 -- shadow. Command contract chỉ thêm typed CODEC_SAFE_LRA_GUARD_SHADOW_PENDING.
 -- Xem drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH — migration 0033
+-- =====================================================================
+-- stage12_codec_safe_lra_feasibility_search_job chỉ nhận exact immutable
+-- correction ordinal 2, true-peak shadow evidence và LRA-guard shadow
+-- READY/FAIL:BUDGET_EXHAUSTED có complete response trace pass 0..7, selected
+-- candidate pass 5. Lineage khóa source R2/SHA/bytes/receipt, worker image,
+-- lossless/frame-MD5, FFmpeg/libopus, algorithm/threshold/controller/render
+-- fingerprints. Mỗi LRA-guard evidence chỉ tạo tối đa một feasibility job.
+--
+-- stage12_codec_safe_lra_feasibility_search_evidence lưu LRA map, seed ranking,
+-- post-Opus true-peak containment, LUFS trim, stabilization, final same-artifact
+-- verification, safe rollback và budget ledger. Trigger khóa macro domain
+-- 10.9..14 dB, phase budgets 8/4/3/2/1/1, tổng candidate <=19, trim step
+-- <=0.25 LU và exact control-variable isolation theo phase. READY/PASS chỉ hợp lệ
+-- khi cùng candidate đạt đồng thời -15..-13 LUFS-I, <=-1 dBTP và 4..8 LU.
+-- Terminal job/evidence cấm UPDATE/DELETE.
+--
+-- Migration không backfill/sửa ordinal 2/3, true-peak shadow hoặc LRA-guard
+-- shadow. Side effects luôn false/0/OFF; không output pointer, correction ordinal
+-- 4, Stage 12 attempt 4, provider, calibration, Finalize, activation, release hay
+-- publish. Command contract chỉ thêm typed
+-- CODEC_SAFE_LRA_FEASIBILITY_SEARCH_PENDING transition. Xem
+-- drizzle/0033_stage12_codec_safe_lra_feasibility_search.sql.

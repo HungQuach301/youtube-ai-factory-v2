@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": { "noEmit": true },
+  "compilerOptions": { "noEmit": true, "allowJs": true },
   "include": ["packages/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage", "packages/**/*.test.ts", "packages/**/tests"]
 }

@@ -276,3 +276,23 @@ replay và parent shadow evidence cùng lossless/image/FFmpeg/libopus/render run
 provenance. PR/CI không chạy Production replay; shadow PASS không upload hoặc tự
 activate correction path. Không ordinal/attempt 4, provider, calibration,
 Finalize, release hoặc publish.
+
+### Evolution record: EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+Thay đổi `NEUTRAL` về QA threshold và `SHADOW_ONLY` về activation. Response trace
+pass `0..7` của LRA guard cho thấy true-peak rejection đã bị dùng làm high bound,
+vì vậy vùng phi tuyến `10.9..14 dB` chưa được khảo sát với fixed target `-14 LUFS`.
+Controller mới tách ba control variable thành ba phase: macro-depth-only LRA map,
+limiter-ceiling-only post-Opus containment và integrated-target-only LUFS trim.
+
+Migration 0033 tạo job/evidence append-only và khóa exact immutable ordinal 2,
+true-peak parent evidence, LRA-guard evidence, source/runtime fingerprints,
+deterministic trace và budget ledger. Compute budget `8+4+3+2+1+1=19` có reserve
+riêng cho trim, same-artifact verification và safe rollback; budget không được vay
+giữa phase. `FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED` không đồng nghĩa miền bất khả
+thi, và pass 5 chỉ là rollback reference chứ không phải accepted output.
+
+PR/CI chỉ tạo implementation evidence; không chạy Production search. Shadow PASS
+không upload hoặc tự activate correction path. Không ordinal/attempt 4, provider,
+calibration, Finalize, release hoặc publish; mọi Production invocation cần owner
+OPERATE approval riêng sau merge/deploy/exact-tree/health PASS.

@@ -891,3 +891,142 @@ Bất kỳ true-peak fail hoặc codec overshoot tăng quá `0.25 dB` đều b�
 Threshold QA vẫn là `-14 ±1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`.
 Result có semantics `CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION`; không có output
 pointer, không sửa history và không cấp quyền activation hoặc downstream action.
+
+---
+
+## 15. Stage 12 codec-safe LRA feasibility search shadow contract
+
+```ts
+type RunStage12CodecSafeLraFeasibilitySearchCommand = {
+  commandType: 'RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH'
+  ownerApprovalText: 'RUN STAGE 12 CODEC SAFE LRA FEASIBILITY SEARCH'
+  schemaVersion: 1
+  evidenceSemantics: 'CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION'
+  sourceAttemptOrdinal: 3
+  sourceCorrectionOrdinal: 2
+  historicalFailureCorrectionOrdinal: 3
+  sourceCorrectionJobId: string
+  historicalFailureJobId: string
+  diagnosticReplayJobId: string
+  diagnosticReplayEvidenceId: string
+  codecSafeTruePeakShadowJobId: string
+  codecSafeTruePeakShadowEvidenceId: string
+  codecSafeLraGuardShadowJobId: string
+  codecSafeLraGuardShadowEvidenceId: string
+  sourceCorrectedPreMaster: { r2Key: string; sha256: string; byteLength: number }
+  sourceCorrectionReceiptSha256: string
+  parentWorkerImageDigest: `sha256:${string}`
+  parentAlgorithmFingerprint: string
+  parentThresholdSnapshotSha256: string
+  parentControllerPolicySha256: string
+  parentRenderKernelFingerprint: string
+  parentRenderRuntimeFingerprint: string
+  parentLosslessReference: { sha256: string; byteLength: number;
+    audioFrameMd5Sha256: string; codec: 'pcm_f32le'; sampleRateHz: number }
+  parentRuntimeProvenance: { ffmpegVersion: string;
+    ffmpegBuildFingerprint: string; libopusEncoderFingerprint: string }
+  parentGuardTrace: { terminalReason: 'BUDGET_EXHAUSTED';
+    selectedCandidatePass: 5; candidates: CodecSafeLraGuardCandidate[] }
+  expectedWorkerImageDigest: `sha256:${string}`
+  algorithmFingerprint: string
+  thresholdSnapshotSha256: string
+  controllerPolicySha256: string
+  renderKernelFingerprint: string
+  controllerPolicy: {
+    macroDepthMinDb: 10.9
+    macroDepthMaxDb: 14
+    lraMapBudget: 8
+    truePeakContainmentBudget: 4
+    lufsTrimBudget: 3
+    postTrimStabilizationBudget: 2
+    finalVerifyBudget: 1
+    rollbackVerifyBudget: 1
+    maxSeeds: 2
+    truePeakInteriorMarginDb: 0.05
+    integratedBoundaryMarginLu: 0.05
+    maxIntegratedTargetStepLu: 0.25
+    roundDecimals: 6
+  }
+  historicalBackfill: false
+  uploadCorrectedOutput: false
+  providerDispatch: 'OFF'
+  providerCallCount: 0
+  calibration: false
+  finalize: false
+  release: false
+  productionActivation: false
+  autoPublish: 'OFF'
+}
+
+type CodecSafeLraFeasibilityCandidate = {
+  candidateOrdinal: number // 0..18
+  phase: 'LRA_MAP' | 'TP_CONTAINMENT' | 'LUFS_TRIM'
+    | 'POST_TRIM_STABILIZATION' | 'FINAL_VERIFY' | 'ROLLBACK_VERIFY'
+  phaseSlot: number // 1-based, bounded by the phase reserve
+  seedOrdinal: null | 0 | 1
+  seedMapCandidateOrdinal: null | number
+  parentCandidateOrdinal: null | number
+  rollbackToCandidateOrdinal: null | number
+  losslessReferenceSha256: string
+  integratedTargetLufs: number
+  limiterCeilingDbtp: number
+  macroDepthDb: number
+  targetStepLufs: number
+  ceilingStepDb: number
+  codecOvershootDb: number
+  integratedLufs: number
+  integratedLufsExact: string
+  truePeakDbtp: number
+  truePeakDbtpExact: string
+  loudnessRangeLu: number
+  loudnessRangeLuExact: string
+  failedPredicates: string[]
+  encodedArtifactSha256: string
+  audioFrameMd5Sha256: string
+  disposition: 'LRA_BELOW_MIN' | 'LRA_FEASIBLE_TP_SAFE'
+    | 'LRA_FEASIBLE_TP_UNCONTAINED' | 'LRA_ABOVE_MAX' | 'TP_CONTAINED'
+    | 'TP_IMPROVING' | 'SEED_REJECTED_NON_IMPROVING'
+    | 'SEED_REJECTED_LRA_REGRESSION' | 'LUFS_TRIM_ACCEPTED'
+    | 'LUFS_TRIM_COMPLETE' | 'SEED_REJECTED_TRIM_REGRESSION'
+    | 'STABILIZATION_CONFIRMED' | 'TP_STABILIZING'
+    | 'SEED_REJECTED_STABILIZATION_REGRESSION' | 'FINAL_PASS'
+    | 'FINAL_FAIL' | 'ROLLBACK_SAFE' | 'ROLLBACK_DRIFT'
+}
+```
+
+Worker payload dùng key `codecSafeLraFeasibilitySearch`, schema version `1` và
+result semantics `CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION`. Parent guard
+phải là immutable `READY/FAIL:BUDGET_EXHAUSTED`, selected candidate pass 5 và có
+complete trace pass `0..7`. Duplicate, missing, reordered pass hoặc drift ở source,
+lineage, measurements, frame-MD5 hay runtime provenance đều fail-closed.
+Worker tự khóa exact evidence IDs, shared controls và response core/raw strings đã
+biết; control plane và migration khóa toàn bộ candidate JSON, gồm frame-MD5, vào
+đúng immutable parent evidence row. Không hardcode frame hash giả vào worker.
+Worker health phải trả `codecSafeLraFeasibilitySearchReady: true` trước mọi D1
+mutation; readiness không bật live dispatch và không tự khởi chạy search.
+
+Result boundary là `POST_OPUS_LRA_FEASIBILITY_SEARCH`. Budget ledger có sáu phase
+và `TOTAL`, mỗi entry khóa `{limit, used, remaining}`. Safe rollback khóa parent
+candidate pass, lossless SHA, target/ceiling/depth, exact measurements, frame-MD5
+và verification candidate ordinal.
+
+Result khóa riêng `lastEvaluatedCandidateOrdinal`, `selectedCandidateOrdinal` và
+`verifiedCandidateOrdinal`. Với `PASS`, last row là `FINAL_VERIFY`, còn selected
+và verified cùng trỏ tới artifact ứng viên được đo lại; hai row phải có cùng
+`encodedArtifactSha256`, controls, exact measurement strings và decoded-audio
+frame-MD5. Provenance cũng khóa riêng `parentRenderKernelFingerprint`.
+
+`LRA_MAP` chỉ thay macro depth, giữ target `-14 LUFS` và fixed limiter
+ceiling; true-peak fail không tạo LRA bound. Probe lattice trong `10.9..14 dB`
+được khóa deterministic. Containment chỉ hạ limiter ceiling; LUFS trim chỉ đổi
+integrated target tối đa `0.25 LU` mỗi step. Các phase không được vay budget của
+nhau. PASS yêu cầu cùng một decoded-Opus artifact đạt đồng thời threshold hiện
+hành `-14 ±1 LUFS-I`, `≤-1 dBTP`, `4..8 LU`.
+
+Terminal chỉ là `PASS`, `FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED`,
+`FINAL_SAME_ARTIFACT_VERIFICATION_FAILED` hoặc
+`SAFE_ROLLBACK_REPRODUCTION_DRIFT`. Hết budget giữ exact rollback reference nhưng
+không biến fallback thành PASS. Contract không có corrected-output pointer hay
+quyền PUT; route chỉ cấp source GET và nhận callback POST. Contract không cấp
+quyền correction, ordinal/attempt 4, provider, calibration, Finalize, activation,
+release hoặc publish.

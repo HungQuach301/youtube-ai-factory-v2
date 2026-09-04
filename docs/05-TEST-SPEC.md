@@ -328,3 +328,21 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Job/evidence append-only, shadow-only | UPDATE/DELETE/terminal-shape tests; source route chỉ GET/POST; FFmpeg smoke zero write |
 | Không ordinal/attempt 4 hoặc side effect | Migration/static/Sites tests kiểm no attempt 4, output/provider/calibration/finalize/activation/publish false/0/OFF |
 | PR/CI không chạy Production replay | Workflow chỉ build/test smoke; invocation cần owner OPERATE approval riêng sau merge/deploy/health PASS |
+
+## 13. EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+| Acceptance | Test/evidence |
+|---|---|
+| Exact parent trace pass `0..7` và selected pass 5 được tái tạo | Controller fixture khóa known raw/numeric measurements, shared controls, predicates và pass order; migration fixture khóa full candidate JSON/frame-MD5 vào exact immutable parent evidence; duplicate/missing/reordered pass hoặc lineage/hash drift → fail closed |
+| Parent `14 dB/-11.79 LUFS` không làm fixed-control bracket | Unit/parser test đánh dấu reference `CONFOUNDED`; search bắt buộc đo lại `14 dB` với target `-14 LUFS` |
+| LRA map không giả định response đơn điệu | Unit vectors cho slope jump, reversal, interior feasible island và endpoint-only feasibility; true-peak fail không thu hẹp miền LRA |
+| Probe order deterministic trong `10.9..14 dB` | Unit + strict parser khóa `14,12.45,11.675,13.225,11.2875,12.0625,12.8375,13.6125` và tie-break seed |
+| Mỗi phase chỉ thay đúng một control variable | Unit trace khóa macro-only LRA map, ceiling-only containment, target-only LUFS trim; candidate sau luôn render từ cùng lossless source |
+| True-peak containment là hậu Opus và có rollback | Real FFmpeg smoke encode/decode/measure từng step; reversal/no-improvement/LRA regress reject seed và chọn exact safe fallback |
+| LUFS trim có reserve và step riêng | Vector `-15.25` cần ít nhất hai step vì mỗi target step tuyệt đối `≤0.25 LU`; macro phase không tiêu trim reserve |
+| Một artifact duy nhất phải đạt cả ba predicates | Parser/migration từ chối measurement mix giữa candidates và pre-codec PASS/post-Opus FAIL; final verification khóa cùng `encodedArtifactSha256`, decoded frame-MD5 và exact measurement strings khi đo `-15..-13`, `≤-1`, `4..8` |
+| Budget ledger deterministic và không vay giữa phase | Unit/migration khóa slots `8/4/3/2/1/1`, tổng tối đa `19`; exhaustion trả `FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED` |
+| Threshold giữ nguyên | Worker/control-plane fingerprint parity và static guardrail khóa `-14±1 LUFS-I`, `≤-1 dBTP`, `4..8 LU`; threshold source diff bằng 0 |
+| Exact lineage/provenance append-only | Migration 0033 mutation vectors khóa ordinal-2 SHA, true-peak/LRA-guard evidence, candidate trace, image/FFmpeg/libopus/algorithm/threshold fingerprints; UPDATE/DELETE → ABORT |
+| Không ordinal/attempt 4 hoặc side effect | Unit/migration/Sites/static checks khóa output/provider/calibration/finalize/activation/release/publish ở `false/0/OFF`; real FFmpeg smoke zero write |
+| Build/deploy không tự chạy Production search | Image/deploy workflow chỉ chạy local container smoke và readiness health; invocation cần owner OPERATE approval riêng sau merge/deploy/exact-tree/health PASS |
