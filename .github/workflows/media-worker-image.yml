@@ -62,6 +62,8 @@ jobs:
                and .stage12Ready == true and .encodedLoudnessDiagnosticReplayReady == true
                and .codecSafeTruePeakShadowReady == true
                and .codecSafeLraGuardShadowReady == true
+               and .codecSafeLraFeasibilitySearchReady == true
+               and .codecSafeLraFeasibilityExecutionSemantics == "AT_LEAST_ONCE_COMPUTE_FENCED_SINGLE_TERMINAL_EFFECT"
                and .imageDigest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' >/dev/null; then
               exit 0
             fi

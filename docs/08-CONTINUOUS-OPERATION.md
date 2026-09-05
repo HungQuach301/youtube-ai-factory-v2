@@ -287,3 +287,44 @@ approval mới và work package riêng.
 - LUFS/true peak/LRA terminal vẫn đạt thresholds hiện hành nếu outcome PASS.
 - `correctedOutputUploaded=false`, provider count `0`; calibration/finalize/release/
   activation false và auto-publish OFF; ordinal/attempt 4 không tồn tại.
+
+---
+
+## 11. Runbook Stage 12 codec-safe LRA feasibility search
+
+Đây là một shadow diagnostic duy nhất, không phải correction, Finalize hay
+activation. Không được dùng runbook này trước khi PR command gateway đã merge,
+exact-tree Sites/Fly deployment và migration 0034 đều được phê duyệt riêng.
+
+### Preflight bắt buộc
+
+1. Read exact Git main/tree, Sites source/version, Fly image digest và post-deploy
+   health; drift bất kỳ thì dừng.
+2. D1 migration head là `0034`. Receipt migration guard phải có
+   `migration_id=34`, `existing_job_count=0`, `existing_evidence_count=0`.
+3. Factory vẫn `STAGE_12_READY`; source attempt 3, ordinal 2 SHA và hai parent
+   evidence IDs khớp typed contract; feasibility job/evidence/outbox đều trống.
+4. Fly health trả feasibility ready và execution semantics
+   `AT_LEAST_ONCE_COMPUTE_FENCED_SINGLE_TERMINAL_EFFECT`.
+5. Owner approval phải ghi rõ đúng một execution; provider/spend/upload/
+   calibration/Finalize/activation/release/publish vẫn OFF/0.
+
+### Thực thi và recovery
+
+Gửi `RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH` đúng một lần. Nếu response mất
+hoặc trả `PENDING`, chỉ gọi diagnostic/read-back; không resend command thủ công.
+Outbox reconciliation đọc worker status, renewal ledger và terminal receipt.
+Heartbeat giữ current fence còn hạn; status lỗi/503 không được tự đóng fence. Chỉ
+sau authoritative status read tại/sau effective deadline mới ghi
+`RECONCILED_EXPIRED` và cấp fence kế tiếp.
+
+### Terminal Definition of Done
+
+- `READY/PASS`: một decoded-Opus candidate có cùng artifact đạt LUFS/TP/LRA.
+- `READY/FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED`: exact rollback reference được
+  giữ nhưng không được gọi là accepted output.
+- `FAILED`: typed encode/measurement/lineage error với truthful partial trace.
+- Mọi terminal phải có one job + one evidence + one terminal receipt + one
+  terminal event cùng hashes/fence/lease; duplicate read-back phải exact-match.
+- Sau terminal dừng. Không upload, ordinal/attempt 4, correction, provider,
+  Finalize, activation, release hoặc publish nếu chưa có approval mới.

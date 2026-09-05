@@ -328,3 +328,31 @@ Với gate có `error_floor`: nếu `error_floor` là hằng số hardcode chứ
 | Job/evidence append-only, shadow-only | UPDATE/DELETE/terminal-shape tests; source route chỉ GET/POST; FFmpeg smoke zero write |
 | Không ordinal/attempt 4 hoặc side effect | Migration/static/Sites tests kiểm no attempt 4, output/provider/calibration/finalize/activation/publish false/0/OFF |
 | PR/CI không chạy Production replay | Workflow chỉ build/test smoke; invocation cần owner OPERATE approval riêng sau merge/deploy/health PASS |
+
+## 13. EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH
+
+| Acceptance | Test/evidence |
+|---|---|
+| Non-monotonic lattice không bị true-peak fail cắt miền | Controller fixtures kiểm exact probe order, reversal/interior island và độc lập phase |
+| Hai seed, một FINAL slot, exact rollback | Controller/runtime tests ép seed 1 fail, seed 2 final fail và so rollback pass 5 |
+| Partial failure vẫn truthful | Contract/runtime tests khóa completed trace, failed probe, phase budget used, lossless/runtime refs |
+| Một artifact đạt đồng thời ba gate mới PASS | Semantic parser từ chối mixed candidate, forged PASS và post-Opus regression |
+| Threshold/lineage không đổi | Fingerprint parity + G11; exact ordinal-2 SHA và hai evidence IDs trong typed contract |
+| Không output hoặc Production side effect | Real FFmpeg zero-upload smoke + static guards |
+
+## 14. ENABLE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SHADOW_COMMAND
+
+| Acceptance | Test/evidence |
+|---|---|
+| 0034 không nhận lifecycle 0033 không rõ | SQLite và real Miniflare D1 proofs yêu cầu `STAGE12_LRA_FEASIBILITY_PREEXISTING_STATE` trước gateway schema |
+| Concurrent duplicate chỉ có một durable claim | Miniflare concurrent insert proof + coordinator 100-start test |
+| Lease là writer deadline thật | Planner/app/SQL tests kiểm callback tại deadline bị reject, renewal mới nhất là effective deadline và stale fence bị đóng |
+| Heartbeat lost-response idempotent | Worker test retry cùng heartbeat ID/sequence; SQL partial unique index chặn duplicate logical renewal |
+| Heartbeat và terminal được serialize | Worker test giữ terminal delivery cho tới khi heartbeat in-flight ACK xong |
+| Higher-fence starts không vượt nhau | Concurrent duplicate fence và fence 2/3 overlap tests kiểm per-key single-flight, monotonic current fence và chỉ current delivery |
+| Event CAS giữ liveness mà không che lỗi | Ordinal/time-regression interleavings retry bounded; clock drift/semantic constraint không được classifier nhận |
+| Transient persistence không biến thành permanent conflict | Real callback route trả safe 503; coordinator retry cùng heartbeat ID và byte-identical terminal body tới ACK |
+| Callback/restart recovery giữ single terminal effect | 503, redrive, higher-fence frozen terminal và stateless re-execution tests |
+| Terminal persistence atomic | Miniflare D1 rejected four-row batch để lại chỉ claim, không partial job/evidence/receipt/event |
+| Receipt integrity fail-closed | Exact nested/top-level keys, value types, result/runtime hashes và duplicate/conflicting callback tests |
+| Mirrors/threshold/side effects | Root/Sites/worker exact mirrors, full CI, real FFmpeg zero-upload, G11 changes rỗng |

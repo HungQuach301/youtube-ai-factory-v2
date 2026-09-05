@@ -23,6 +23,7 @@ import {
   diagnoseTrackGVideoOneStage12AudioP0Correction,
   diagnoseTrackGVideoOneStage12CorrectedPreMaster,
   diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow,
+  diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility,
   diagnoseTrackGVideoOneStage12CodecSafeTruePeakShadow,
   diagnoseTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   createTrackGVideoOneStage12AudioP0Correction,
@@ -36,6 +37,7 @@ import {
   prepareTrackGVideoOneStage09VisualReview,
   recoverTrackGVideoOneStage12AttemptThree,
   runTrackGVideoOneStage12CodecSafeLraGuardShadow,
+  runTrackGVideoOneStage12CodecSafeLraFeasibility,
   runTrackGVideoOneStage12CodecSafeTruePeakShadow,
   runTrackGVideoOneStage12EncodedLoudnessDiagnosticReplay,
   scanTrackGVideoOneStage12AttemptThree,
@@ -125,7 +127,7 @@ function requireStableTrackGVideoOneStage12Target(
 
 function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, request: Request) {
   const server = new McpServer(
-    { name: "youtube-ai-factory-v2", version: "1.3.0" },
+    { name: "youtube-ai-factory-v2", version: "1.4.0" },
     {
       capabilities: { tools: {} },
       instructions:
@@ -1386,6 +1388,9 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
       } else if (commandType === "RUN_STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_REPLAY") {
         if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
         diagnostic = (await diagnoseTrackGVideoOneStage12CodecSafeLraGuardShadow()) as unknown as Record<string, unknown>;
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH") {
+        if (attemptOrdinal !== 3) throw new Error("STABLE_COMMAND_ATTEMPT_MISMATCH");
+        diagnostic = (await diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility()) as unknown as Record<string, unknown>;
       } else if (commandType === "START_STAGE_12" || commandType === "FINALIZE_STAGE_12") {
         diagnostic = await diagnoseTrackGVideoOneStage12Preflight() as unknown as Record<string, unknown>;
       } else {
@@ -1398,6 +1403,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
         || diagnostic.correctionState === "ELIGIBLE" || diagnostic.correctionState === "READY"
         || diagnostic.replayState === "ELIGIBLE" || diagnostic.replayState === "READY"
         || diagnostic.shadowState === "ELIGIBLE" || diagnostic.shadowState === "READY"
+        || diagnostic.feasibilityState === "ELIGIBLE" || diagnostic.feasibilityState === "READY"
         ? "PASS" as const : "FAIL" as const;
       const output = {
         contractVersion: MCP_STABLE_CONTRACT_VERSION,
@@ -1409,6 +1415,7 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
           ?? diagnostic.correctionState
           ?? diagnostic.replayState
           ?? diagnostic.shadowState
+          ?? diagnostic.feasibilityState
           ?? diagnostic.recoveryState ?? diagnostic.preflightState ?? "UNKNOWN"),
         diagnosticJson: JSON.stringify(diagnostic),
         providerDispatch: "OFF" as const,
@@ -1607,6 +1614,36 @@ function createFactoryServer(user: ChatGPTUser, grantedScopes: Set<string>, requ
             parentShadowEvidenceId: shadow.parentShadowEvidenceId,
             evidenceSemantics: "CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION",
             correctedOutputUploaded: false, historicalBackfill: false,
+            providerCallCount: 0, providerDispatch: "OFF", calibration: false,
+            finalize: false, releaseEligible: false, productionActivation: false,
+            autoPublish: "OFF" } };
+      } else if (commandType === "RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH") {
+        if (attemptOrdinal !== 3
+          || ownerApprovalText !== "RUN STAGE 12 CODEC SAFE LRA FEASIBILITY SEARCH") {
+          throw new Error("STABLE_COMMAND_APPROVAL_MISMATCH");
+        }
+        const feasibilityRoute = new URL(
+          "/api/media-worker/stage12-codec-safe-lra-feasibility-search", request.url,
+        ).toString();
+        const feasibility = await runTrackGVideoOneStage12CodecSafeLraFeasibility(user, {
+          objective,
+          ownerApprovalText,
+          callbackUrl: feasibilityRoute,
+          objectAccessUrl: feasibilityRoute,
+        });
+        const runId = before.trackGWorkbench?.run.id;
+        if (!runId) throw new Error("STABLE_COMMAND_RUN_READ_BACK_FAILED");
+        result = { replayed: feasibility.replayed, runId,
+          currentStep: "STAGE_12_READY", operationState: feasibility.feasibilityState,
+          receipt: { sourceAttemptOrdinal: 3, sourceCorrectionOrdinal: 2,
+            historicalFailureCorrectionOrdinal: 3,
+            feasibilityState: feasibility.feasibilityState,
+            outcome: feasibility.outcome, terminalReason: feasibility.terminalReason,
+            selectedCandidateSha256: feasibility.selectedCandidateSha256,
+            parentEvidenceId: feasibility.parentEvidenceId,
+            lraGuardEvidenceId: feasibility.lraGuardEvidenceId,
+            evidenceSemantics: "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION",
+            shadowOnly: true, correctedOutputUploaded: false, historicalBackfill: false,
             providerCallCount: 0, providerDispatch: "OFF", calibration: false,
             finalize: false, releaseEligible: false, productionActivation: false,
             autoPublish: "OFF" } };

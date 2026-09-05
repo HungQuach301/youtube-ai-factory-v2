@@ -32,6 +32,58 @@ test("Stage 10 bounds TTS concurrency to two provider calls", async () => {
   assert.match(source, /slice\(offset, offset \+ TTS_BATCH_SIZE\)/);
 });
 
+test("Stage 12 LRA feasibility command has one durable intent and fenced terminal effect", async () => {
+  const [domain, gateway, route, worker, runtime, controller, rootWorker, rootRuntime,
+    rootController, migration] = await Promise.all([
+    readFile(fileURLToPath(new URL("../app/track-g-video-one.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../app/mcp/route.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../app/api/media-worker/stage12-codec-safe-lra-feasibility-search/route.ts",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/container-entry.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../packages/media-worker/stage12-runtime.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../packages/media-worker/stage12-lra-feasibility-controller.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../../../packages/media-worker/container-entry.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../../../packages/media-worker/stage12-runtime.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../../../packages/media-worker/stage12-lra-feasibility-controller.mjs",
+      import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL(
+      "../drizzle/0034_stage12_lra_feasibility_command_contract.sql",
+      import.meta.url)), "utf8"),
+  ]);
+  assert.equal(worker, rootWorker);
+  assert.equal(runtime, rootRuntime);
+  assert.equal(controller, rootController);
+  assert.match(gateway, /RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH/g);
+  assert.match(gateway, /diagnoseTrackGVideoOneStage12CodecSafeLraFeasibility/u);
+  assert.match(gateway, /runTrackGVideoOneStage12CodecSafeLraFeasibility/u);
+  assert.match(worker, /stage12Jobs\.get\(payload\.idempotencyKey\)/u);
+  assert.match(worker, /\/stage12\/codec-safe-lra-feasibility-search/u);
+  assert.match(runtime, /kind=codec-safe-lra-feasibility-source-ordinal-2/u);
+  assert.doesNotMatch(route, /export async function PUT|putImmutable|upload/u);
+  const persistStart = domain.indexOf("async function persistStage12LraFeasibilityTerminal");
+  const persistEnd = domain.indexOf(
+    "export async function recordTrackGVideoOneStage12CodecSafeLraFeasibilityCallback",
+    persistStart,
+  );
+  const persistence = domain.slice(persistStart, persistEnd);
+  assert.match(persistence, /getD1\(\)\.batch/u);
+  assert.match(persistence, /INSERT INTO stage12_codec_safe_lra_feasibility_job/u);
+  assert.match(persistence, /INSERT INTO stage12_codec_safe_lra_feasibility_evidence/u);
+  assert.doesNotMatch(persistence, /UPDATE|DELETE/u);
+  assert.match(migration,
+    /RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH/u);
+  assert.match(migration,
+    /TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL/u);
+});
+
 test("Stage 10 observes all tournament takes in one WhisperX batch", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../scripts/whisperx-phoneme-observer.py", import.meta.url)),
@@ -293,7 +345,8 @@ const ownerHeaders = {
   "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
 };
 
-async function createFactoryFixture(databaseName, bindings = { FACTORY_OWNER_EMAIL: "owner@example.com" }) {
+async function createFactoryFixture(databaseName,
+  bindings = { FACTORY_OWNER_EMAIL: "owner@example.com" }, options = {}) {
   const serverRoot = fileURLToPath(new URL("../dist/server", import.meta.url));
   const entries = await readdir(serverRoot, { recursive: true, withFileTypes: true });
   const modulePaths = entries
@@ -320,6 +373,7 @@ async function createFactoryFixture(databaseName, bindings = { FACTORY_OWNER_EMA
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
   for (const migrationName of migrations) {
+    if (migrationName === options.stopBeforeMigration) break;
     const migration = await readFile(resolve(migrationRoot, migrationName), "utf8");
     for (const statement of migration.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
       await d1.prepare(statement).run();
@@ -327,6 +381,418 @@ async function createFactoryFixture(databaseName, bindings = { FACTORY_OWNER_EMA
   }
   return { mf, d1 };
 }
+
+test("migration 0034 D1 gate aborts before dispatch schema when 0033 state exists",
+  async () => {
+    const { mf, d1 } = await createFactoryFixture(
+      "stage12-lra-feasibility-preexisting-state-proof",
+      { FACTORY_OWNER_EMAIL: "owner@example.com" },
+      { stopBeforeMigration: "0034_stage12_lra_feasibility_command_contract.sql" },
+    );
+    try {
+      await d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_job
+        (id,source_correction_ordinal,historical_failure_correction_ordinal,source_sha256,
+         parent_evidence_id,lra_guard_evidence_id,status,created_at)
+        VALUES ('legacy-0033-job',2,3,?,?,?,'PENDING',?)`).bind(
+        stage12LraFeasibilityD1Proof.sourceSha256,
+        stage12LraFeasibilityD1Proof.parentEvidenceId,
+        stage12LraFeasibilityD1Proof.lraGuardEvidenceId,
+        new Date().toISOString(),
+      ).run();
+      const migrationRoot = fileURLToPath(new URL("../drizzle", import.meta.url));
+      const migration = await readFile(resolve(migrationRoot,
+        "0034_stage12_lra_feasibility_command_contract.sql"), "utf8");
+      let failure = null;
+      for (const statement of migration.split("--> statement-breakpoint")
+        .map((value) => value.trim()).filter(Boolean)) {
+        try {
+          await d1.prepare(statement).run();
+        } catch (error) {
+          failure = error;
+          break;
+        }
+      }
+      assert.match(String(failure), /STAGE12_LRA_FEASIBILITY_PREEXISTING_STATE/u);
+      await assert.rejects(d1.prepare(
+        "SELECT count(*) FROM stage12_codec_safe_lra_feasibility_dispatch_outbox",
+      ).all(), /no such table/u);
+      assert.equal((await d1.prepare(`SELECT count(*) AS count
+        FROM stage12_codec_safe_lra_feasibility_job`).first()).count, 1);
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+const stage12LraFeasibilityD1Proof = Object.freeze({
+  idempotencyKey: "1".repeat(64),
+  commandId: "stage12-lra-feasibility-d1-proof-command",
+  sourceSha256: "163acb7a9d1b971afeb50b3ac935960cfe7197e9fcbe45416eebdaa8299506d2",
+  parentEvidenceId: "41209f9c50604dd8e1963d83717eaf6734c1c6fdee1857c6647af483f89243eb",
+  lraGuardEvidenceId: "4ff67d50dbdd891b13014b476b9cb91eb0e7fcb610a98b87bc88a2524d94ccb9",
+  workerImageDigest: `sha256:${"2".repeat(64)}`,
+  algorithmFingerprint: "3".repeat(64),
+  thresholdSnapshotSha256: "4".repeat(64),
+});
+
+async function seedStage12LraFeasibilityOutbox(d1) {
+  const createdAt = new Date().toISOString();
+  const requestPayload = { proof: "migration-0034-miniflare-d1" };
+  const requestPayloadJson = canonicalTestValue(requestPayload);
+  const requestSha256 = canonicalTestSha256(requestPayload);
+  await d1.prepare(`INSERT INTO owner_identity
+    (identity,display_name,role,active,created_at)
+    VALUES ('owner@example.com','Factory Owner','OWNER',1,?)`).bind(createdAt).run();
+  await d1.prepare(`INSERT INTO command_log
+    (id,command_type,payload_json,idempotency_key,actor_identity,prev_state,next_state,
+     trace_id,created_at)
+    VALUES (?,'RUN_TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH',?,?,
+      'owner@example.com','TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_GUARD_SHADOW_FAIL',
+      'TRACK_G_VIDEO_1_STAGE_12_CODEC_SAFE_LRA_FEASIBILITY_PENDING',?,?)`).bind(
+    stage12LraFeasibilityD1Proof.commandId, requestPayloadJson,
+    stage12LraFeasibilityD1Proof.idempotencyKey, "stage12-lra-feasibility-d1-proof-trace",
+    createdAt,
+  ).run();
+  await d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_outbox
+    (idempotency_key,command_id,request_payload_json,request_sha256,
+     source_attempt_ordinal,source_correction_ordinal,source_sha256,parent_evidence_id,
+     lra_guard_evidence_id,expected_worker_image_digest,algorithm_fingerprint,
+     threshold_snapshot_sha256,created_at)
+    VALUES (?,?,?,?,3,2,?,?,?,?,?,?,?)`).bind(
+    stage12LraFeasibilityD1Proof.idempotencyKey,
+    stage12LraFeasibilityD1Proof.commandId,
+    requestPayloadJson,
+    requestSha256,
+    stage12LraFeasibilityD1Proof.sourceSha256,
+    stage12LraFeasibilityD1Proof.parentEvidenceId,
+    stage12LraFeasibilityD1Proof.lraGuardEvidenceId,
+    stage12LraFeasibilityD1Proof.workerImageDigest,
+    stage12LraFeasibilityD1Proof.algorithmFingerprint,
+    stage12LraFeasibilityD1Proof.thresholdSnapshotSha256,
+    createdAt,
+  ).run();
+  return { ...stage12LraFeasibilityD1Proof, requestSha256 };
+}
+
+function stage12LraFeasibilityClaim(d1, { id, leaseHolder, createdAt }) {
+  const leaseExpiresAt = new Date(Date.parse(createdAt) + 90_000).toISOString();
+  const payload = { fencingToken: 1, leaseId: leaseHolder };
+  return d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+    (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+     lease_expires_at,payload_json,payload_sha256,created_at)
+    VALUES (?,?,1,'CLAIMED',1,?,?,?,?,?)`).bind(
+    id,
+    stage12LraFeasibilityD1Proof.idempotencyKey,
+    leaseHolder,
+    leaseExpiresAt,
+    canonicalTestValue(payload),
+    canonicalTestSha256(payload),
+    createdAt,
+  ).run();
+}
+
+test("migration 0034 converges concurrent D1 claims to one fenced row", async () => {
+  const { mf, d1 } = await createFactoryFixture("stage12-lra-feasibility-claim-race-proof");
+  try {
+    await seedStage12LraFeasibilityOutbox(d1);
+    const createdAt = new Date().toISOString();
+    const claims = await Promise.allSettled([
+      stage12LraFeasibilityClaim(d1, {
+        id: "stage12-lra-feasibility-claim-a", leaseHolder: "lease-a", createdAt,
+      }),
+      stage12LraFeasibilityClaim(d1, {
+        id: "stage12-lra-feasibility-claim-b", leaseHolder: "lease-b", createdAt,
+      }),
+    ]);
+    assert.equal(claims.filter(({ status }) => status === "fulfilled").length, 1);
+    assert.equal(claims.filter(({ status }) => status === "rejected").length, 1);
+    const stored = await d1.prepare(`SELECT event_type,event_ordinal,fencing_token,lease_holder
+      FROM stage12_codec_safe_lra_feasibility_dispatch_event`).all();
+    assert.equal(stored.results.length, 1);
+    assert.equal(stored.results[0].event_type, "CLAIMED");
+    assert.equal(stored.results[0].event_ordinal, 1);
+    assert.equal(stored.results[0].fencing_token, 1);
+    assert.ok(["lease-a", "lease-b"].includes(stored.results[0].lease_holder));
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("migration 0034 persists ordered renewable leases and deduplicates heartbeat identity",
+  async () => {
+    const { mf, d1 } = await createFactoryFixture(
+      "stage12-lra-feasibility-heartbeat-proof",
+    );
+    try {
+      const outbox = await seedStage12LraFeasibilityOutbox(d1);
+      const claimCreatedAt = new Date().toISOString();
+      await stage12LraFeasibilityClaim(d1, {
+        id: "stage12-lra-feasibility-heartbeat-claim",
+        leaseHolder: "heartbeat-lease", createdAt: claimCreatedAt,
+      });
+      const renewedAt = new Date(Math.max(Date.now(), Date.parse(claimCreatedAt) + 1))
+        .toISOString();
+      const leaseExpiresAt = new Date(Date.parse(renewedAt) + 90_000).toISOString();
+      const dispatchPayload = { requestSha256: outbox.requestSha256 };
+      await d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+        (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+         lease_expires_at,payload_json,payload_sha256,created_at)
+        VALUES ('stage12-lra-feasibility-dispatch-accepted',?,2,'DISPATCH_ACCEPTED',1,
+          'heartbeat-lease',NULL,?,?,?)`).bind(
+        outbox.idempotencyKey, canonicalTestValue(dispatchPayload),
+        canonicalTestSha256(dispatchPayload), renewedAt,
+      ).run();
+      const heartbeatPayload = { heartbeatId: "a".repeat(64), heartbeatSequence: 1,
+        requestSha256: outbox.requestSha256 };
+      const insertHeartbeat = (id, eventOrdinal, payload, createdAt, expiresAt) =>
+        d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+          (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+           lease_expires_at,payload_json,payload_sha256,created_at)
+          VALUES (?,?,?,'LEASE_RENEWED',1,'heartbeat-lease',?,?,?,?)`).bind(
+          id, outbox.idempotencyKey, eventOrdinal, expiresAt,
+          canonicalTestValue(payload), canonicalTestSha256(payload), createdAt,
+        ).run();
+      await assert.rejects(insertHeartbeat("stage12-lra-feasibility-heartbeat-stale", 2,
+        heartbeatPayload, renewedAt, leaseExpiresAt),
+      /STAGE12_LRA_FEASIBILITY_EVENT_ORDINAL_INVALID/u);
+      const retryRenewedAt = new Date(Date.parse(renewedAt) + 1).toISOString();
+      const retryLeaseExpiresAt = new Date(Date.parse(leaseExpiresAt) + 1).toISOString();
+      await insertHeartbeat("stage12-lra-feasibility-heartbeat-1", 3,
+        heartbeatPayload,
+        retryRenewedAt, retryLeaseExpiresAt);
+      await assert.rejects(insertHeartbeat("stage12-lra-feasibility-heartbeat-retry", 4,
+        heartbeatPayload,
+        new Date(Date.parse(renewedAt) + 2).toISOString(),
+        new Date(Date.parse(leaseExpiresAt) + 2).toISOString()),
+      /LEASE_RENEWAL_INVALID|UNIQUE constraint failed/u);
+      const stored = await d1.prepare(`SELECT event_ordinal,event_type,lease_expires_at,
+        json_extract(payload_json,'$.heartbeatId') AS heartbeat_id
+        FROM stage12_codec_safe_lra_feasibility_dispatch_event
+        ORDER BY event_ordinal`).all();
+      assert.equal(stored.results.length, 3);
+      assert.deepEqual(stored.results[2], { event_ordinal: 3,
+        event_type: "LEASE_RENEWED", lease_expires_at: retryLeaseExpiresAt,
+        heartbeat_id: heartbeatPayload.heartbeatId });
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+test("migration 0034 rolls back a rejected terminal D1 batch to the claim", async () => {
+  const { mf, d1 } = await createFactoryFixture("stage12-lra-feasibility-terminal-batch-proof");
+  try {
+    const outbox = await seedStage12LraFeasibilityOutbox(d1);
+    const claimCreatedAt = new Date().toISOString();
+    await stage12LraFeasibilityClaim(d1, {
+      id: "stage12-lra-feasibility-claim", leaseHolder: "terminal-lease", createdAt: claimCreatedAt,
+    });
+
+    const createdAt = new Date().toISOString();
+    const jobId = "stage12-lra-feasibility-terminal-job";
+    const evidenceId = "stage12-lra-feasibility-terminal-evidence";
+    const selectedCandidateSha256 = "5".repeat(64);
+    const terminalReceiptSha256 = "6".repeat(64);
+    const resultSha256 = "7".repeat(64);
+    const parentRuntimeProvenanceSha256 = "8".repeat(64);
+    const runtimeProvenanceSha256 = "9".repeat(64);
+    const storedTrace = {
+      outcome: "PASS",
+      terminalReceiptSha256,
+      resultSha256,
+      parentRuntimeProvenanceSha256,
+      runtimeProvenanceSha256,
+    };
+    const invalidTerminalPayload = {
+      requestSha256: outbox.requestSha256,
+      terminalReceiptSha256,
+      resultSha256: "a".repeat(64),
+      jobId,
+      evidenceId,
+      jobStatus: "READY",
+      outcome: "PASS",
+      terminalReason: "PASS",
+      selectedCandidateSha256,
+      algorithmFingerprint: outbox.algorithmFingerprint,
+      thresholdSnapshotSha256: outbox.thresholdSnapshotSha256,
+      workerImageDigest: outbox.workerImageDigest,
+      parentRuntimeProvenanceSha256,
+      runtimeProvenanceSha256,
+    };
+
+    await assert.rejects(d1.batch([
+      d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_job
+        (id,source_correction_ordinal,historical_failure_correction_ordinal,source_sha256,
+         parent_evidence_id,lra_guard_evidence_id,status,created_at)
+        VALUES (?,2,3,?,?,?,'READY',?)`).bind(
+        jobId, outbox.sourceSha256, outbox.parentEvidenceId, outbox.lraGuardEvidenceId,
+        createdAt,
+      ),
+      d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_evidence
+        (id,job_id,algorithm_fingerprint,threshold_snapshot_sha256,phase_budget_json,
+         candidate_trace_json,selected_candidate_sha256,terminal_reason,
+         evidence_semantics,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+        evidenceId, jobId, outbox.algorithmFingerprint, outbox.thresholdSnapshotSha256,
+        canonicalTestValue({}), canonicalTestValue(storedTrace), selectedCandidateSha256,
+        "PASS", "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION", createdAt,
+      ),
+      d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_terminal_receipt
+        (idempotency_key,request_sha256,fencing_token,lease_holder,
+         terminal_receipt_sha256,result_sha256,job_id,evidence_id,job_status,outcome,
+         terminal_reason,selected_candidate_sha256,algorithm_fingerprint,
+         threshold_snapshot_sha256,worker_image_digest,parent_runtime_provenance_sha256,
+         runtime_provenance_sha256,created_at)
+        VALUES (?,?,1,'terminal-lease',?,?,?,?,'READY','PASS','PASS',?,?,?,?,?,?,?)`).bind(
+        outbox.idempotencyKey, outbox.requestSha256, terminalReceiptSha256, resultSha256,
+        jobId, evidenceId, selectedCandidateSha256, outbox.algorithmFingerprint,
+        outbox.thresholdSnapshotSha256, outbox.workerImageDigest,
+        parentRuntimeProvenanceSha256, runtimeProvenanceSha256, createdAt,
+      ),
+      d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+        (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+         lease_expires_at,payload_json,payload_sha256,created_at)
+        VALUES ('stage12-lra-feasibility-terminal-event',?,2,'CALLBACK_TERMINAL',1,
+          'terminal-lease',NULL,?,?,?)`).bind(
+        outbox.idempotencyKey,
+        canonicalTestValue(invalidTerminalPayload),
+        canonicalTestSha256(invalidTerminalPayload),
+        createdAt,
+      ),
+    ]), /STAGE12_LRA_FEASIBILITY_TERMINAL_RECEIPT_MISSING/u);
+
+    const [jobs, evidence, receipts, terminalEvents, allEvents] = await Promise.all([
+      d1.prepare("SELECT count(*) AS count FROM stage12_codec_safe_lra_feasibility_job").first(),
+      d1.prepare("SELECT count(*) AS count FROM stage12_codec_safe_lra_feasibility_evidence").first(),
+      d1.prepare("SELECT count(*) AS count FROM stage12_codec_safe_lra_feasibility_terminal_receipt").first(),
+      d1.prepare(`SELECT count(*) AS count
+        FROM stage12_codec_safe_lra_feasibility_dispatch_event
+        WHERE event_type IN ('CALLBACK_TERMINAL','DISPATCH_REJECTED')`).first(),
+      d1.prepare(`SELECT event_type,event_ordinal,fencing_token,lease_holder
+        FROM stage12_codec_safe_lra_feasibility_dispatch_event`).all(),
+    ]);
+    assert.equal(jobs.count, 0);
+    assert.equal(evidence.count, 0);
+    assert.equal(receipts.count, 0);
+    assert.equal(terminalEvents.count, 0);
+    assert.deepEqual(allEvents.results, [{
+      event_type: "CLAIMED", event_ordinal: 1, fencing_token: 1,
+      lease_holder: "terminal-lease",
+    }]);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test("migration 0034 retries a terminal batch after a dispatch event wins its ordinal",
+  async () => {
+    const { mf, d1 } = await createFactoryFixture(
+      "stage12-lra-feasibility-terminal-ordinal-cas-proof",
+    );
+    try {
+      const outbox = await seedStage12LraFeasibilityOutbox(d1);
+      const claimCreatedAt = new Date().toISOString();
+      await stage12LraFeasibilityClaim(d1, {
+        id: "stage12-lra-feasibility-cas-claim",
+        leaseHolder: "terminal-cas-lease", createdAt: claimCreatedAt,
+      });
+      const acceptedAt = new Date(Math.max(Date.now(), Date.parse(claimCreatedAt) + 1))
+        .toISOString();
+      const dispatchPayload = { requestSha256: outbox.requestSha256 };
+      await d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+        (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+         lease_expires_at,payload_json,payload_sha256,created_at)
+        VALUES ('stage12-lra-feasibility-cas-accepted',?,2,'DISPATCH_ACCEPTED',1,
+          'terminal-cas-lease',NULL,?,?,?)`).bind(
+        outbox.idempotencyKey, canonicalTestValue(dispatchPayload),
+        canonicalTestSha256(dispatchPayload), acceptedAt,
+      ).run();
+
+      const createdAt = new Date(Date.parse(acceptedAt) + 1).toISOString();
+      const jobId = "stage12-lra-feasibility-cas-job";
+      const evidenceId = "stage12-lra-feasibility-cas-evidence";
+      const selectedCandidateSha256 = "5".repeat(64);
+      const terminalReceiptSha256 = "6".repeat(64);
+      const resultSha256 = "7".repeat(64);
+      const parentRuntimeProvenanceSha256 = "8".repeat(64);
+      const runtimeProvenanceSha256 = "9".repeat(64);
+      const storedTrace = { outcome: "PASS", terminalReceiptSha256, resultSha256,
+        parentRuntimeProvenanceSha256, runtimeProvenanceSha256 };
+      const terminalPayload = { requestSha256: outbox.requestSha256,
+        terminalReceiptSha256, resultSha256, jobId, evidenceId, jobStatus: "READY",
+        outcome: "PASS", terminalReason: "PASS", selectedCandidateSha256,
+        algorithmFingerprint: outbox.algorithmFingerprint,
+        thresholdSnapshotSha256: outbox.thresholdSnapshotSha256,
+        workerImageDigest: outbox.workerImageDigest,
+        parentRuntimeProvenanceSha256, runtimeProvenanceSha256 };
+      const terminalBatch = (eventOrdinal, eventId) => d1.batch([
+        d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_job
+          (id,source_correction_ordinal,historical_failure_correction_ordinal,source_sha256,
+           parent_evidence_id,lra_guard_evidence_id,status,created_at)
+          VALUES (?,2,3,?,?,?,'READY',?)`).bind(
+          jobId, outbox.sourceSha256, outbox.parentEvidenceId, outbox.lraGuardEvidenceId,
+          createdAt,
+        ),
+        d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_evidence
+          (id,job_id,algorithm_fingerprint,threshold_snapshot_sha256,phase_budget_json,
+           candidate_trace_json,selected_candidate_sha256,terminal_reason,
+           evidence_semantics,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(
+          evidenceId, jobId, outbox.algorithmFingerprint, outbox.thresholdSnapshotSha256,
+          canonicalTestValue({}), canonicalTestValue(storedTrace), selectedCandidateSha256,
+          "PASS", "CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION", createdAt,
+        ),
+        d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_terminal_receipt
+          (idempotency_key,request_sha256,fencing_token,lease_holder,
+           terminal_receipt_sha256,result_sha256,job_id,evidence_id,job_status,outcome,
+           terminal_reason,selected_candidate_sha256,algorithm_fingerprint,
+           threshold_snapshot_sha256,worker_image_digest,parent_runtime_provenance_sha256,
+           runtime_provenance_sha256,created_at)
+          VALUES (?,?,1,'terminal-cas-lease',?,?,?,?,'READY','PASS','PASS',?,?,?,?,?,?,?)`)
+          .bind(outbox.idempotencyKey, outbox.requestSha256, terminalReceiptSha256,
+            resultSha256, jobId, evidenceId, selectedCandidateSha256,
+            outbox.algorithmFingerprint, outbox.thresholdSnapshotSha256,
+            outbox.workerImageDigest, parentRuntimeProvenanceSha256,
+            runtimeProvenanceSha256, createdAt),
+        d1.prepare(`INSERT INTO stage12_codec_safe_lra_feasibility_dispatch_event
+          (id,idempotency_key,event_ordinal,event_type,fencing_token,lease_holder,
+           lease_expires_at,payload_json,payload_sha256,created_at)
+          VALUES (?,?,?,'CALLBACK_TERMINAL',1,'terminal-cas-lease',NULL,?,?,?)`).bind(
+          eventId, outbox.idempotencyKey, eventOrdinal,
+          canonicalTestValue(terminalPayload), canonicalTestSha256(terminalPayload), createdAt,
+        ),
+      ]);
+
+      await assert.rejects(terminalBatch(2, "stage12-lra-feasibility-cas-terminal-stale"),
+        /STAGE12_LRA_FEASIBILITY_EVENT_ORDINAL_INVALID/u);
+      for (const table of ["stage12_codec_safe_lra_feasibility_job",
+        "stage12_codec_safe_lra_feasibility_evidence",
+        "stage12_codec_safe_lra_feasibility_terminal_receipt"]) {
+        assert.equal((await d1.prepare(`SELECT count(*) AS count FROM ${table}`).first()).count,
+          0);
+      }
+
+      await terminalBatch(3, "stage12-lra-feasibility-cas-terminal-retry");
+      const [jobs, evidence, receipts, events] = await Promise.all([
+        d1.prepare("SELECT count(*) AS count FROM stage12_codec_safe_lra_feasibility_job")
+          .first(),
+        d1.prepare("SELECT count(*) AS count FROM stage12_codec_safe_lra_feasibility_evidence")
+          .first(),
+        d1.prepare(`SELECT count(*) AS count FROM
+          stage12_codec_safe_lra_feasibility_terminal_receipt`).first(),
+        d1.prepare(`SELECT event_ordinal,event_type FROM
+          stage12_codec_safe_lra_feasibility_dispatch_event ORDER BY event_ordinal`).all(),
+      ]);
+      assert.equal(jobs.count, 1);
+      assert.equal(evidence.count, 1);
+      assert.equal(receipts.count, 1);
+      assert.deepEqual(events.results, [
+        { event_ordinal: 1, event_type: "CLAIMED" },
+        { event_ordinal: 2, event_type: "DISPATCH_ACCEPTED" },
+        { event_ordinal: 3, event_type: "CALLBACK_TERMINAL" },
+      ]);
+    } finally {
+      await mf.dispose();
+    }
+  });
 
 function qualificationFixture() {
   const audio = Buffer.alloc(42);

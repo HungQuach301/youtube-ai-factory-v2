@@ -12,12 +12,16 @@ import {
   stage12CallbackTransportErrorCode,
   stage12WorkerErrorCode,
 } from './stage12-callback-error.mjs'
+import { createStage12LraFeasibilityWorkerCoordinator } from
+  './stage12-lra-feasibility-delivery.mjs'
 import { executeStage12, executeStage12AudioP0Correction,
+  executeStage12CodecSafeLraFeasibilitySearch,
   executeStage12CodecSafeLraGuardShadowReplay,
   executeStage12CodecSafeTruePeakShadowReplay,
   executeStage12EncodedLoudnessDiagnosticReplay, executeStage12Recovery,
   executeStage12Remediation, stage12EncodedLoudnessFailureDiagnostic,
   validateStage12AudioP0CorrectionPayload,
+  validateStage12CodecSafeLraFeasibilityPayload,
   validateStage12CodecSafeLraGuardShadowPayload,
   validateStage12CodecSafeTruePeakShadowPayload,
   validateStage12EncodedLoudnessDiagnosticReplayPayload,
@@ -45,6 +49,7 @@ const STAGE10_EXECUTION_CACHE_LIMIT = 8
 const stage10Executions = new Map()
 const stage10Jobs = new Map()
 const stage12Jobs = new Map()
+const stage12LraFeasibilityJobs = new Map()
 const PYTHON_RUNTIME_MARKER = '/app/runtime-verification/stage10-python.json'
 const STAGE12_FONT_PATH = process.env.MEDIA_STAGE12_FONT_PATH
   ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
@@ -554,6 +559,65 @@ async function publishStage12Failure(callback, idempotencyKey, error) {
   if (!response.ok) throw Object.assign(new Error(`Stage 12 failure callback returned ${response.status}.`), { code: 'STAGE12_FAILURE_CALLBACK_FAILED' })
 }
 
+async function publishStage12LraFeasibilityTerminal(delivery) {
+  let response
+  try {
+    response = await fetch(delivery.callback.url, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
+      headers: { authorization: `Bearer ${delivery.callback.token}`,
+        'content-type': 'application/json' },
+      body: delivery.body,
+    })
+  } catch (error) {
+    throw Object.assign(new Error('Stage 12 feasibility callback transport failed.'), {
+      code: stage12CallbackTransportErrorCode(error), retryable: true, cause: error,
+    })
+  }
+  const acknowledgement = await response.json().catch(() => null)
+  if (!response.ok) {
+    const candidate = typeof acknowledgement?.error === 'string'
+      ? acknowledgement.error : ''
+    throw Object.assign(new Error(`Stage 12 feasibility callback returned ${response.status}.`), {
+      code: stage12CallbackErrorCode(candidate, response.status),
+      retryable: response.status === 408 || response.status === 425
+        || response.status === 429 || response.status >= 500,
+    })
+  }
+  return acknowledgement
+}
+
+async function publishStage12LraFeasibilityHeartbeat(heartbeat) {
+  let response
+  try {
+    response = await fetch(heartbeat.callback.url, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(CALLBACK_REQUEST_TIMEOUT_MS),
+      headers: { authorization: `Bearer ${heartbeat.callback.token}`,
+        'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'LEASE_HEARTBEAT',
+        idempotencyKey: heartbeat.idempotencyKey,
+        requestSha256: heartbeat.requestSha256,
+        fencingToken: heartbeat.fencingToken, leaseId: heartbeat.leaseId,
+        heartbeatId: heartbeat.heartbeatId,
+        heartbeatSequence: heartbeat.heartbeatSequence }),
+    })
+  } catch (error) {
+    throw Object.assign(new Error('Stage 12 feasibility heartbeat transport failed.'), {
+      code: stage12CallbackTransportErrorCode(error), retryable: true, cause: error,
+    })
+  }
+  const acknowledgement = await response.json().catch(() => null)
+  if (!response.ok) {
+    const candidate = typeof acknowledgement?.error === 'string'
+      ? acknowledgement.error : ''
+    throw Object.assign(new Error(`Stage 12 feasibility heartbeat returned ${response.status}.`), {
+      code: stage12CallbackErrorCode(candidate, response.status),
+      retryable: response.status === 408 || response.status === 425
+        || response.status === 429 || response.status >= 500,
+    })
+  }
+  return acknowledgement
+}
+
 function startStage12Job(payload) {
   const existing = stage12Jobs.get(payload.idempotencyKey)
   if (existing) return existing.status
@@ -771,6 +835,19 @@ function startStage12CodecSafeLraGuardShadowJob(payload) {
   return job.status
 }
 
+const stage12LraFeasibilityCoordinator = createStage12LraFeasibilityWorkerCoordinator({
+  jobs: stage12LraFeasibilityJobs,
+  execute: (payload) => executeStage12CodecSafeLraFeasibilitySearch(payload, IMAGE_DIGEST),
+  deliver: publishStage12LraFeasibilityTerminal,
+  heartbeat: publishStage12LraFeasibilityHeartbeat,
+  errorCode: stage12WorkerErrorCode,
+})
+
+async function startStage12CodecSafeLraFeasibilityJob(payload) {
+  validateStage12CodecSafeLraFeasibilityPayload(payload, IMAGE_DIGEST)
+  return stage12LraFeasibilityCoordinator.start(payload)
+}
+
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -784,6 +861,9 @@ const server = createServer(async (request, response) => {
       encodedLoudnessDiagnosticReplayReady: stage12Ready(),
       codecSafeTruePeakShadowReady: stage12Ready(),
       codecSafeLraGuardShadowReady: stage12Ready(),
+      codecSafeLraFeasibilitySearchReady: stage12Ready(),
+      codecSafeLraFeasibilityExecutionSemantics:
+        'AT_LEAST_ONCE_COMPUTE_FENCED_SINGLE_TERMINAL_EFFECT',
       stage12FontVerified: existsSync(STAGE12_FONT_PATH),
       pythonRuntimeVerified: PYTHON_RUNTIME_VERIFIED,
       calibrationEvidenceSha256: CALIBRATION_SHA256 ?? null,
@@ -1042,6 +1122,73 @@ const server = createServer(async (request, response) => {
       const code = typeof error === 'object' && error !== null && 'code' in error
         ? String(error.code) : 'STAGE12_CODEC_SAFE_LRA_GUARD_SHADOW_START_FAILED'
       response.writeHead(422, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST'
+    && request.url === '/stage12/codec-safe-lra-feasibility-search') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' })
+        .end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' })
+          .end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = validateStage12CodecSafeLraFeasibilityPayload(
+        JSON.parse(body.toString('utf8')), IMAGE_DIGEST,
+      )
+      const receipt = await startStage12CodecSafeLraFeasibilityJob(payload)
+      response.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({
+        ...receipt, idempotencyKey: payload.idempotencyKey, imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : 'STAGE12_CODEC_SAFE_LRA_FEASIBILITY_START_FAILED'
+      response.writeHead(422, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ ok: false, code }))
+    }
+    return
+  }
+  if (request.method === 'POST'
+    && request.url === '/stage12/codec-safe-lra-feasibility-search/status') {
+    if (!STAGE12_ENABLED) {
+      response.writeHead(503, { 'content-type': 'application/json' })
+        .end('{"ok":false,"code":"STAGE12_DISABLED"}')
+      return
+    }
+    try {
+      const body = await readBody(request)
+      if (!verifyStage10Request(request, body)) {
+        response.writeHead(401, { 'content-type': 'application/json' })
+          .end('{"ok":false,"code":"INVALID_SIGNATURE"}')
+        return
+      }
+      const payload = JSON.parse(body.toString('utf8'))
+      if (!/^[a-f0-9]{64}$/u.test(payload?.idempotencyKey ?? '')
+        || !/^[a-f0-9]{64}$/u.test(payload?.requestSha256 ?? '')
+        || !Number.isSafeInteger(payload?.fencingToken) || payload.fencingToken < 1
+        || !/^[A-Za-z0-9_-]{1,160}$/u.test(payload?.leaseId ?? '')) {
+        throw Object.assign(new Error('Invalid Stage 12 feasibility status request.'), {
+          code: 'INVALID_STAGE12_LRA_FEASIBILITY_STATUS_REQUEST',
+        })
+      }
+      const status = stage12LraFeasibilityCoordinator.status(payload.idempotencyKey,
+        payload.requestSha256, payload.fencingToken, payload.leaseId)
+      response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
+        ...status, idempotencyKey: payload.idempotencyKey, imageDigest: IMAGE_DIGEST,
+      }))
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code) : error instanceof Error
+          ? error.message : 'STAGE12_LRA_FEASIBILITY_STATUS_FAILED'
+      const status = /(?:CONFLICT|STALE_FENCE)/u.test(code) ? 409 : 422
+      response.writeHead(status, { 'content-type': 'application/json' })
         .end(JSON.stringify({ ok: false, code }))
     }
     return

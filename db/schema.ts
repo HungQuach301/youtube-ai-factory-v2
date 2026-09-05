@@ -510,6 +510,160 @@ export const stage12AudioP0CorrectionJobs = sqliteTable("stage12_audio_p0_correc
   uniqueIndex("stage12_audio_p0_correction_output_hash_unique").on(table.correctedPreMasterSha256),
 ]);
 
+export const stage12CodecSafeLraFeasibilityJobs = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_job",
+  {
+    id: text("id").primaryKey(),
+    sourceCorrectionOrdinal: integer("source_correction_ordinal").notNull(),
+    historicalFailureCorrectionOrdinal:
+      integer("historical_failure_correction_ordinal").notNull(),
+    sourceSha256: text("source_sha256").notNull(),
+    parentEvidenceId: text("parent_evidence_id").notNull(),
+    lraGuardEvidenceId: text("lra_guard_evidence_id").notNull(),
+    status: text("status", { enum: ["PENDING", "READY", "FAILED"] }).notNull(),
+    shadowOnly: integer("shadow_only").notNull().default(1),
+    uploadCorrectedOutput: integer("upload_corrected_output").notNull().default(0),
+    providerCallCount: integer("provider_call_count").notNull().default(0),
+    calibration: integer("calibration").notNull().default(0),
+    finalize: integer("finalize").notNull().default(0),
+    productionActivation: integer("production_activation").notNull().default(0),
+    release: integer("release").notNull().default(0),
+    autoPublish: integer("auto_publish").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_lra_feasibility_job_lineage_unique")
+      .on(table.sourceSha256, table.parentEvidenceId, table.lraGuardEvidenceId),
+  ],
+);
+
+export const stage12CodecSafeLraFeasibilityEvidence = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_evidence",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id").notNull()
+      .references(() => stage12CodecSafeLraFeasibilityJobs.id),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    phaseBudgetJson: text("phase_budget_json").notNull(),
+    candidateTraceJson: text("candidate_trace_json").notNull(),
+    selectedCandidateSha256: text("selected_candidate_sha256"),
+    terminalReason: text("terminal_reason", {
+      enum: ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED", "ENCODE_FAILED",
+        "MEASUREMENT_FAILED", "LINEAGE_DRIFT"],
+    }).notNull(),
+    evidenceSemantics: text("evidence_semantics", {
+      enum: ["CODEC_SAFE_LRA_FEASIBILITY_SHADOW_NOT_CORRECTION"],
+    }).notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_codec_safe_lra_feasibility_evidence_job_unique").on(table.jobId),
+  ],
+);
+
+export const stage12CodecSafeLraFeasibilityMigrationGuard = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_migration_guard",
+  {
+    migrationId: integer("migration_id").primaryKey(),
+    preexistingJobCount: integer("preexisting_job_count").notNull(),
+    preexistingEvidenceCount: integer("preexisting_evidence_count").notNull(),
+    checkedAt: text("checked_at").notNull(),
+  },
+);
+
+export const stage12CodecSafeLraFeasibilityDispatchOutbox = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_dispatch_outbox",
+  {
+    idempotencyKey: text("idempotency_key").primaryKey(),
+    commandId: text("command_id").notNull().references(() => commandLog.id),
+    requestPayloadJson: text("request_payload_json").notNull(),
+    requestSha256: text("request_sha256").notNull(),
+    sourceAttemptOrdinal: integer("source_attempt_ordinal").notNull(),
+    sourceCorrectionOrdinal: integer("source_correction_ordinal").notNull(),
+    sourceSha256: text("source_sha256").notNull(),
+    parentEvidenceId: text("parent_evidence_id").notNull(),
+    lraGuardEvidenceId: text("lra_guard_evidence_id").notNull(),
+    expectedWorkerImageDigest: text("expected_worker_image_digest").notNull(),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_lra_feasibility_dispatch_outbox_command_unique")
+      .on(table.commandId),
+    uniqueIndex("stage12_lra_feasibility_dispatch_outbox_lineage_unique")
+      .on(table.sourceSha256, table.parentEvidenceId, table.lraGuardEvidenceId),
+  ],
+);
+
+export const stage12CodecSafeLraFeasibilityTerminalReceipts = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_terminal_receipt",
+  {
+    idempotencyKey: text("idempotency_key").primaryKey()
+      .references(() => stage12CodecSafeLraFeasibilityDispatchOutbox.idempotencyKey),
+    requestSha256: text("request_sha256").notNull(),
+    fencingToken: integer("fencing_token").notNull(),
+    leaseHolder: text("lease_holder").notNull(),
+    terminalReceiptSha256: text("terminal_receipt_sha256").notNull(),
+    resultSha256: text("result_sha256").notNull(),
+    jobId: text("job_id").notNull()
+      .references(() => stage12CodecSafeLraFeasibilityJobs.id),
+    evidenceId: text("evidence_id").notNull()
+      .references(() => stage12CodecSafeLraFeasibilityEvidence.id),
+    jobStatus: text("job_status", { enum: ["READY", "FAILED"] }).notNull(),
+    outcome: text("outcome", { enum: ["PASS", "FAIL"] }).notNull(),
+    terminalReason: text("terminal_reason", {
+      enum: ["PASS", "FEASIBILITY_NOT_PROVEN_BUDGET_EXHAUSTED", "ENCODE_FAILED",
+        "MEASUREMENT_FAILED", "LINEAGE_DRIFT"],
+    }).notNull(),
+    selectedCandidateSha256: text("selected_candidate_sha256"),
+    algorithmFingerprint: text("algorithm_fingerprint").notNull(),
+    thresholdSnapshotSha256: text("threshold_snapshot_sha256").notNull(),
+    workerImageDigest: text("worker_image_digest").notNull(),
+    parentRuntimeProvenanceSha256: text("parent_runtime_provenance_sha256").notNull(),
+    runtimeProvenanceSha256: text("runtime_provenance_sha256").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_lra_feasibility_terminal_receipt_job_unique")
+      .on(table.jobId),
+    uniqueIndex("stage12_lra_feasibility_terminal_receipt_evidence_unique")
+      .on(table.evidenceId),
+  ],
+);
+
+export const stage12CodecSafeLraFeasibilityDispatchEvents = sqliteTable(
+  "stage12_codec_safe_lra_feasibility_dispatch_event",
+  {
+    id: text("id").primaryKey(),
+    idempotencyKey: text("idempotency_key").notNull()
+      .references(() => stage12CodecSafeLraFeasibilityDispatchOutbox.idempotencyKey),
+    eventOrdinal: integer("event_ordinal").notNull(),
+    eventType: text("event_type", { enum: ["CLAIMED", "DISPATCH_ACCEPTED",
+      "DISPATCH_AMBIGUOUS", "DISPATCH_REJECTED", "RECONCILED_PRESENT",
+      "RECONCILED_EXPIRED", "LEASE_RENEWED",
+      "CALLBACK_TERMINAL"] }).notNull(),
+    fencingToken: integer("fencing_token").notNull(),
+    leaseHolder: text("lease_holder").notNull(),
+    leaseExpiresAt: text("lease_expires_at"),
+    payloadJson: text("payload_json").notNull(),
+    payloadSha256: text("payload_sha256").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage12_lra_feasibility_dispatch_event_ordinal_unique")
+      .on(table.idempotencyKey, table.eventOrdinal),
+    uniqueIndex("stage12_lra_feasibility_dispatch_event_type_unique")
+      .on(table.idempotencyKey, table.fencingToken, table.eventType)
+      .where(sql`${table.eventType} <> 'LEASE_RENEWED'`),
+    uniqueIndex("stage12_lra_feasibility_dispatch_heartbeat_unique")
+      .on(table.idempotencyKey, table.fencingToken,
+        sql`json_extract(${table.payloadJson}, '$.heartbeatId')`)
+      .where(sql`${table.eventType} = 'LEASE_RENEWED'`),
+  ],
+);
+
 export const stage12PreMasterQa = sqliteTable("stage12_pre_master_qa", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => productionPackages.id),

@@ -891,3 +891,49 @@ Bất kỳ true-peak fail hoặc codec overshoot tăng quá `0.25 dB` đều b�
 Threshold QA vẫn là `-14 ±1 LUFS-I`, true peak `≤ -1 dBTP`, LRA `4..8 LU`.
 Result có semantics `CODEC_SAFE_LRA_GUARD_SHADOW_NOT_CORRECTION`; không có output
 pointer, không sửa history và không cấp quyền activation hoặc downstream action.
+
+---
+
+## 15. Stage 12 codec-safe LRA feasibility search and durable command contract
+
+`RUN_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH` chỉ nhận source attempt 3 và
+immutable correction ordinal 2 SHA
+`163acb7a9d1b971afeb50b3ac935960cfe7197e9fcbe45416eebdaa8299506d2`, đồng thời
+khóa parent evidence `41209f9c…43eb` và LRA-guard evidence `4ff67d50…ccb9`.
+Threshold snapshot vẫn biểu diễn `-14 ±1 LUFS-I`, true peak `≤-1 dBTP` và LRA
+`4..8 LU`; command không được mang attempt/ordinal 4 hoặc đường upload/provider.
+
+Controller dựng từng candidate độc lập từ cùng lossless reference. Phase
+`LRA_MAP` quét deterministic lattice `10.9..14 dB` mà không dùng true-peak fail
+để thu hẹp miền LRA; `TRUE_PEAK_CONTAINMENT` chỉ đổi limiter ceiling; `LUFS_TRIM`
+chỉ đổi target/gain. Hai seed được xếp hạng deterministic, toàn search chỉ có một
+slot `FINAL`, và terminal failure phải chạy `SAFE_ROLLBACK` về exact pass 5.
+PASS chỉ hợp lệ khi một decoded-Opus artifact duy nhất đồng thời đạt cả ba gate.
+
+Migration `0033` chỉ định nghĩa terminal job/evidence append-only. Migration
+`0034` bổ sung một outbox intent, event ledger, terminal receipt và immutable
+migration-guard receipt. Apply `0034` phải abort trước khi mở gateway nếu bất kỳ
+row `0033` nào đã tồn tại; không được tự backfill hoặc đoán lifecycle cho row cũ.
+
+Dispatch dùng fencing token tăng đơn điệu và renewable lease 90 giây. Worker gửi
+`LEASE_HEARTBEAT` với cùng heartbeat identity cho đến khi được ACK; server ghi
+`LEASE_RENEWED` append-only và chỉ current holder được gia hạn trước effective
+deadline. Callback/source mới tại hoặc sau deadline bị từ chối. Sau một status
+read có thẩm quyền tại/sau deadline, `RECONCILED_EXPIRED` đóng fence và chỉ fence
+kế tiếp mới được dispatch. Exact terminal/heartbeat replay đã persist có thể được
+ACK lại nhưng không tạo logical effect mới.
+
+Mọi worker start được serialize theo idempotency key để duplicate hoặc fence cao
+hơn không thể vượt nhau sau một async heartbeat stop. Event append dùng bounded
+compare-and-swap: chỉ exact ordinal collision hoặc event-time regression do một
+event hợp lệ vừa thắng race mới được đọc lại và tính lại tối đa ba lần. Lỗi
+protocol/auth/fence có 4xx allowlist; lỗi D1/storage ngoài allowlist trả generic
+`503` để worker giữ nguyên heartbeat identity hoặc terminal body và retry.
+
+Terminal result, job, evidence, receipt và terminal event được ghi trong một D1
+batch. Receipt khóa request hash, fence/lease, result hash, runtime provenance,
+candidate trace và budget thật. Runtime semantics là
+`AT_LEAST_ONCE_COMPUTE_FENCED_SINGLE_TERMINAL_EFFECT`: restart có thể tính lại
+deterministically, nhưng stale fence không thể tạo terminal effect thứ hai.
+Provider/spend, corrected output, calibration, Finalize, activation, release và
+publish luôn `OFF`, `0` hoặc `false`.

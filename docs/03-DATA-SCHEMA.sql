@@ -1478,3 +1478,40 @@ CREATE INDEX idx_policy_snapshot ON policy_snapshot(source_url, fetched_at);
 -- Migration không backfill hay sửa ordinal 2/3, diagnostic replay hoặc parent
 -- shadow. Command contract chỉ thêm typed CODEC_SAFE_LRA_GUARD_SHADOW_PENDING.
 -- Xem drizzle/0032_stage12_codec_safe_lra_guard_shadow.sql.
+
+-- =====================================================================
+-- EVOLVE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SEARCH — migration 0033
+-- =====================================================================
+-- stage12_codec_safe_lra_feasibility_job/evidence là terminal shadow-only
+-- lineage từ đúng correction ordinal 2, historical failure ordinal 3, parent
+-- true-peak evidence và LRA-guard evidence. Evidence lưu phase budget, toàn bộ
+-- post-Opus candidate trace, exact-decimal measurements, immutable rollback
+-- reference và runtime fingerprints; job/evidence cấm UPDATE/DELETE.
+--
+-- Migration không tạo row, không backfill và không tạo correction/attempt 4.
+-- Threshold vẫn là -14 +/-1 LUFS-I, <= -1 dBTP và LRA 4..8 LU; mọi output,
+-- provider, calibration, finalize, activation, release và publish đều OFF/0.
+-- Xem drizzle/0033_stage12_codec_safe_lra_feasibility_search.sql.
+
+-- =====================================================================
+-- ENABLE_STAGE12_CODEC_SAFE_LRA_FEASIBILITY_SHADOW_COMMAND — migration 0034
+-- =====================================================================
+-- stage12_codec_safe_lra_feasibility_dispatch_outbox lưu một durable intent
+-- duy nhất cho immutable lineage. dispatch_event là ledger append-only có
+-- ordinal liên tục, renewable lease 90 giây/heartbeat 30 giây, fencing token,
+-- canonical payload hash và state machine cho accepted/ambiguous/
+-- reconciliation/terminal delivery. LEASE_RENEWED được dedupe theo heartbeat ID;
+-- RECONCILED_EXPIRED đóng stale fence tại DB deadline trước fence kế tiếp.
+-- Event ordinal liên tục là CAS boundary; writer chỉ retry exact ordinal/time
+-- race sau durable re-read, không retry semantic, auth hoặc integrity failure.
+-- terminal_receipt bind atomically exact request, current fence/lease,
+-- READY/FAILED job, evidence, result hash, worker image và provenance.
+--
+-- Command + outbox và terminal job + evidence + receipt + terminal event được
+-- ghi theo D1 batch; duplicate/race chỉ hội tụ khi durable read-back khớp hoàn
+-- toàn. PENDING job legacy bị cấm; recovery qua outbox/lease, không rewrite row
+-- cũ. Immutable migration_guard receipt yêu cầu job/evidence 0033 đều trống;
+-- pre-existing state abort trước gateway schema thay vì backfill mơ hồ. Migration
+-- 0033 được giữ byte-identical và 0034 chỉ forward-only; ngoài zero-state guard
+-- receipt, apply không chạy media, tạo job/evidence hay side effect.
+-- Xem drizzle/0034_stage12_lra_feasibility_command_contract.sql.
